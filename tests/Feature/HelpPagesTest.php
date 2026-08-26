@@ -717,6 +717,35 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_waived_class_payments_help_explains_owner_only_reversible_workflow(): void
+    {
+        $this->get(route('help.show', 'waived-class-payments', false))
+            ->assertOk()
+            ->assertSee('Як списати вимогу оплати за заняття або оренду', false)
+            ->assertSee('Звіти → Не внесена оплата', false)
+            ->assertSee('доплати за будь-який час або прямої оплати оренди залу', false)
+            ->assertSee('власниця може списати цю вимогу', false)
+            ->assertSee('не створює платіж, не змінює касу, абонемент, запис клієнта або відвідування', false)
+            ->assertSee('Списані вимоги оплати', false)
+            ->assertSee('пагінований журнал', false)
+            ->assertSee('Скасувати списання', false)
+            ->assertSee('Вимога знову зʼявиться у звіті Не внесена оплата', false)
+            ->assertSee('не можна скасувати, якщо початкового запису вже немає', false)
+            ->assertSee('assets/help/screenshots/unpaid-class-payment-waiver.png', false)
+            ->assertDontSee('class_booking_payment_waivers', false)
+            ->assertDontSee('tenant', false);
+
+        foreach ([
+            'як списати доплату за будь-який час',
+            'як списати оплату прямої оренди',
+            'як скасувати помилкове списання',
+        ] as $question) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('waived-class-payments', $result[0]['slug'] ?? null, $question);
+        }
+    }
+
     public function test_public_pages_help_explains_studio_landing_maps_and_support_links(): void
     {
         $this->get(route('help.show', 'public-pages', false))

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.151.0',
+                'date' => '2026-08-26',
+                'title' => 'Reversible missing-payment waivers',
+                'items' => ['Studio owners can now waive an intentionally uncollected any-time add-on or direct room-rental payment from the Missing payments report with a required reason and confirmation.', 'A separate paginated history preserves every waiver, author, and reason. An eligible mistaken waiver can be restored so the payment requirement returns to the report without changing existing payments, cash, class passes, bookings, or attendance.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.150.1',
                 'date' => '2026-08-26',
                 'title' => 'Clear cash-paid booking status',
@@ -1332,6 +1339,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.151.0',
+                'date' => '2026-08-26',
+                'title' => 'Зворотне списання невнесених оплат',
+                'items' => ['Власниця студії тепер може списати свідомо неотриману доплату за будь-який час або пряму оплату оренди залу зі звіту «Не внесена оплата» з обовʼязковою причиною та підтвердженням.', 'Окремий пагінований журнал зберігає кожне списання, автора й причину. Помилкове списання можна скасувати, якщо вимога досі актуальна: вона повернеться до звіту без зміни наявних платежів, каси, абонементів, записів або відвідування.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.150.1',
                 'date' => '2026-08-26',

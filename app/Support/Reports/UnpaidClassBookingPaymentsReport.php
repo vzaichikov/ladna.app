@@ -64,6 +64,7 @@ class UnpaidClassBookingPaymentsReport
             ])
             ->where("{$classesTable}.status", ScheduledClassStatus::Scheduled->value)
             ->whereDoesntHave('manualCashPayment')
+            ->whereDoesntHave('activePaymentWaiver')
             ->where(function (Builder $query): void {
                 $query
                     ->where(function (Builder $query): void {
@@ -88,6 +89,7 @@ class UnpaidClassBookingPaymentsReport
                 'scheduledClass.classType:id,account_id,name,schedule_kind',
                 'scheduledClass.trainer:id,account_id,name',
                 'manualCashPayment',
+                'activePaymentWaiver',
                 'classPassReservation.customerClassPass',
             ])
             ->orderBy("{$classesTable}.starts_at")

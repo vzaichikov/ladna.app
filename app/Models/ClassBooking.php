@@ -100,6 +100,17 @@ class ClassBooking extends Model
             ->where('payment_source', CustomerPurchase::SourceManualCashBooking);
     }
 
+    public function paymentWaivers(): HasMany
+    {
+        return $this->hasMany(ClassBookingPaymentWaiver::class);
+    }
+
+    public function activePaymentWaiver(): HasOne
+    {
+        return $this->hasOne(ClassBookingPaymentWaiver::class)
+            ->whereNull('unwaived_at');
+    }
+
     public function activeClassPassReservation(): ?CustomerClassPassReservation
     {
         if ($this->relationLoaded('classPassReservation')) {
@@ -134,6 +145,19 @@ class ClassBooking extends Model
     }
 
     public function manualCashPaymentDueKind(?ScheduledClass $scheduledClass = null): ?string
+    {
+        $dueKind = $this->manualCashPaymentRequirementKind($scheduledClass);
+
+        if ($dueKind === null) {
+            return null;
+        }
+
+        $this->loadMissing('activePaymentWaiver');
+
+        return $this->activePaymentWaiver ? null : $dueKind;
+    }
+
+    public function manualCashPaymentRequirementKind(?ScheduledClass $scheduledClass = null): ?string
     {
         if ($scheduledClass) {
             $this->setRelation('scheduledClass', $scheduledClass);

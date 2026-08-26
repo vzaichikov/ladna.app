@@ -17,6 +17,7 @@ class UnpaidClassPaymentReportController extends Controller
             'account' => $account,
             'bookings' => $report->paginateForAccount($account),
             'canManageBookingPayments' => $request->user()?->can('recordCustomerPayments', $account) ?? false,
+            'canWaiveBookingPayments' => $account->isOwnedBy($request->user()),
         ]);
     }
 }

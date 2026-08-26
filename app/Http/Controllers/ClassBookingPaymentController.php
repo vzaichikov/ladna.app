@@ -74,7 +74,7 @@ class ClassBookingPaymentController extends Controller
             'activeCancellation.effects',
             'classBookings' => fn ($query) => $query
                 ->notCorrectedRemoved()
-                ->with(['customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
+                ->with(['activePaymentWaiver', 'customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
         ]);
 
         return response()->json([

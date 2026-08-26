@@ -74,7 +74,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(199, $classifiedRouteNames);
+        $this->assertCount(200, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -423,6 +423,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.reports.trainers',
             'dashboard.accounts.reports.unknown-presence',
             'dashboard.accounts.reports.unpaid-class-payments',
+            'dashboard.accounts.reports.unpaid-class-payments.waived',
             'dashboard.accounts.room-rentals.create',
             'dashboard.accounts.room-rentals.index',
             'dashboard.accounts.rooms.create',

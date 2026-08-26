@@ -6,6 +6,7 @@ use App\Http\Controllers\AccountSmsSendingSettingsController;
 use App\Http\Controllers\CheckboxFiscalReceiptLogController;
 use App\Http\Controllers\ClassBookingController;
 use App\Http\Controllers\ClassBookingPaymentController;
+use App\Http\Controllers\ClassBookingPaymentWaiverController;
 use App\Http\Controllers\ClosedClassBookingCorrectionController;
 use App\Http\Controllers\ManualScheduledClassController;
 use App\Http\Controllers\QuickBookingController;
@@ -66,5 +67,11 @@ Route::post('accounts/{account}/bookings/{classBooking}/corrections/remove', [Cl
     ->name('accounts.bookings.corrections.remove');
 Route::post('accounts/{account}/bookings/{classBooking}/payment', [ClassBookingPaymentController::class, 'store'])
     ->name('accounts.bookings.payment.store');
+Route::post('accounts/{account}/bookings/{classBooking}/payment-waivers', [ClassBookingPaymentWaiverController::class, 'store'])
+    ->scopeBindings()
+    ->name('accounts.bookings.payment-waivers.store');
+Route::patch('accounts/{account}/booking-payment-waivers/{classBookingPaymentWaiver}/unwaive', [ClassBookingPaymentWaiverController::class, 'unwaive'])
+    ->scopeBindings()
+    ->name('accounts.booking-payment-waivers.unwaive');
 Route::delete('accounts/{account}/bookings/{classBooking}', [ClassBookingController::class, 'destroy'])
     ->name('accounts.bookings.destroy');

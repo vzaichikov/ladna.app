@@ -390,13 +390,8 @@
                         : null;
                     $hasAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
                     $manualCashPayment = $booking->manualCashPayment;
-                    $hasUnpaidRequiredManualPayment = ! $manualCashPayment
-                        && ! $isCancelledClass
-                        && in_array($booking->status->value, ['booked', 'attended'], true)
-                        && (
-                            ($isRoomRental && ! $hasActivePassReservation)
-                            || $hasAnyTimeAddonPayment
-                        );
+                    $manualPaymentDueKind = $booking->manualCashPaymentDueKind($scheduledClass);
+                    $hasUnpaidRequiredManualPayment = $manualPaymentDueKind !== null;
                 @endphp
                 <div class="rounded-lg border border-slate-200 p-3 text-sm">
                     <div class="flex items-start justify-between gap-3">
@@ -453,18 +448,18 @@
                             && auth()->user()?->can('recordCustomerPayments', $account)
                             && ! $isCancelledClass
                             && ! $isClosedClass
-                            && ! $manualCashPayment
-                            && (! $hasActivePassReservation || $hasAnyTimeAddonPayment)
-                            && in_array($booking->status->value, ['booked', 'attended'], true);
+                            && $manualPaymentDueKind !== null;
                         $bookingPaymentValue = $manualCashPayment
                             ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $manualCashPayment->amount_cents)
-                            : ($hasAnyTimeAddonPayment ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $anyTimeAddonAmountCents) : '');
+                            : ($manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon
+                                ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) $anyTimeAddonAmountCents)
+                                : '');
                     @endphp
                     @if ($manualCashPayment)
                         <div class="mt-3 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
                             {{ $hasAnyTimeAddonPayment ? __('app.any_time_addon_paid') : __('app.class_booking_payment') }}: {{ \App\Support\MoneyFormatter::format($manualCashPayment->amount_cents, $manualCashPayment->currency) }}
                         </div>
-                    @elseif ($hasAnyTimeAddonPayment)
+                    @elseif ($manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon)
                         <div class="mt-3 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
                             {{ __('app.any_time_addon_due') }}: {{ \App\Support\MoneyFormatter::format($anyTimeAddonAmountCents, $reservedPass?->currency ?? $account->default_currency) }}
                         </div>
@@ -473,7 +468,7 @@
                         <form method="POST" action="{{ route('dashboard.accounts.bookings.payment.store', [$account, $booking]) }}" data-async-form class="mt-3 flex flex-wrap items-end gap-2 rounded-lg border border-sky-100 bg-sky-50 p-3">
                             @csrf
                             <label class="min-w-40 grow">
-                                <span class="crm-label">{{ $hasAnyTimeAddonPayment ? __('app.any_time_addon_price') : __('app.class_booking_payment_amount') }}</span>
+                                <span class="crm-label">{{ $manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon ? __('app.any_time_addon_price') : __('app.class_booking_payment_amount') }}</span>
                                 <input
                                     name="amount"
                                     type="number"
@@ -483,10 +478,10 @@
                                     value="{{ $bookingPaymentValue }}"
                                     class="crm-field"
                                     placeholder="0.00"
-                                    @readonly($hasAnyTimeAddonPayment)
+                                    @readonly($manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon)
                                 >
                             </label>
-                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $hasAnyTimeAddonPayment ? __('app.record_any_time_addon_payment') : __('app.record_payment') }}</x-ui.button>
+                            <x-ui.button type="submit" variant="secondary" size="sm">{{ $manualPaymentDueKind === \App\Models\ClassBooking::ManualPaymentDueAnyTimeAddon ? __('app.record_any_time_addon_payment') : __('app.record_payment') }}</x-ui.button>
                         </form>
                     @endif
                     @unless ($isCancelledClass || $readonly || $isClosedClass)

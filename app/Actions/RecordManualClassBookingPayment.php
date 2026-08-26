@@ -36,11 +36,18 @@ class RecordManualClassBookingPayment
 
         return DB::transaction(function () use ($account, $classBooking, $amountCents, $user, $idempotencyKey): CustomerPurchase {
             $lockedBooking = ClassBooking::query()
-                ->with(['scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType', 'customer', 'classPassReservation.customerClassPass'])
+                ->with(['activePaymentWaiver', 'scheduledClass.location', 'scheduledClass.room', 'scheduledClass.classType', 'customer', 'classPassReservation.customerClassPass'])
                 ->whereBelongsTo($account)
                 ->whereKey($classBooking->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($lockedBooking->activePaymentWaiver) {
+                throw ValidationException::withMessages([
+                    'amount' => __('app.class_booking_payment_waived_cannot_record'),
+                ]);
+            }
+
             $anyTimeAddonAmountCents = $lockedBooking->anyTimeAddonAmountCents();
             $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
             $activeReservation = $lockedBooking->activeClassPassReservation();

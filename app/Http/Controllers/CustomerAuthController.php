@@ -708,6 +708,7 @@ class CustomerAuthController extends Controller
                 'scheduledClass.trainer',
                 'classPassReservation.customerClassPass',
                 'manualCashPayment',
+                'activePaymentWaiver',
             ]);
     }
 

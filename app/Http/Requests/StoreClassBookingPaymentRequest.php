@@ -55,6 +55,12 @@ class StoreClassBookingPaymentRequest extends FormRequest
                     return;
                 }
 
+                if ($classBooking->activePaymentWaiver()->exists()) {
+                    $validator->errors()->add('amount', __('app.class_booking_payment_waived_cannot_record'));
+
+                    return;
+                }
+
                 $anyTimeAddonAmountCents = $classBooking->anyTimeAddonAmountCents();
                 $isAnyTimeAddonPayment = $anyTimeAddonAmountCents !== null && $anyTimeAddonAmountCents > 0;
 

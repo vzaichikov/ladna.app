@@ -271,6 +271,15 @@ final class AppBreadcrumbs
             ];
         }
 
+        if ($routeName === 'dashboard.accounts.reports.unpaid-class-payments.waived') {
+            return [
+                ...$base,
+                $reports,
+                $this->item(__('app.unpaid_class_payments'), route('dashboard.accounts.reports.unpaid-class-payments', $account)),
+                $this->item(__('app.waived_class_booking_payments')),
+            ];
+        }
+
         $labels = [
             'dashboard.accounts.reports.earnings' => 'app.earnings_report',
             'dashboard.accounts.reports.financial' => 'app.financial_report',

@@ -13,6 +13,14 @@
         </x-ui.button>
     </div>
 
+    @if ($canWaiveBookingPayments)
+        <div class="mt-6">
+            <x-ui.button :href="route('dashboard.accounts.reports.unpaid-class-payments.waived', $account)" variant="secondary">
+                {{ __('app.waived_class_booking_payments') }}
+            </x-ui.button>
+        </div>
+    @endif
+
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         <div class="hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 xl:grid xl:grid-cols-[1.2fr_1.1fr_1fr_1.3fr]">
             <div>{{ __('app.booking_section') }}</div>
@@ -97,6 +105,31 @@
                         </form>
                     @else
                         <p class="rounded-lg border border-stone-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">{{ __('app.unpaid_class_booking_payment_no_permission') }}</p>
+                    @endif
+
+                    @if ($canWaiveBookingPayments)
+                        <form
+                            method="POST"
+                            action="{{ route('dashboard.accounts.bookings.payment-waivers.store', [$account, $booking]) }}"
+                            class="mt-3 flex justify-end"
+                            data-confirm-action
+                            data-confirm-title="{{ __('app.waive_class_booking_payment_title') }}"
+                            data-confirm-body="{{ __('app.waive_class_booking_payment_copy') }}"
+                            data-confirm-accept="{{ __('app.waive_payment') }}"
+                            data-confirm-variant="danger"
+                            data-confirm-icon="circle-x"
+                            data-confirm-reason-required="true"
+                            data-confirm-reason-maxlength="2000"
+                            data-confirm-reason-label="{{ __('app.waive_payment_reason') }}"
+                            data-confirm-reason-placeholder="{{ __('app.waive_payment_reason_placeholder') }}"
+                        >
+                            @csrf
+                            <input type="hidden" name="return_to" value="{{ request()->fullUrl() }}">
+                            <input type="hidden" name="reason" data-confirm-reason-output>
+                            <x-ui.button type="submit" variant="danger" size="sm">
+                                {{ __('app.waive_payment') }}
+                            </x-ui.button>
+                        </form>
                     @endif
                 </div>
             </article>

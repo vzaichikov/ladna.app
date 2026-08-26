@@ -85,7 +85,7 @@ class ScheduledClassController extends Controller
                 'activeCancellation.effects',
                 'classBookings' => fn ($query) => $query
                     ->notCorrectedRemoved()
-                    ->with(['customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
+                    ->with(['activePaymentWaiver', 'customer', 'manualCashPayment', 'classPassReservation.customerClassPass.classPassPlan']),
             ])
             ->whereBetween('starts_at', [
                 $startsAt->timezone(config('app.timezone')),

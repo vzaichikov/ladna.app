@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ClassBookingPaymentWaiverController;
 use App\Http\Controllers\CustomerPurchaseCorrectionController;
 use App\Http\Controllers\CustomerPurchaseRefundController;
 use App\Http\Controllers\EarningsReportController;
@@ -85,6 +86,8 @@ Route::post('accounts/{account}/salary-model-assignments', [TrainerSalaryAssignm
     ->name('accounts.salary-model-assignments.store');
 Route::get('accounts/{account}/reports/unpaid-class-payments', UnpaidClassPaymentReportController::class)
     ->name('accounts.reports.unpaid-class-payments');
+Route::get('accounts/{account}/reports/unpaid-class-payments/waived', [ClassBookingPaymentWaiverController::class, 'index'])
+    ->name('accounts.reports.unpaid-class-payments.waived');
 Route::get('accounts/{account}/reports/people-counter', PeopleCounterReportController::class)
     ->name('accounts.reports.people-counter');
 Route::get('accounts/{account}/reports/unknown-presence', UnknownPresenceReportController::class)

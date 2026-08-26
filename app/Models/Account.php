@@ -892,6 +892,11 @@ class Account extends Model
         return $this->hasMany(ClassBooking::class);
     }
 
+    public function classBookingPaymentWaivers(): HasMany
+    {
+        return $this->hasMany(ClassBookingPaymentWaiver::class);
+    }
+
     public function classBookingCorrections(): HasMany
     {
         return $this->hasMany(ClassBookingCorrection::class);
