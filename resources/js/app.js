@@ -7560,6 +7560,66 @@ function initFestivalAnnouncementModal() {
     }
 }
 
+function initFestivalApplicationPickerModal() {
+    const modal = document.querySelector('[data-festival-application-picker-modal]');
+    const openButton = document.querySelector('[data-festival-application-picker-open]');
+
+    if (!modal || !openButton) {
+        return;
+    }
+
+    let opener = null;
+    const focusableElements = () => [...modal.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    const close = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+        opener?.focus();
+        opener = null;
+    };
+    const open = () => {
+        opener = openButton;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        window.requestAnimationFrame(() => focusableElements()[0]?.focus());
+    };
+
+    openButton.addEventListener('click', open);
+    modal.querySelectorAll('[data-festival-application-picker-close]').forEach((button) => {
+        button.addEventListener('click', close);
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            close();
+        }
+    });
+    modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            close();
+
+            return;
+        }
+
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = focusableElements();
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    });
+}
+
 function initFestivalQuickProfileModal() {
     const modal = document.querySelector('[data-festival-quick-profile-modal]');
     const form = modal?.querySelector('[data-festival-quick-profile-form]');
@@ -8958,6 +9018,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalStreamPlayer();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
+    initFestivalApplicationPickerModal();
     initFestivalQuickProfileModal();
     initFestivalSceneTabs();
     initFestivalProgram();

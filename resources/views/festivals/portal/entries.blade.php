@@ -64,10 +64,62 @@
                         </a>
                     </article>
                 @empty
-                    <x-ui.empty-state icon="trophy">{{ __('app.festival_entries_empty') }}</x-ui.empty-state>
+                    <x-ui.empty-state :title="__('app.festival_entries_empty')" icon="trophy" class="py-14 lg:col-span-2">
+                        @if($eligibleEditions->isNotEmpty())
+                            <p>{{ __('app.festival_empty_apply_copy') }}</p>
+                            <div class="mt-6">
+                                <x-ui.button type="button" size="lg" variant="success" data-festival-application-picker-open>
+                                    <x-ui.icon name="plus" class="h-5 w-5" />
+                                    {{ __('app.festival_apply') }}
+                                </x-ui.button>
+                            </div>
+                        @endif
+                    </x-ui.empty-state>
                 @endforelse
             </div>
         </section>
+
+        @if($entries->isEmpty() && $eligibleEditions->isNotEmpty())
+            <div
+                class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="festival-application-picker-title"
+                data-festival-application-picker-modal
+            >
+                <div class="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <h2 id="festival-application-picker-title" class="text-xl font-semibold text-slate-950">{{ __('app.festival_choose_application_festival') }}</h2>
+                            <p class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_choose_application_festival_copy') }}</p>
+                        </div>
+                        <button type="button" class="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 crm-focus" aria-label="{{ __('app.close') }}" data-festival-application-picker-close>
+                            <x-ui.icon name="x" class="h-5 w-5" />
+                        </button>
+                    </div>
+
+                    <div class="mt-5 space-y-2">
+                        @foreach($eligibleEditions as $eligibleEdition)
+                            <a href="{{ route('festival.portal.entries.create', [$account->slug, $eligibleEdition->slug]) }}" class="group flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3 text-left transition hover:border-violet-crm-100 hover:bg-violet-crm-50 crm-focus">
+                                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-violet-crm-100 text-violet-crm-700">
+                                    <x-ui.icon name="trophy" class="h-5 w-5" />
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-xs font-semibold text-violet-crm-700">{{ $eligibleEdition->series->name }}</span>
+                                    <span class="mt-0.5 block font-semibold text-slate-950">{{ $eligibleEdition->title }}</span>
+                                    <span class="mt-1 block text-xs text-slate-500">{{ $eligibleEdition->starts_at->timezone($eligibleEdition->timezone)->format('d.m.Y H:i') }} · {{ $eligibleEdition->venue_name }}</span>
+                                </span>
+                                <x-ui.icon name="chevron-right" class="h-5 w-5 shrink-0 text-slate-400 transition group-hover:text-violet-crm-700" />
+                            </a>
+                        @endforeach
+                    </div>
+
+                    <div class="mt-6 flex justify-end">
+                        <x-ui.button type="button" variant="secondary" data-festival-application-picker-close>{{ __('app.cancel') }}</x-ui.button>
+                    </div>
+                </div>
+            </div>
+        @endif
 
         @if($notifications->isNotEmpty())<section class="mt-9"><h2 class="text-2xl font-semibold">{{ __('app.notifications') }}</h2><div class="mt-4 space-y-2">@foreach($notifications as $notification)<article class="rounded-xl border border-stone-200 bg-white p-4"><strong>{{ __('app.festival_notification_type_'.$notification->type->value) }}</strong><span class="ml-2 text-xs text-slate-500">{{ $notification->created_at->diffForHumans() }}</span></article>@endforeach</div></section>@endif
     </div>

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
+use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalRegistrationStatus;
 use App\Http\Requests\FestivalOtpVerifyRequest;
 use App\Http\Requests\FestivalPortalProfileRequest;
 use App\Http\Requests\FestivalProfilePhoneOtpSendRequest;
@@ -14,6 +16,7 @@ use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Festivals\FestivalOtpService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +30,17 @@ class FestivalPortalController extends Controller
     public function dashboard(Request $request, string $accountSlug): View
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        $editions = FestivalEdition::query()->whereBelongsTo($account)->published()->with(['series', 'coverMedia'])->orderBy('starts_at')->get();
+        $editions = FestivalEdition::query()
+            ->whereBelongsTo($account)
+            ->published()
+            ->with(['series', 'coverMedia'])
+            ->withCount([
+                'entries as portal_entries_count' => fn (Builder $query): Builder => $query
+                    ->where('account_id', $account->id)
+                    ->where('festival_portal_user_id', $portalUser->id),
+            ])
+            ->orderBy('starts_at')
+            ->get();
 
         return view('festivals.portal.dashboard', compact('account', 'portalUser', 'editions'));
     }
@@ -47,8 +60,27 @@ class FestivalPortalController extends Controller
                 ->orderBy('starts_at'),
         ])->latest()->get();
         $notifications = FestivalNotification::query()->where('festival_portal_user_id', $portalUser->id)->latest()->limit(50)->get();
+        $eligibleEditions = collect();
 
-        return view('festivals.portal.entries', compact('account', 'portalUser', 'entries', 'notifications'));
+        if ($entries->isEmpty()) {
+            $eligibleEditions = FestivalEdition::query()
+                ->whereBelongsTo($account)
+                ->where('status', FestivalEditionStatus::Published->value)
+                ->where('registration_status', FestivalRegistrationStatus::Open->value)
+                ->where('starts_at', '>', now())
+                ->where(fn (Builder $query): Builder => $query
+                    ->whereNull('registration_opens_at')
+                    ->orWhere('registration_opens_at', '<=', now()))
+                ->where(fn (Builder $query): Builder => $query
+                    ->whereNull('registration_closes_at')
+                    ->orWhere('registration_closes_at', '>', now()))
+                ->whereHas('categories', fn (Builder $query): Builder => $query->where('is_active', true))
+                ->with('series')
+                ->orderBy('starts_at')
+                ->get();
+        }
+
+        return view('festivals.portal.entries', compact('account', 'portalUser', 'entries', 'notifications', 'eligibleEditions'));
     }
 
     public function judgeDashboard(Request $request, string $accountSlug): View

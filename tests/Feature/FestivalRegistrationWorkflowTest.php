@@ -748,6 +748,12 @@ class FestivalRegistrationWorkflowTest extends TestCase
         ]);
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create(['account_id' => $account->id]);
+        $otherPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $otherPortalUser->id,
+        ]);
 
         $this->actingAs($portalUser, 'festival')->get(route('festival.portal.dashboard', $account->slug))
             ->assertOk()
@@ -755,6 +761,11 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertSee(__('app.festival_my_performances'))
             ->assertSee(__('app.festival_portal_team'))
             ->assertSee(__('app.festival_new_application'))
+            ->assertSee(__('app.festival_my_applications_count', ['count' => 0]))
+            ->assertSee('bg-emerald-600', false)
+            ->assertSee('data-festival-entry-count="0"', false)
+            ->assertSee('bg-stone-100 text-slate-400', false)
+            ->assertDontSee(__('app.festival_additional_application_confirmation'))
             ->assertSee('src="https://example.test/festival-cover.jpg"', false)
             ->assertSee('alt="Festival cover"', false)
             ->assertDontSee(__('app.notifications'));
@@ -789,6 +800,13 @@ class FestivalRegistrationWorkflowTest extends TestCase
         $this->get(route('festival.portal.dashboard', $account->slug))
             ->assertOk()
             ->assertSee(__('app.festival_new_application'))
+            ->assertSee(__('app.festival_my_applications_count', ['count' => 1]))
+            ->assertSee(__('app.festival_additional_application_confirmation'))
+            ->assertSee('bg-violet-crm-500', false)
+            ->assertSee('data-confirm-action', false)
+            ->assertSee('data-confirm-variant="primary"', false)
+            ->assertSee('data-festival-entry-count="1"', false)
+            ->assertSee('bg-violet-crm-100 text-violet-crm-700', false)
             ->assertDontSee('Sky Mara');
         $draftApplications = $this->get(route('festival.portal.entries.index', $account->slug));
         $draftApplications
@@ -800,6 +818,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertSee('<span class="crm-status-muted">'.__('app.festival_entry_status_draft').'</span>', false)
             ->assertSee('crm-status-danger', false)
             ->assertSee(__('app.festival_application_payment_unpaid'))
+            ->assertSee('data-festival-entry-count="1"', false)
             ->assertDontSee(__('app.festival_new_application'));
 
         $entry->update(['status' => FestivalEntryStatus::Submitted]);
@@ -814,6 +833,52 @@ class FestivalRegistrationWorkflowTest extends TestCase
             ->assertOk()
             ->assertDontSee(__('app.festival_application_payment_unpaid'))
             ->assertDontSee(__('app.festival_charge_status_paid'));
+    }
+
+    public function test_empty_application_list_offers_only_future_festivals_with_open_registration_and_active_categories(): void
+    {
+        [$account, $eligibleEdition, $portalUser] = $this->festival();
+        $series = $eligibleEdition->series()->firstOrFail();
+        FestivalCategory::factory()->for($eligibleEdition)->create(['account_id' => $account->id, 'is_active' => true]);
+
+        $closedEdition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'registration_status' => 'closed',
+            'title' => 'Closed future Festival',
+            'slug' => 'closed-future-festival',
+        ]);
+        FestivalCategory::factory()->for($closedEdition)->create(['account_id' => $account->id, 'is_active' => true]);
+
+        $pastEdition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Started Festival',
+            'slug' => 'started-festival',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addDay(),
+        ]);
+        FestivalCategory::factory()->for($pastEdition)->create(['account_id' => $account->id, 'is_active' => true]);
+
+        $categorylessEdition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'title' => 'Categoryless Festival',
+            'slug' => 'categoryless-festival',
+        ]);
+
+        $response = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entries.index', $account->slug));
+
+        $response
+            ->assertOk()
+            ->assertSee(__('app.festival_entries_empty'))
+            ->assertSee(__('app.festival_apply'))
+            ->assertSee(__('app.festival_choose_application_festival'))
+            ->assertSee('data-festival-application-picker-open', false)
+            ->assertSee('data-festival-application-picker-modal', false)
+            ->assertSee($eligibleEdition->title)
+            ->assertSee(route('festival.portal.entries.create', [$account->slug, $eligibleEdition->slug]), false)
+            ->assertDontSee($closedEdition->title)
+            ->assertDontSee($pastEdition->title)
+            ->assertDontSee($categorylessEdition->title);
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser} */

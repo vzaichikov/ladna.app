@@ -12,7 +12,11 @@
         <section class="mt-7">
             <div class="grid gap-4 md:grid-cols-2">
                 @forelse($editions as $edition)
-                    @php $coverUrl = $edition->coverMedia?->url(); @endphp
+                    @php
+                        $coverUrl = $edition->coverMedia?->url();
+                        $applicationCount = (int) $edition->portal_entries_count;
+                        $newApplicationUrl = route('festival.portal.entries.create', [$account->slug, $edition->slug]);
+                    @endphp
                     <article class="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-crm">
                         <a href="{{ route('public.festivals.show', [$account->slug, $edition->slug]) }}" class="relative block aspect-[16/9] overflow-hidden bg-[linear-gradient(135deg,#10233F_0%,#23405F_58%,#D9A441_145%)]">
                             @if($coverUrl)
@@ -28,8 +32,26 @@
                             <p class="mt-2 text-sm text-slate-500">{{ $edition->starts_at->timezone($edition->timezone)->format('d.m.Y H:i') }} · {{ $edition->venue_name }}</p>
                             <div class="mt-4 flex flex-wrap gap-2">
                                 @if($edition->registrationIsOpen())
-                                    <x-ui.button :href="route('festival.portal.entries.create', [$account->slug, $edition->slug])">{{ __('app.festival_new_application') }}</x-ui.button>
+                                    @if($applicationCount > 0)
+                                        <form
+                                            method="GET"
+                                            action="{{ $newApplicationUrl }}"
+                                            data-confirm-action
+                                            data-confirm-title="{{ __('app.festival_new_application') }}"
+                                            data-confirm-body="{{ __('app.festival_additional_application_confirmation') }}"
+                                            data-confirm-accept="{{ __('app.continue') }}"
+                                            data-confirm-icon="plus"
+                                            data-confirm-variant="primary"
+                                        >
+                                            <x-ui.button type="submit" variant="brand">{{ __('app.festival_new_application') }}</x-ui.button>
+                                        </form>
+                                    @else
+                                        <x-ui.button :href="$newApplicationUrl" variant="success">{{ __('app.festival_new_application') }}</x-ui.button>
+                                    @endif
                                 @endif
+                                <x-ui.button :href="route('festival.portal.entries.index', $account->slug)" variant="secondary">
+                                    {{ __('app.festival_my_applications_count', ['count' => $applicationCount]) }}
+                                </x-ui.button>
                                 <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug])" variant="secondary">{{ __('app.more') }}</x-ui.button>
                             </div>
                         </div>

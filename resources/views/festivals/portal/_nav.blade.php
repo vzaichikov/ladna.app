@@ -7,7 +7,17 @@
         <a href="{{ route('festival.portal.judge.profile.edit', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.judge.profile.*')) aria-current="page" @endif>{{ __('app.profile') }}</a>
     @else
         <a href="{{ route('festival.portal.dashboard', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.dashboard')) aria-current="page" @endif>{{ __('app.festivals') }}</a>
-        <a href="{{ route('festival.portal.entries.index', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.entries.*', 'festival.portal.entry-steps.*', 'festival.portal.entry-step-responses.*', 'festival.portal.submissions.*', 'festival.portal.charges.*')) aria-current="page" @endif>{{ __('app.festival_my_performances') }}</a>
+        <a href="{{ route('festival.portal.entries.index', $account->slug) }}" class="crm-tab gap-2" @if(request()->routeIs('festival.portal.entries.*', 'festival.portal.entry-steps.*', 'festival.portal.entry-step-responses.*', 'festival.portal.submissions.*', 'festival.portal.charges.*')) aria-current="page" @endif>
+            <span>{{ __('app.festival_my_performances') }}</span>
+            <span
+                data-festival-entry-count="{{ $portalEntryCount }}"
+                @class([
+                    'inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-1 text-xs font-bold leading-none',
+                    'bg-violet-crm-100 text-violet-crm-700' => $portalEntryCount > 0,
+                    'bg-stone-100 text-slate-400' => $portalEntryCount === 0,
+                ])
+            >{{ $portalEntryCount }}</span>
+        </a>
         <a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.participants.*')) aria-current="page" @endif>{{ __('app.festival_portal_team') }}</a>
         <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.profile.*')) aria-current="page" @endif>{{ __('app.profile') }}</a>
     @endif

@@ -3,11 +3,13 @@
 namespace App\Providers;
 
 use App\Enums\AccountRole;
+use App\Enums\FestivalPortalRole;
 use App\Enums\StudioPermission;
 use App\Http\Controllers\McpOAuthApprovalController;
 use App\Http\Controllers\McpOAuthDenialController;
 use App\Models\Account;
 use App\Models\FestivalEdition;
+use App\Models\FestivalPortalUser;
 use App\Models\Location;
 use App\Policies\AccountPolicy;
 use App\Policies\FestivalEditionPolicy;
@@ -154,6 +156,22 @@ class AppServiceProvider extends ServiceProvider
         });
         View::composer('layouts.app', AppBreadcrumbComposer::class);
         View::composer('layouts.app', FestivalWorkspaceComposer::class);
+        View::composer('festivals.portal._nav', function (ViewInstance $view): void {
+            $account = $view->getData()['account'] ?? null;
+            $portalUser = $view->getData()['portalUser'] ?? request()->user('festival');
+            $portalEntryCount = 0;
+
+            if ($account instanceof Account
+                && $portalUser instanceof FestivalPortalUser
+                && $portalUser->role === FestivalPortalRole::Registrant
+                && $portalUser->account_id === $account->id) {
+                $portalEntryCount = $portalUser->entries()
+                    ->where('account_id', $account->id)
+                    ->count();
+            }
+
+            $view->with('portalEntryCount', $portalEntryCount);
+        });
 
         RateLimiter::for('login', function (Request $request): Limit {
             return Limit::perMinute(5)->by($request->string('email')->lower().'|'.$request->ip());
