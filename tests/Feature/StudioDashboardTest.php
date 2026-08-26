@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\RecordManualClassBookingPayment;
 use App\Enums\AccountRole;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
@@ -17,6 +18,7 @@ use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
+use App\Models\CustomerPurchaseRefund;
 use App\Models\Location;
 use App\Models\PeopleCounterSample;
 use App\Models\Room;
@@ -334,12 +336,26 @@ class StudioDashboardTest extends TestCase
         $context = $this->classContext($account, trainerName: 'Issue Trainer');
         $unreservedClass = $this->scheduledClass($context, 'Unreserved Class', '2026-06-25 10:00:00', '2026-06-25 11:00:00', 8);
         $reservedClass = $this->scheduledClass($context, 'Reserved Class', '2026-06-26 10:00:00', '2026-06-26 11:00:00', 8);
+        $paidClass = $this->scheduledClass($context, 'Cash Paid Class', '2026-06-27 10:00:00', '2026-06-27 11:00:00', 8);
+        $refundedClass = $this->scheduledClass($context, 'Refunded Cash Class', '2026-06-28 10:00:00', '2026-06-28 11:00:00', 8);
         $usedClass = $this->scheduledClass($context, 'Used Class', '2026-06-23 10:00:00', '2026-06-23 11:00:00', 8);
         $unreservedBooking = $this->booking($account, $unreservedClass, ClassBookingStatus::Booked, 'Needs Reserve');
         $reservedBooking = $this->booking($account, $reservedClass, ClassBookingStatus::Booked, 'Reserved Customer');
+        $paidBooking = $this->booking($account, $paidClass, ClassBookingStatus::Booked, 'Cash Paid Customer');
+        $refundedBooking = $this->booking($account, $refundedClass, ClassBookingStatus::Booked, 'Refunded Cash Customer');
         $usedBooking = $this->booking($account, $usedClass, ClassBookingStatus::Attended, 'Used Customer');
         $reservedPass = $this->activePass($account, 'RESERVED-001');
         $usedPass = $this->activePass($account, 'USED-001');
+        app(RecordManualClassBookingPayment::class)->execute($account, $paidBooking, 25000, $owner);
+        $refundedPayment = app(RecordManualClassBookingPayment::class)->execute($account, $refundedBooking, 25000, $owner);
+
+        CustomerPurchaseRefund::factory()
+            ->for($account)
+            ->for($refundedPayment, 'customerPurchase')
+            ->create([
+                'amount_cents' => 25000,
+                'currency' => 'UAH',
+            ]);
 
         $reservedPass->reservations()->create([
             'account_id' => $account->id,
@@ -357,6 +373,11 @@ class StudioDashboardTest extends TestCase
             'used_at' => Carbon::parse('2026-06-23 10:00:00'),
         ]);
 
+        $problems = collect(app(StudioDashboardData::class)->forAccount($account, $owner)['ownerDashboard']['problems'])
+            ->keyBy('key');
+
+        $this->assertSame(1, $problems['unreserved_bookings']['count']);
+
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.trainers.index', $account))
             ->assertOk()
@@ -368,6 +389,8 @@ class StudioDashboardTest extends TestCase
             ->assertSee('Needs Reserve')
             ->assertSee(route('dashboard.accounts.customers.edit', [$account, $unreservedBooking->customer]), false)
             ->assertDontSee('Reserved Customer')
+            ->assertDontSee('Cash Paid Customer')
+            ->assertDontSee('Refunded Cash Customer')
             ->assertDontSee('Used Customer');
 
         Carbon::setTestNow();

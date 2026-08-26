@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\RecordManualClassBookingPayment;
 use App\Enums\ClassBookingStatus;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
@@ -517,6 +518,17 @@ class CustomerDashboardTest extends TestCase
         $this->assertStringContainsString(__('app.unpaid_class_booking_payment_alert'), $roomRentalCard);
         $this->assertStringContainsString(__('app.unpaid_class_booking_payment_reason_room_rental'), $roomRentalCard);
         $this->assertStringNotContainsString(__('app.customer_booking_without_class_pass_alert'), $roomRentalCard);
+
+        app(RecordManualClassBookingPayment::class)->execute($account, $groupBooking, 25000);
+
+        $paidResponse = $this->actingAs($customer, 'customer')
+            ->withSession(['locale' => 'uk'])
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk();
+        $paidGroupCard = $this->bookingCardHtml($paidResponse, $groupBooking);
+
+        $this->assertStringNotContainsString(__('app.customer_booking_without_class_pass_alert'), $paidGroupCard);
+        $this->assertStringNotContainsString(__('app.unpaid_class_booking_payment_alert'), $paidGroupCard);
 
         Carbon::setTestNow();
     }

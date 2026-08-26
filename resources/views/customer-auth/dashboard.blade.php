@@ -196,6 +196,7 @@
                                         $manualPaymentDueKind = $booking->manualCashPaymentDueKind($booking->scheduledClass);
                                         $bookingNeedsClassPassAlert = ! $booking->skip_class_pass_reservation
                                             && ! $hasActivePassReservation
+                                            && ! $booking->manualCashPayment
                                             && $booking->scheduledClass?->classType?->schedule_kind === \App\Enums\ScheduleKind::GroupClass
                                             && in_array($booking->status->value, ['booked', 'attended', 'no_show'], true)
                                             && $booking->scheduledClass?->status !== \App\Enums\ScheduledClassStatus::Cancelled;

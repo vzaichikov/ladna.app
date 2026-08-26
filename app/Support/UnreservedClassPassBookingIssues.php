@@ -43,6 +43,7 @@ class UnreservedClassPassBookingIssues
             ->where("{$classBookingTable}.skip_class_pass_reservation", false)
             ->where("{$scheduledClassTable}.account_id", $accountId)
             ->where("{$scheduledClassTable}.status", ScheduledClassStatus::Scheduled->value)
+            ->whereDoesntHave('manualCashPayment')
             ->whereDoesntHave('classPassReservation', fn ($query) => $query->whereIn('status', [
                 CustomerClassPassReservationStatus::Reserved->value,
                 CustomerClassPassReservationStatus::Used->value,

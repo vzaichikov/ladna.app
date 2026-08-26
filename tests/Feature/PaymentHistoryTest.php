@@ -176,6 +176,55 @@ class PaymentHistoryTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_studio_cash_group_booking_payment_hides_missing_pass_warning(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-23 09:00:00', 'UTC'));
+
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['name' => 'Studio Group Cash', 'default_currency' => 'UAH', 'timezone' => 'UTC']);
+        $account->addOwner($owner);
+        $location = Location::factory()->for($account)->create(['name' => 'Main desk', 'timezone' => 'UTC']);
+        $room = Room::factory()->for($account)->for($location)->create(['name' => 'Main Hall']);
+        $classType = ClassType::factory()->for($account)->create([
+            'name' => 'Pole group',
+            'schedule_kind' => ScheduleKind::GroupClass->value,
+        ]);
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($classType)
+            ->create([
+                'title' => 'Paid Pole group',
+                'starts_at' => '2026-06-23 10:00:00',
+                'ends_at' => '2026-06-23 11:00:00',
+            ]);
+        $customer = Customer::factory()->for($account)->create(['name' => 'Paid Group Client']);
+        $booking = ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.scheduled-classes.index', $account))
+            ->assertOk()
+            ->assertSee(__('app.no_matching_class_pass_alert'));
+
+        $response = $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.bookings.payment.store', [$account, $booking]), [
+                'amount' => '250.00',
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', __('app.class_booking_payment_recorded'));
+
+        $this->assertStringContainsString(__('app.class_booking_payment'), $response->json('card_html'));
+        $this->assertStringContainsString(MoneyFormatter::format(25000, 'UAH'), $response->json('card_html'));
+        $this->assertStringNotContainsString(__('app.no_matching_class_pass_alert'), $response->json('card_html'));
+
+        Carbon::setTestNow();
+    }
+
     public function test_any_time_addon_booking_payment_is_recorded_against_booking_and_class_pass(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-23 09:00:00', 'UTC'));

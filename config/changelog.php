@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.150.1',
+                'date' => '2026-08-26',
+                'title' => 'Clear cash-paid booking status',
+                'items' => ['Cash-paid single-class bookings no longer appear as missing-pass problems or show a missing-pass warning. Their payment and refund history remains unchanged.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.150.0',
                 'date' => '2026-08-22',
                 'title' => 'Combined Festival payments and authored Velvet content',
@@ -1325,6 +1332,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.150.1',
+                'date' => '2026-08-26',
+                'title' => 'Зрозумілий статус разових готівкових записів',
+                'items' => ['Разові записи, оплачені готівкою, більше не потрапляють до проблем без абонемента й не показують попередження про відсутній абонемент. Історія оплат і повернень не змінюється.'],
+                'meta' => 'Очікується коміт релізу.',
+            ],
             [
                 'version' => '0.150.0',
                 'date' => '2026-08-22',
