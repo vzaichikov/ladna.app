@@ -102,6 +102,7 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertSee('https://cdn.example.test/festival-mobile.jpg', false)
             ->assertDontSee('https://cdn.example.test/farther-festival.jpg', false)
             ->assertDontSee('https://cdn.example.test/other-series.jpg', false)
+            ->assertDontSee($series->summary)
             ->assertSee($edition->title)
             ->assertDontSee((string) $installation->tokenValue(), false);
     }

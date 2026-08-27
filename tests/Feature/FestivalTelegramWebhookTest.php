@@ -21,10 +21,9 @@ class FestivalTelegramWebhookTest extends TestCase
 
     public function test_private_own_contact_creates_role_neutral_series_authorization_and_registrant(): void
     {
-        Http::fake(['api.telegram.org/*' => Http::response([
-            'ok' => true,
-            'result' => ['message_id' => 55101],
-        ])]);
+        Http::fake(['api.telegram.org/*' => Http::sequence()
+            ->push(['ok' => true, 'result' => ['message_id' => 55101]])
+            ->push(['ok' => true, 'result' => ['message_id' => 55102]])]);
         [$account, $series, $installation] = $this->festival();
         $payload = $this->messageUpdate(5101, 7201001, [
             'contact' => [
@@ -48,8 +47,10 @@ class FestivalTelegramWebhookTest extends TestCase
             'festival_portal_user_id' => $registrant->id,
         ]);
         $this->assertSame(1, $installation->updates()->count());
-        $this->assertSame(2, $installation->messages()->count());
-        Http::assertSentCount(1);
+        $this->assertSame(3, $installation->messages()->count());
+        Http::assertSentCount(2);
+        Http::assertSent(fn (Request $request): bool => $request['chat_id'] === '7201001'
+            && data_get($request->data(), 'reply_markup.remove_keyboard') === true);
         Http::assertSent(fn (Request $request): bool => $request['chat_id'] === '7201001'
             && data_get($request->data(), 'reply_markup.inline_keyboard.0.0.web_app.url') === route(
                 'public.festival-telegram.show',
@@ -86,6 +87,38 @@ class FestivalTelegramWebhookTest extends TestCase
             (string) $request['text'],
             __('app.festival_telegram_contact_must_be_own', locale: 'en'),
         ) && data_get($request->data(), 'reply_markup.keyboard.0.0.request_contact') === true);
+    }
+
+    public function test_authorized_command_removes_the_contact_keyboard_and_keeps_the_mini_app_action(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::sequence()
+            ->push(['ok' => true, 'result' => ['message_id' => 55103]])
+            ->push(['ok' => true, 'result' => ['message_id' => 55104]])]);
+        [$account, $series, $installation] = $this->festival();
+        $linked = app(FestivalTelegramIdentityLinker::class)->authorizeRegistrant(
+            $series,
+            $installation,
+            '7202501',
+            '7202501',
+            '+380501112501',
+            ['first_name' => 'Authorized'],
+        );
+
+        $this->postUpdate($installation, $this->messageUpdate(5105, 7202501, [
+            'text' => '/start',
+        ]))->assertNoContent();
+
+        $this->assertSame(1, $installation->chatAuthorizations()->count());
+        $this->assertSame(3, $installation->messages()->count());
+        Http::assertSentCount(2);
+        Http::assertSent(fn (Request $request): bool => $request['chat_id'] === '7202501'
+            && data_get($request->data(), 'reply_markup.remove_keyboard') === true);
+        Http::assertSent(fn (Request $request): bool => $request['chat_id'] === '7202501'
+            && $request['text'] === __('app.festival_telegram_open_app', locale: $linked['registrant']->locale)
+            && data_get($request->data(), 'reply_markup.inline_keyboard.0.0.web_app.url') === route(
+                'public.festival-telegram.show',
+                [$account->slug, $series->slug],
+            ));
     }
 
     public function test_bot_block_membership_update_revokes_the_exact_series_authorization(): void

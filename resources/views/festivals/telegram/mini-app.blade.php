@@ -49,9 +49,6 @@
                     @if ($hero)
                         <p class="mt-2 text-sm font-semibold text-white/90">{{ $hero['title'] }}</p>
                     @endif
-                    @if ($series->summary)
-                        <p class="mt-3 max-w-xl text-sm leading-6 text-slate-300">{{ $series->summary }}</p>
-                    @endif
                 </div>
             </header>
 

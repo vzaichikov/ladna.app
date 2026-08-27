@@ -168,10 +168,14 @@ class FestivalTelegramUpdateProcessor
 
     private function sendOpenApp(TelegramUpdate $update, FestivalSeries $series, string $chatId, string $message, TelegramChatAuthorization $authorization): void
     {
+        $locale = $this->localeForAuthorization($series, $authorization);
         $this->send($update, $chatId, $message, [
+            'reply_markup' => ['remove_keyboard' => true],
+        ], $authorization);
+        $this->send($update, $chatId, __('app.festival_telegram_open_app', locale: $locale), [
             'reply_markup' => [
                 'inline_keyboard' => [[[
-                    'text' => __('app.festival_telegram_open_app', locale: $this->localeForAuthorization($series, $authorization)),
+                    'text' => __('app.festival_telegram_open_app', locale: $locale),
                     'web_app' => ['url' => route('public.festival-telegram.show', [$series->account->slug, $series->slug])],
                 ]]],
             ],
@@ -190,16 +194,17 @@ class FestivalTelegramUpdateProcessor
             throw new RuntimeException((string) ($response?->json('description') ?: 'Festival Telegram message delivery failed.'));
         }
 
+        $telegramMessageId = filled($response?->json('result.message_id')) ? (string) $response?->json('result.message_id') : null;
         TelegramMessage::query()->firstOrCreate([
             'telegram_update_id' => $update->id,
             'direction' => 'outbound',
+            'telegram_message_id' => $telegramMessageId,
         ], [
             'account_id' => $update->account_id,
             'telegram_bot_installation_id' => $update->telegram_bot_installation_id,
             'telegram_chat_authorization_id' => $authorization?->id,
             'profile' => TelegramBotProfile::Festival->value,
             'telegram_chat_id' => $chatId,
-            'telegram_message_id' => filled($response?->json('result.message_id')) ? (string) $response?->json('result.message_id') : null,
             'telegram_user_id' => $authorization?->telegram_user_id,
             'message_type' => 'text',
             'text' => $text,

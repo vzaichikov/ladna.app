@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.153.2',
+                'date' => '2026-08-27',
+                'title' => 'Compact Festival Telegram experience',
+                'items' => ['Authorized Festival subscribers now move directly from the edition hero to the Mini App navigation without the redundant Series summary or large authorization card. After phone authorization, the bot explicitly removes Telegram’s contact-sharing keyboard before presenting the Festival button.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.153.1',
                 'date' => '2026-08-27',
                 'title' => 'Festival-branded Telegram Mini App',
@@ -1360,6 +1367,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.153.2',
+                'date' => '2026-08-27',
+                'title' => 'Компактний Festival Telegram',
+                'items' => ['Авторизовані підписники фестивалю тепер одразу переходять від обкладинки фестивалю до навігації Mini App без зайвого опису серії та великої картки авторизації. Після авторизації за номером телефону бот явно прибирає клавіатуру Telegram для поширення контакту перед показом кнопки фестивалю.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.153.1',
                 'date' => '2026-08-27',

@@ -217,12 +217,13 @@ export function initFestivalTelegramMiniApp() {
     const renderAuthorization = () => {
         const card = root.querySelector('[data-festival-telegram-authorization]');
         const button = root.querySelector('[data-festival-telegram-contact]');
+        const navigation = root.querySelector('[data-festival-telegram-nav]');
+        card.classList.toggle('hidden', state.authorized);
+        navigation.classList.toggle('hidden', !state.authorized);
+        button.hidden = state.authorized;
+
         if (state.authorized) {
-            card.classList.add('border-emerald-400/30', 'bg-emerald-500/10');
-            root.querySelector('[data-festival-telegram-auth-title]').textContent = labels.authorization_ready;
-            root.querySelector('[data-festival-telegram-auth-copy]').textContent = state.identity?.phone || '';
-            button.hidden = true;
-            root.querySelector('[data-festival-telegram-nav]').classList.remove('hidden');
+            window.clearInterval(contactPoll);
         }
     };
 

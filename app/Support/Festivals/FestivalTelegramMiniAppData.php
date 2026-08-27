@@ -44,7 +44,6 @@ class FestivalTelegramMiniAppData
             'series' => [
                 'id' => $series->id,
                 'name' => $series->name,
-                'summary' => $series->summary,
                 'organizer' => $series->organizer_name,
                 'phone' => $series->organizer_phone,
                 'email' => $series->organizer_email,
