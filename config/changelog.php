@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.153.1',
+                'date' => '2026-08-27',
+                'title' => 'Festival-branded Telegram Mini App',
+                'items' => ['Each Festival Series Telegram Mini App now uses that Series brand colour and the nearest live or upcoming published edition’s configured desktop and mobile cover images as its main hero visual. If no future cover is available, it falls back to the newest published Festival cover and then to the existing gradient.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.153.0',
                 'date' => '2026-08-27',
                 'title' => 'Festival Series Telegram companion',
@@ -1353,6 +1360,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.153.1',
+                'date' => '2026-08-27',
+                'title' => 'Фірмовий Telegram Mini App фестивалю',
+                'items' => ['Telegram Mini App кожної серії фестивалів тепер використовує її фірмовий колір і налаштовані десктопне та мобільне обкладинкові зображення найближчого активного або майбутнього опублікованого фестивалю як головне зображення. Якщо майбутньої обкладинки немає, застосовується найновіша опублікована фестивальна обкладинка, а потім наявний градієнт.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.153.0',
                 'date' => '2026-08-27',

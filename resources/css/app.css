@@ -134,6 +134,24 @@
 }
 
 @layer components {
+    .festival-telegram-accent-button {
+        background-color: var(--festival-telegram-accent);
+    }
+
+    .festival-telegram-accent-button:hover {
+        filter: brightness(1.12);
+    }
+
+    .festival-telegram-accent-text {
+        color: var(--festival-telegram-accent);
+    }
+
+    .festival-telegram-tab[data-active='true'] {
+        border-color: var(--festival-telegram-accent);
+        background-color: var(--festival-telegram-accent);
+        color: #ffffff;
+    }
+
     .festival-page {
         background-color: var(--festival-page);
         color: var(--festival-text);

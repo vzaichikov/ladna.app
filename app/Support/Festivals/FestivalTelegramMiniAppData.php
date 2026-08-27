@@ -6,10 +6,12 @@ use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPortalRole;
 use App\Models\FestivalEdition;
+use App\Models\FestivalMedia;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTimeline;
 use App\Models\TelegramChatAuthorization;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 class FestivalTelegramMiniAppData
@@ -29,6 +31,8 @@ class FestivalTelegramMiniAppData
             ->published()
             ->with([
                 'account:id,slug',
+                'coverMedia',
+                'mobileCoverMedia',
                 'documents' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
                 'results' => fn ($query) => $query->whereNotNull('published_at')->with('entry.category'),
                 'scheduleSlots' => fn ($query) => $query->whereNotNull('published_at')->with(['stage', 'entry', 'category']),
@@ -48,6 +52,7 @@ class FestivalTelegramMiniAppData
                 'instagram_url' => $series->organizer_instagram_url,
                 'brand_color' => $series->brand_color,
             ],
+            'hero' => $this->hero($editions),
             'editions' => $editions->map(fn (FestivalEdition $edition): array => $this->edition($edition))->all(),
             'authorized' => $authorization !== null,
         ];
@@ -70,6 +75,56 @@ class FestivalTelegramMiniAppData
             'registrant' => $registrant ? $this->registrant($series, $registrant) : null,
             'guest' => $guest ? $this->guest($series, $guest) : null,
         ];
+    }
+
+    /**
+     * @param  Collection<int, FestivalEdition>  $editions
+     * @return array<string, mixed>|null
+     */
+    private function hero(Collection $editions): ?array
+    {
+        $now = now();
+        $withHero = $editions->filter(fn (FestivalEdition $edition): bool => $this->heroMedia($edition) !== null);
+        $edition = $withHero
+            ->filter(fn (FestivalEdition $edition): bool => $edition->starts_at?->lte($now) === true && $edition->ends_at?->gte($now) === true)
+            ->sortBy('starts_at')
+            ->first()
+            ?? $withHero
+                ->filter(fn (FestivalEdition $edition): bool => $edition->starts_at?->gt($now) === true)
+                ->sortBy('starts_at')
+                ->first()
+            ?? $withHero->sortByDesc('starts_at')->first();
+
+        if (! $edition instanceof FestivalEdition) {
+            return null;
+        }
+
+        $desktop = $this->imageUrl($edition->coverMedia);
+        $mobile = $this->imageUrl($edition->mobileCoverMedia);
+        $fallback = $edition->coverMedia && $desktop ? $edition->coverMedia : $edition->mobileCoverMedia;
+
+        return [
+            'edition_id' => $edition->id,
+            'title' => $edition->title,
+            'period' => $this->period($edition),
+            'desktop_url' => $desktop ?? $mobile,
+            'mobile_url' => $mobile ?? $desktop,
+            'alt' => $fallback?->alt_text ?: $edition->title,
+        ];
+    }
+
+    private function heroMedia(FestivalEdition $edition): ?FestivalMedia
+    {
+        return $this->imageUrl($edition->coverMedia) ? $edition->coverMedia : ($this->imageUrl($edition->mobileCoverMedia) ? $edition->mobileCoverMedia : null);
+    }
+
+    private function imageUrl(?FestivalMedia $media): ?string
+    {
+        if (! $media || $media->kind !== 'image') {
+            return null;
+        }
+
+        return $media->url();
     }
 
     /** @return array<string, mixed> */

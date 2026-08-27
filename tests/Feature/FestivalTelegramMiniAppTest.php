@@ -10,6 +10,7 @@ use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
+use App\Models\FestivalMedia;
 use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
@@ -51,10 +52,56 @@ class FestivalTelegramMiniAppTest extends TestCase
     public function test_series_mini_app_shell_renders_public_data_without_exposing_the_bot_token(): void
     {
         [$account, $series, $edition, $installation] = $this->festival();
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'external_url' => 'https://cdn.example.test/festival-desktop.jpg',
+            'alt_text' => 'Nearest Festival',
+            'is_cover' => true,
+        ]);
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'kind' => 'image',
+            'external_url' => 'https://cdn.example.test/festival-mobile.jpg',
+            'alt_text' => 'Nearest Festival Mobile',
+            'is_mobile_cover' => true,
+        ]);
+        $fartherEdition = FestivalEdition::factory()->published()->for($series)->create([
+            'account_id' => $account->id,
+            'starts_at' => now()->addMonths(2),
+            'ends_at' => now()->addMonths(2)->addHours(6),
+        ]);
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $fartherEdition->id,
+            'kind' => 'image',
+            'external_url' => 'https://cdn.example.test/farther-festival.jpg',
+            'is_cover' => true,
+        ]);
+        $otherSeries = FestivalSeries::factory()->for($account)->create();
+        $otherEdition = FestivalEdition::factory()->published()->for($otherSeries)->create([
+            'account_id' => $account->id,
+            'starts_at' => now()->addDay(),
+            'ends_at' => now()->addDay()->addHours(6),
+        ]);
+        FestivalMedia::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $otherEdition->id,
+            'kind' => 'image',
+            'external_url' => 'https://cdn.example.test/other-series.jpg',
+            'is_cover' => true,
+        ]);
 
         $this->get(route('public.festival-telegram.show', [$account->slug, $series->slug]))
             ->assertOk()
             ->assertSee('data-festival-telegram-mini-app', false)
+            ->assertSee('data-festival-telegram-hero-edition="'.$edition->id.'"', false)
+            ->assertSee('https://cdn.example.test/festival-desktop.jpg', false)
+            ->assertSee('https://cdn.example.test/festival-mobile.jpg', false)
+            ->assertDontSee('https://cdn.example.test/farther-festival.jpg', false)
+            ->assertDontSee('https://cdn.example.test/other-series.jpg', false)
             ->assertSee($edition->title)
             ->assertDontSee((string) $installation->tokenValue(), false);
     }

@@ -1,5 +1,12 @@
 @extends('layouts.public', ['hideAppFooter' => true, 'disablePublicPwa' => true])
 
+@php
+    $hero = $initialData['hero'] ?? null;
+    $brandColor = preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $series->brand_color) === 1
+        ? $series->brand_color
+        : (preg_match('/^#[0-9A-Fa-f]{6}$/', (string) $account->brand_color) === 1 ? $account->brand_color : '#d946ef');
+@endphp
+
 @section('title', $series->name)
 
 @push('head')
@@ -14,16 +21,34 @@
         data-action-url="{{ route('public.festival-telegram.action', [$account->slug, $series->slug]) }}"
         data-unlink-url="{{ route('public.festival-telegram.unlink', [$account->slug, $series->slug]) }}"
         data-csrf-token="{{ csrf_token() }}"
+        style="--festival-telegram-accent: {{ $brandColor }};"
     >
         <script type="application/json" data-festival-telegram-initial>@json($initialData)</script>
         <script type="application/json" data-festival-telegram-labels>@json($labels)</script>
 
         <div class="mx-auto max-w-3xl pb-[max(2rem,env(safe-area-inset-bottom))]">
-            <header class="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-violet-950 via-slate-950 to-fuchsia-950 px-5 pb-7 pt-[max(1.25rem,env(safe-area-inset-top))]">
-                <div class="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-fuchsia-500/20 blur-3xl"></div>
-                <div class="relative">
-                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-fuchsia-200">{{ __('app.festival_telegram_companion') }}</p>
+            <header
+                class="relative flex overflow-hidden border-b border-white/10 bg-gradient-to-br from-violet-950 via-slate-950 to-fuchsia-950 px-5 pb-7 pt-[max(1.25rem,env(safe-area-inset-top))] {{ $hero ? 'min-h-72 items-end' : '' }}"
+                @if ($hero) data-festival-telegram-hero-edition="{{ $hero['edition_id'] }}" @endif
+            >
+                @if ($hero)
+                    <picture class="absolute inset-0">
+                        @if ($hero['mobile_url'] && $hero['mobile_url'] !== $hero['desktop_url'])
+                            <source media="(max-width: 767px)" srcset="{{ $hero['mobile_url'] }}">
+                        @endif
+                        <img src="{{ $hero['desktop_url'] }}" alt="{{ $hero['alt'] }}" class="h-full w-full object-cover" loading="eager" decoding="async" fetchpriority="high">
+                    </picture>
+                    <div class="absolute inset-0 bg-gradient-to-b from-slate-950/25 via-slate-950/45 to-slate-950"></div>
+                    <div class="absolute -right-16 -top-20 h-52 w-52 rounded-full opacity-30 blur-3xl" style="background-color: var(--festival-telegram-accent);"></div>
+                @else
+                    <div class="absolute -right-16 -top-20 h-52 w-52 rounded-full opacity-20 blur-3xl" style="background-color: var(--festival-telegram-accent);"></div>
+                @endif
+                <div class="relative z-10">
+                    <p class="festival-telegram-accent-text text-xs font-semibold uppercase tracking-[0.22em]">{{ __('app.festival_telegram_companion') }}</p>
                     <h1 class="mt-3 text-3xl font-semibold leading-tight">{{ $series->name }}</h1>
+                    @if ($hero)
+                        <p class="mt-2 text-sm font-semibold text-white/90">{{ $hero['title'] }}</p>
+                    @endif
                     @if ($series->summary)
                         <p class="mt-3 max-w-xl text-sm leading-6 text-slate-300">{{ $series->summary }}</p>
                     @endif
@@ -41,7 +66,7 @@
                         <div class="min-w-0 flex-1">
                             <h2 class="font-semibold" data-festival-telegram-auth-title>{{ __('app.festival_telegram_authorization_title') }}</h2>
                             <p class="mt-1 text-sm leading-6 text-slate-300" data-festival-telegram-auth-copy>{{ __('app.festival_telegram_authorization_help') }}</p>
-                            <button type="button" class="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-fuchsia-400" data-festival-telegram-contact>
+                            <button type="button" class="festival-telegram-accent-button mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition" data-festival-telegram-contact>
                                 <x-ui.icon name="phone" class="h-4 w-4" />
                                 {{ __('app.festival_telegram_share_phone') }}
                             </button>
@@ -59,7 +84,7 @@
                             'preferences' => __('app.notification_preferences'),
                             'contacts' => __('app.contacts'),
                         ] as $tab => $label)
-                            <button type="button" class="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-300 transition data-[active=true]:border-fuchsia-400/50 data-[active=true]:bg-fuchsia-500/20 data-[active=true]:text-white" data-festival-telegram-tab="{{ $tab }}" data-active="{{ $tab === 'calendar' ? 'true' : 'false' }}">{{ $label }}</button>
+                            <button type="button" class="festival-telegram-tab rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-300 transition" data-festival-telegram-tab="{{ $tab }}" data-active="{{ $tab === 'calendar' ? 'true' : 'false' }}">{{ $label }}</button>
                         @endforeach
                     </div>
                 </nav>

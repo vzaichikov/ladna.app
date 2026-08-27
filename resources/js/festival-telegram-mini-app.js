@@ -60,7 +60,7 @@ export function initFestivalTelegramMiniApp() {
     const actionButton = (text, action, targetId, secondary = false) => {
         const button = element('button', secondary
             ? 'inline-flex min-h-10 items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-slate-100'
-            : 'inline-flex min-h-10 items-center justify-center rounded-xl bg-fuchsia-500 px-3 py-2 text-sm font-semibold text-white', text);
+            : 'festival-telegram-accent-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-white', text);
         button.type = 'button';
         button.addEventListener('click', async () => {
             clearError();
@@ -90,7 +90,7 @@ export function initFestivalTelegramMiniApp() {
             const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/10');
             const top = element('div', 'flex items-start justify-between gap-3');
             const heading = element('div');
-            heading.append(element('div', 'text-xs font-semibold uppercase tracking-wider text-fuchsia-200', labels[edition.period] || edition.period));
+            heading.append(element('div', 'festival-telegram-accent-text text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period));
             heading.append(element('h2', 'mt-1 text-xl font-semibold', edition.title));
             if (edition.starts_at) heading.append(element('p', 'mt-2 text-sm text-slate-300', new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(edition.starts_at))));
             top.append(heading);
