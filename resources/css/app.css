@@ -152,6 +152,18 @@
         color: #ffffff;
     }
 
+    .festival-telegram-rich-text {
+        --tw-prose-body: #cbd5e1;
+        --tw-prose-headings: #f8fafc;
+        --tw-prose-links: var(--festival-telegram-accent);
+        --tw-prose-bold: #f8fafc;
+        --tw-prose-counters: #94a3b8;
+        --tw-prose-bullets: var(--festival-telegram-accent);
+        --tw-prose-hr: rgb(255 255 255 / 0.12);
+        --tw-prose-quotes: #e2e8f0;
+        --tw-prose-quote-borders: var(--festival-telegram-accent);
+    }
+
     .festival-page {
         background-color: var(--festival-page);
         color: var(--festival-text);

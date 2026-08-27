@@ -88,6 +88,7 @@
                                     <div class="flex flex-wrap gap-3">
                                         <label class="flex min-w-36 items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"><input type="checkbox" checked disabled class="crm-checkbox">{{ __('app.email') }}</label>
                                         <label class="flex min-w-36 items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 text-sm font-semibold text-slate-800"><input type="checkbox" name="sms[{{ $type->value }}]" value="1" class="crm-checkbox" @checked($setting?->send_sms)>{{ __('app.sms') }}</label>
+                                        <label class="flex min-w-36 items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-900"><input type="checkbox" name="telegram[{{ $type->value }}]" value="1" class="crm-checkbox" @checked($setting?->send_telegram ?? true)>{{ __('app.festival_participant_telegram_channel') }}</label>
                                         <label class="flex min-w-48 items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900"><input type="checkbox" name="owner_telegram[{{ $type->value }}]" value="1" class="crm-checkbox" @checked($setting?->notify_owner_telegram)>{{ __('app.festival_owner_telegram_channel') }}</label>
                                     </div>
                                 </div>

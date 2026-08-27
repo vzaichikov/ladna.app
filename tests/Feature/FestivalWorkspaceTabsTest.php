@@ -529,6 +529,7 @@ class FestivalWorkspaceTabsTest extends TestCase
                 __('app.festival_notification_group_tickets'),
                 __('app.festival_notification_group_announcements'),
             ])
+            ->assertSee('telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee('owner_telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee(trans_choice('app.festival_owner_telegram_connections', 0, ['count' => 0]));
 
@@ -536,6 +537,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->from($url)
             ->put(route('dashboard.accounts.festivals.notification-settings.update', $account), [
                 'sms' => [FestivalNotificationType::Announcement->value => '1'],
+                'telegram' => [FestivalNotificationType::EntryReviewed->value => '1'],
                 'owner_telegram' => [FestivalNotificationType::EntrySubmitted->value => '1'],
             ])
             ->assertRedirect($url);
@@ -550,6 +552,16 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->where('type', FestivalNotificationType::EntrySubmitted->value)
             ->firstOrFail()
             ->notify_owner_telegram);
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntryReviewed->value)
+            ->firstOrFail()
+            ->send_telegram);
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntrySubmitted->value)
+            ->firstOrFail()
+            ->send_telegram);
         $this->assertFalse(FestivalNotificationSetting::query()
             ->whereBelongsTo($account)
             ->where('type', FestivalNotificationType::EntrySubmitted->value)

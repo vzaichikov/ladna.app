@@ -94,6 +94,13 @@ export function initFestivalTelegramMiniApp() {
 
     const emptyCard = () => element('div', 'rounded-2xl border border-white/10 bg-white/[0.05] p-5 text-sm text-slate-300', labels.no_items);
 
+    const richText = (html) => {
+        const content = element('div', 'festival-telegram-rich-text prose prose-sm max-w-none text-slate-200');
+        content.innerHTML = html;
+
+        return content;
+    };
+
     const formattedEditionDate = (edition) => edition.starts_at
         ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(edition.starts_at))
         : '';
@@ -126,13 +133,22 @@ export function initFestivalTelegramMiniApp() {
         if (state.authorized && state.registrant) {
             actions.append(actionButton(labels.my_applications_count.replace('__count__', String(applicationCount)), 'entries', null, true));
         }
-        actions.append(linkButton(labels.open_ladna, edition.public_url));
+        actions.append(linkButton(labels.open_page, edition.public_url));
         if (state.authorized) actions.append(actionButton(labels.tickets, 'ticket_checkout', edition.id, true));
 
         return actions;
     };
 
     const appendEditionSections = (container, edition) => {
+        (edition.sections || []).forEach((section) => {
+            const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
+            details.append(element('summary', 'cursor-pointer text-base font-semibold text-slate-100', section.title));
+            const content = richText(section.body_html);
+            content.classList.add('mt-3');
+            details.append(content);
+            container.append(details);
+        });
+
         [['timeline', edition.timeline], ['schedule', edition.schedule], ['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
             if (!items?.length) return;
             const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
@@ -240,7 +256,7 @@ export function initFestivalTelegramMiniApp() {
             const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
             card.append(element('h3', 'font-semibold', entry.name || entry.code));
             card.append(element('p', 'mt-1 text-sm text-slate-300', [entry.edition, entry.category, entry.status].filter(Boolean).join(' · ')));
-            card.append(actionButton(labels.open_ladna, 'entry', entry.id, true));
+            card.append(actionButton(labels.open_page, 'entry', entry.id, true));
             container.append(card);
         });
     };
@@ -253,7 +269,7 @@ export function initFestivalTelegramMiniApp() {
             const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5');
             card.append(element('h3', 'font-semibold', order.edition));
             card.append(element('p', 'mt-2 text-sm text-slate-300', `${order.order_id} · ${order.status} · ${order.tickets_count}`));
-            card.append(actionButton(labels.open_ladna, 'ticket_order', order.id));
+            card.append(actionButton(labels.open_page, 'ticket_order', order.id));
             container.append(card);
         });
         if (!orders.length) container.append(emptyCard());
@@ -272,19 +288,6 @@ export function initFestivalTelegramMiniApp() {
             grid.append(card);
         });
         container.append(grid);
-    };
-
-    const renderPreferences = () => {
-        const container = root.querySelector('[data-festival-telegram-preferences]');
-        container.replaceChildren();
-        const preferences = state.registrant?.preferences || {};
-        Object.entries(preferences).forEach(([name, enabled]) => {
-            const row = element('div', 'flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3');
-            row.append(element('span', 'text-sm font-semibold', name.replaceAll('_', ' ')));
-            row.append(element('span', enabled ? 'text-sm font-semibold text-emerald-300' : 'text-sm font-semibold text-slate-400', enabled ? labels.enabled : labels.disabled));
-            container.append(row);
-        });
-        if (!Object.keys(preferences).length) container.append(emptyCard());
     };
 
     const renderContacts = () => {
@@ -333,7 +336,6 @@ export function initFestivalTelegramMiniApp() {
         renderMine();
         renderTickets();
         renderStatistics();
-        renderPreferences();
         renderContacts();
     };
 

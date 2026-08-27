@@ -35,13 +35,16 @@ class FestivalTelegramNotificationSender
             return ['sent' => false, 'cancel_reason' => 'festival_telegram_recipient_state_changed'];
         }
 
-        if ($notification->type->isOptional() && ! FestivalNotificationPreference::query()
-            ->where('account_id', $account->id)
-            ->where('festival_portal_user_id', $target['portal_user']->id)
-            ->where('type', $notification->type->value)
-            ->where('is_enabled', true)
-            ->exists()) {
-            return ['sent' => false, 'cancel_reason' => 'festival_telegram_preference_disabled'];
+        if ($notification->type->isOptional()) {
+            $preference = FestivalNotificationPreference::query()
+                ->where('account_id', $account->id)
+                ->where('festival_portal_user_id', $target['portal_user']->id)
+                ->where('type', $notification->type->value)
+                ->value('is_enabled');
+
+            if ($preference !== null && ! $preference) {
+                return ['sent' => false, 'cancel_reason' => 'festival_telegram_preference_disabled'];
+            }
         }
 
         $existingMessage = TelegramMessage::query()
@@ -171,6 +174,7 @@ class FestivalTelegramNotificationSender
                 ->where('account_id', $account->id)
                 ->where('festival_edition_id', $edition->id)
                 ->where('festival_portal_user_id', $portalUser->id)
+                ->where('status', 'paid')
                 ->first();
             if (! $order) {
                 return null;

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.154.0',
+                'date' => '2026-08-27',
+                'title' => 'Festival information and independent Telegram delivery',
+                'items' => ['An exact Festival in the Series Mini App now presents every active public organizer-authored information block as a compact disclosure, alongside the published timeline, schedule, results, and documents. The unused Notifications tab is gone, and external Festival, application, and ticket actions use the neutral Go to page label.', 'Festival communication settings now place participant Telegram beside Email and SMS for every scenario. Telegram is enabled by default and is delivered independently rather than replacing or falling back to SMS; the separate studio-owner Telegram alert remains available.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.153.2',
                 'date' => '2026-08-27',
                 'title' => 'Compact Festival Telegram experience',
@@ -1367,6 +1374,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.154.0',
+                'date' => '2026-08-27',
+                'title' => 'Інформація про фестиваль і незалежна доставка в Telegram',
+                'items' => ['Сторінка окремого фестивалю в Mini App серії тепер показує кожен активний публічний інформаційний блок організатора як компактний розділ, що розкривається, поруч з опублікованими таймлайном, програмою, результатами й документами. Непотрібну вкладку сповіщень прибрано, а зовнішні дії фестивалю, заявки та квитка мають нейтральну назву «Перейти на сторінку».', 'У налаштуваннях фестивальної комунікації Telegram учасника тепер розташований поруч з електронною поштою та SMS для кожного сценарію. Telegram початково увімкнений і доставляється незалежно, а не замінює SMS чи використовується як запасний канал; окреме Telegram-сповіщення власника студії збережено.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.153.2',
                 'date' => '2026-08-27',

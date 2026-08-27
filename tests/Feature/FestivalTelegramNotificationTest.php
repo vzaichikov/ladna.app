@@ -13,6 +13,7 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationPreference;
+use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTicketOrder;
@@ -102,7 +103,7 @@ class FestivalTelegramNotificationTest extends TestCase
         $this->assertSame(1, FestivalNotification::query()->whereBelongsTo($fixture['account'])->count());
     }
 
-    public function test_optional_notification_requires_an_enabled_preference_at_queue_and_delivery_time(): void
+    public function test_optional_notification_is_enabled_by_default_and_respects_an_explicit_opt_out(): void
     {
         $fixture = $this->authorizedFestival('7102001');
 
@@ -111,33 +112,61 @@ class FestivalTelegramNotificationTest extends TestCase
             $fixture['edition'],
             FestivalNotificationType::Announcement,
             ['subject' => 'Optional', 'body' => 'No Telegram yet.'],
-            dedupeSuffix: 'disabled',
-        );
-        $this->assertSame(0, FestivalNotification::query()->where('channel', FestivalNotificationChannel::Telegram->value)->count());
-
-        $preference = FestivalNotificationPreference::query()->create([
-            'account_id' => $fixture['account']->id,
-            'festival_portal_user_id' => $fixture['registrant']->id,
-            'type' => FestivalNotificationType::Announcement,
-            'is_enabled' => true,
-        ]);
-        app(FestivalNotificationOutbox::class)->queue(
-            $fixture['registrant'],
-            $fixture['edition'],
-            FestivalNotificationType::Announcement,
-            ['subject' => 'Optional', 'body' => 'Telegram is allowed.'],
-            dedupeSuffix: 'enabled',
+            dedupeSuffix: 'default-enabled',
         );
         $telegram = FestivalNotification::query()
             ->where('channel', FestivalNotificationChannel::Telegram->value)
             ->sole();
 
-        $preference->update(['is_enabled' => false]);
+        $preference = FestivalNotificationPreference::query()->create([
+            'account_id' => $fixture['account']->id,
+            'festival_portal_user_id' => $fixture['registrant']->id,
+            'type' => FestivalNotificationType::Announcement,
+            'is_enabled' => false,
+        ]);
         app()->call([new SendFestivalNotification($telegram->id), 'handle']);
 
         $this->assertSame(FestivalNotificationStatus::Cancelled, $telegram->refresh()->status);
         $this->assertSame('festival_telegram_preference_disabled', $telegram->failure_reason);
         Http::assertNothingSent();
+    }
+
+    public function test_participant_telegram_is_an_independent_scenario_channel_at_queue_and_delivery_time(): void
+    {
+        $fixture = $this->authorizedFestival('7102501');
+        $setting = FestivalNotificationSetting::query()->create([
+            'account_id' => $fixture['account']->id,
+            'type' => FestivalNotificationType::EntrySubmitted,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'send_sms' => true,
+            'send_telegram' => true,
+        ]);
+
+        app(FestivalNotificationOutbox::class)->queue(
+            $fixture['registrant'],
+            $fixture['edition'],
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'INDEPENDENT-CHANNELS'],
+        );
+
+        $this->assertEqualsCanonicalizing(
+            [FestivalNotificationChannel::Email, FestivalNotificationChannel::Sms, FestivalNotificationChannel::Telegram],
+            FestivalNotification::query()->whereBelongsTo($fixture['account'])->pluck('channel')->all(),
+        );
+
+        $telegram = FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Telegram->value)
+            ->sole();
+        $setting->update(['send_telegram' => false]);
+        app()->call([new SendFestivalNotification($telegram->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $telegram->refresh()->status);
+        $this->assertSame('festival_telegram_scenario_disabled', $telegram->failure_reason);
+        $this->assertSame(FestivalNotificationStatus::Pending, FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->sole()
+            ->status);
     }
 
     public function test_blocking_the_bot_revokes_series_authorization_without_affecting_email(): void
@@ -230,6 +259,35 @@ class FestivalTelegramNotificationTest extends TestCase
             && str_contains((string) data_get($request->data(), 'reply_markup.inline_keyboard.0.0.web_app.url'), 'action=ticket_order')
             && str_contains((string) data_get($request->data(), 'reply_markup.inline_keyboard.0.0.web_app.url'), 'target_id='.$order->id)
             && ! str_contains(json_encode($request->data(), JSON_THROW_ON_ERROR), $order->access_token_encrypted));
+    }
+
+    public function test_ticket_notification_is_cancelled_if_the_owned_order_is_no_longer_paid(): void
+    {
+        $fixture = $this->authorizedFestival('7105501');
+        $guest = FestivalPortalUser::factory()->guest()->for($fixture['account'])->create([
+            'telegram_user_id' => '7105501',
+        ]);
+        app(FestivalTelegramIdentityLinker::class)->linkPortalUser($fixture['authorization'], $guest);
+        $order = FestivalTicketOrder::factory()->for($fixture['edition'])->create([
+            'account_id' => $fixture['account']->id,
+            'festival_portal_user_id' => $guest->id,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'buyer_email' => $guest->email,
+        ]);
+
+        app(FestivalNotificationOutbox::class)->queueForTicketOrder($order, ['tickets_count' => 1]);
+        $telegram = FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Telegram->value)
+            ->sole();
+        $order->update(['status' => 'refunded']);
+
+        app()->call([new SendFestivalNotification($telegram->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $telegram->refresh()->status);
+        $this->assertSame('festival_telegram_recipient_state_changed', $telegram->failure_reason);
+        Http::assertNothingSent();
     }
 
     /**

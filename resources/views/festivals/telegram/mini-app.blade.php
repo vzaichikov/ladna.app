@@ -79,7 +79,6 @@
                             'mine' => __('app.festival_telegram_my_festival'),
                             'tickets' => __('app.festival_telegram_my_tickets'),
                             'statistics' => __('app.statistics'),
-                            'preferences' => __('app.notification_preferences'),
                             'contacts' => __('app.contacts'),
                         ] as $tab => $label)
                             <button type="button" class="festival-telegram-tab rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-300 transition" data-festival-telegram-tab="{{ $tab }}" data-active="{{ $tab === 'calendar' ? 'true' : 'false' }}">{{ $label }}</button>
@@ -94,7 +93,6 @@
                 <section class="hidden" data-festival-telegram-panel="mine"><div class="space-y-4" data-festival-telegram-mine></div></section>
                 <section class="hidden" data-festival-telegram-panel="tickets"><div class="space-y-4" data-festival-telegram-tickets></div></section>
                 <section class="hidden" data-festival-telegram-panel="statistics"><div class="space-y-4" data-festival-telegram-statistics></div></section>
-                <section class="hidden" data-festival-telegram-panel="preferences"><div class="space-y-4" data-festival-telegram-preferences></div></section>
                 <section class="hidden" data-festival-telegram-panel="contacts"><div class="space-y-4" data-festival-telegram-contacts></div></section>
             </div>
         </div>

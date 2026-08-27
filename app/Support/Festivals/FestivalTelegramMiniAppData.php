@@ -3,7 +3,6 @@
 namespace App\Support\Festivals;
 
 use App\Enums\FestivalEntryStatus;
-use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPortalRole;
 use App\Models\FestivalEdition;
 use App\Models\FestivalMedia;
@@ -11,6 +10,7 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTimeline;
 use App\Models\TelegramChatAuthorization;
+use App\Support\StudioRulesHtmlSanitizer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +19,7 @@ class FestivalTelegramMiniAppData
     public function __construct(
         private readonly FestivalTimelinePresenter $timelinePresenter,
         private readonly FestivalTelegramAuthorizationResolver $authorizations,
+        private readonly StudioRulesHtmlSanitizer $htmlSanitizer,
     ) {}
 
     /** @return array<string, mixed> */
@@ -33,6 +34,7 @@ class FestivalTelegramMiniAppData
                 'account:id,slug',
                 'coverMedia',
                 'mobileCoverMedia',
+                'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
                 'documents' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
                 'results' => fn ($query) => $query->whereNotNull('published_at')->with('entry.category'),
                 'scheduleSlots' => fn ($query) => $query->whereNotNull('published_at')->with(['stage', 'entry', 'category']),
@@ -148,6 +150,11 @@ class FestivalTelegramMiniAppData
             'thumbnail_url' => $this->imageUrl($edition->mobileCoverMedia) ?? $this->imageUrl($edition->coverMedia),
             'thumbnail_alt' => $edition->mobileCoverMedia?->alt_text ?: ($edition->coverMedia?->alt_text ?: $edition->title),
             'public_url' => route('public.festivals.show', [$edition->account->slug, $edition->slug]),
+            'sections' => $edition->sections->map(fn ($section): array => [
+                'id' => $section->id,
+                'title' => $section->title,
+                'body_html' => $this->htmlSanitizer->sanitize($section->body_html),
+            ])->filter(fn (array $section): bool => filled($section['body_html']))->values()->all(),
             'documents' => $edition->documents->map(fn ($document): array => [
                 'id' => $document->id,
                 'title' => $document->title,
@@ -218,7 +225,6 @@ class FestivalTelegramMiniAppData
                 'accepted' => $entries->where('status', FestivalEntryStatus::Accepted)->count(),
                 'participants' => $participantCount,
             ],
-            'preferences' => $this->preferences($registrant),
         ];
     }
 
@@ -244,18 +250,6 @@ class FestivalTelegramMiniAppData
                 'streaming' => $order->tickets->contains(fn ($ticket): bool => $ticket->streamEntitlement !== null),
             ])->all(),
         ];
-    }
-
-    /** @return array<string, bool> */
-    private function preferences(FestivalPortalUser $registrant): array
-    {
-        $stored = $registrant->notificationPreferences()->pluck('is_enabled', 'type');
-
-        return collect(FestivalNotificationType::cases())
-            ->filter(fn (FestivalNotificationType $type): bool => $type->isOptional())
-            ->mapWithKeys(fn (FestivalNotificationType $type): array => [
-                $type->value => (bool) $stored->get($type->value, false),
-            ])->all();
     }
 
     /** @return array<int, array<string, mixed>> */

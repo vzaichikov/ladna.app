@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Enums\FestivalNotificationType;
 use App\Http\Requests\FestivalAnnouncementRequest;
+use App\Http\Requests\UpdateFestivalNotificationSettingsRequest;
 use App\Models\Account;
 use App\Models\FestivalAnnouncement;
 use App\Models\FestivalEdition;
@@ -17,9 +18,8 @@ use Illuminate\Http\Request;
 
 class FestivalAnnouncementController extends Controller
 {
-    public function updateSettings(Request $request, Account $account): RedirectResponse
+    public function updateSettings(UpdateFestivalNotificationSettingsRequest $request, Account $account): RedirectResponse
     {
-        abort_unless($request->user()?->can('manageFestivals', $account), 403);
         foreach (FestivalNotificationType::cases() as $type) {
             FestivalNotificationSetting::query()->updateOrCreate(
                 ['account_id' => $account->id, 'type' => $type->value],
@@ -27,6 +27,7 @@ class FestivalAnnouncementController extends Controller
                     'is_optional' => $type->isOptional(),
                     'is_enabled' => true,
                     'send_sms' => $request->boolean('sms.'.$type->value),
+                    'send_telegram' => $request->boolean('telegram.'.$type->value),
                     'notify_owner_telegram' => $request->boolean('owner_telegram.'.$type->value),
                 ],
             );

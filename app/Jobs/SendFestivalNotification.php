@@ -84,6 +84,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($notification->channel === FestivalNotificationChannel::Telegram && ! $this->telegramStillEnabled($notification)) {
+            $this->cancel($notification, 'festival_telegram_scenario_disabled');
+
+            return;
+        }
+
         $claimed = FestivalNotification::query()
             ->whereKey($notification->id)
             ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
@@ -268,6 +274,14 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             ->where('type', $notification->type->value)
             ->where('send_sms', true)
             ->exists();
+    }
+
+    private function telegramStillEnabled(FestivalNotification $notification): bool
+    {
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $notification->account_id)
+            ->where('type', $notification->type->value)
+            ->value('send_telegram') ?? true;
     }
 
     private function markSent(FestivalNotification $notification): void

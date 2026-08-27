@@ -8,6 +8,7 @@ use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
+use App\Models\FestivalContentSection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalMedia;
@@ -103,6 +104,9 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertDontSee('https://cdn.example.test/farther-festival.jpg', false)
             ->assertDontSee('https://cdn.example.test/other-series.jpg', false)
             ->assertDontSee($series->summary)
+            ->assertDontSee('data-festival-telegram-tab="preferences"', false)
+            ->assertSee('"open_page":'.json_encode(__('app.festival_telegram_open_page')), false)
+            ->assertDontSee('Open in Ladna')
             ->assertSee($edition->title)
             ->assertDontSee((string) $installation->tokenValue(), false);
     }
@@ -158,6 +162,50 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonFragment(['edition_id' => $edition->id, 'id' => $entry->id])
             ->assertJsonFragment(['name' => $category->name])
             ->assertJsonMissing(['title' => $otherEdition->title]);
+    }
+
+    public function test_exact_festival_includes_only_active_public_sanitized_content_sections(): void
+    {
+        [$account, $series, $edition, $installation] = $this->festival();
+        FestivalContentSection::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'key' => 'about-festival',
+            'title' => 'About this Festival',
+            'body_html' => '<p>Authored Festival information.</p><script>alert("unsafe")</script>',
+            'visibility' => 'public',
+            'is_active' => true,
+            'sort_order' => 10,
+        ]);
+        FestivalContentSection::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'key' => 'portal-only',
+            'title' => 'Portal-only information',
+            'body_html' => '<p>Private.</p>',
+            'visibility' => 'portal',
+            'is_active' => true,
+            'sort_order' => 20,
+        ]);
+        FestivalContentSection::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'key' => 'inactive-public',
+            'title' => 'Inactive information',
+            'body_html' => '<p>Inactive.</p>',
+            'visibility' => 'public',
+            'is_active' => false,
+            'sort_order' => 30,
+        ]);
+
+        $this->postJson(route('public.festival-telegram.bootstrap', [$account->slug, $series->slug]), [
+            'init_data' => $this->initData($installation, '7002501'),
+        ])
+            ->assertOk()
+            ->assertJsonPath('editions.0.sections.0.title', 'About this Festival')
+            ->assertJsonPath('editions.0.sections.0.body_html', '<p>Authored Festival information.</p>')
+            ->assertJsonMissing(['title' => 'Portal-only information'])
+            ->assertJsonMissing(['title' => 'Inactive information']);
     }
 
     public function test_registrant_login_is_single_use_and_fails_after_revocation(): void

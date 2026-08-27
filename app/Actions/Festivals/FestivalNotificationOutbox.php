@@ -117,6 +117,7 @@ class FestivalNotificationOutbox
         }
 
         $telegramAuthorization = $portalUser->role === FestivalPortalRole::Registrant
+            && $this->telegramIsEnabled($edition->account_id, $type)
             ? $this->telegramAuthorization($portalUser, $edition, $type)
             : null;
         if ($telegramAuthorization) {
@@ -206,7 +207,9 @@ class FestivalNotificationOutbox
             $notification ??= $smsNotification;
         }
 
-        $telegramAuthorization = $guest ? $this->telegramAuthorization($guest, $order->edition, $type) : null;
+        $telegramAuthorization = $guest && $this->telegramIsEnabled($order->account_id, $type)
+            ? $this->telegramAuthorization($guest, $order->edition, $type)
+            : null;
         if ($telegramAuthorization) {
             $telegramNotification = $this->createChannel(FestivalNotificationChannel::Telegram, $dedupeBase, [
                 ...$attributes,
@@ -256,13 +259,24 @@ class FestivalNotificationOutbox
             ->exists();
     }
 
+    private function telegramIsEnabled(int $accountId, FestivalNotificationType $type): bool
+    {
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $accountId)
+            ->where('type', $type->value)
+            ->value('send_telegram') ?? true;
+    }
+
     private function telegramAuthorization(FestivalPortalUser $portalUser, FestivalEdition $edition, FestivalNotificationType $type): ?TelegramChatAuthorization
     {
-        if ($type->isOptional() && ! $portalUser->notificationPreferences()
-            ->where('type', $type->value)
-            ->where('is_enabled', true)
-            ->exists()) {
-            return null;
+        if ($type->isOptional()) {
+            $preference = $portalUser->notificationPreferences()
+                ->where('type', $type->value)
+                ->value('is_enabled');
+
+            if ($preference !== null && ! $preference) {
+                return null;
+            }
         }
 
         return TelegramChatAuthorization::query()
