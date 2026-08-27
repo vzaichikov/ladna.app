@@ -39,6 +39,7 @@ use App\Support\Sms\ResumeSmsNotificationsAfterTopUp;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
 use App\Support\Sms\StudioSmsSendResult;
+use App\Support\Telegram\FestivalTelegramNotificationSender;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -260,6 +261,7 @@ class FestivalNotificationDeliveryTest extends TestCase
             $autoTopUp,
             app(PhoneNumberNormalizer::class),
             app(MailDeliverySettingsResolver::class),
+            app(FestivalTelegramNotificationSender::class),
         );
 
         $this->assertSame(FestivalNotificationStatus::WaitingForSmsCredit, $sms->refresh()->status);

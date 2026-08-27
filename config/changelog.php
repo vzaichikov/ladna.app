@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.153.0',
+                'date' => '2026-08-27',
+                'title' => 'Festival Series Telegram companion',
+                'items' => ['Studio owners can connect one independent Telegram bot to each Festival Series. Its Mini App presents the Series calendar, previous and upcoming editions, published schedules and results, live timelines, applications, team statistics, tickets, streaming access, and organizer contacts.', 'A private Telegram contact securely authorizes one human for the Series and can link separate participant and ticket-buyer profiles without merging their roles. Registration, profile changes, payments, ticket checkout, and private order access remain in Ladna through short-lived single-use handoffs.', 'Subscribed participants and ticket buyers can receive Festival lifecycle messages in Telegram alongside existing email and SMS delivery. Required messages remain active while optional reminders, schedule changes, and announcements follow the participant’s notification preferences.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.152.0',
                 'date' => '2026-08-26',
                 'title' => 'Exact missing-pass booking report',
@@ -1346,6 +1353,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.153.0',
+                'date' => '2026-08-27',
+                'title' => 'Telegram-супутник серії фестивалів',
+                'items' => ['Власниця студії може підключити окремого Telegram-бота до кожної серії фестивалів. Mini App показує календар серії, попередні й майбутні фестивалі, опубліковані розклади та результати, живий таймлайн, заявки, статистику команди, квитки, онлайн-трансляції й контакти організатора.', 'Власний Telegram-контакт безпечно авторизує одну людину в межах серії та може пов’язати окремі профілі учасника й покупця квитків без об’єднання їхніх ролей. Реєстрація, зміни профілю, оплати, купівля квитків і приватний доступ до замовлення залишаються в Ladna через короткочасні одноразові переходи.', 'Підписані учасники й покупці квитків можуть отримувати повідомлення життєвого циклу фестивалю в Telegram разом із наявною доставкою електронною поштою та SMS. Обов’язкові повідомлення надходять завжди, а необов’язкові нагадування, зміни розкладу й оголошення враховують налаштування учасника.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.152.0',
                 'date' => '2026-08-26',

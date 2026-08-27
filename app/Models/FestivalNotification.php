@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'festival_portal_user_id', 'festival_edition_id', 'festival_entry_id', 'festival_ticket_order_id', 'type', 'channel', 'status', 'recipient_email', 'recipient_phone', 'recipient_name', 'subject', 'text', 'dedupe_key', 'payload', 'attempts', 'available_at', 'sent_at', 'failed_at', 'cancelled_at', 'failure_reason'])]
+#[Fillable(['account_id', 'festival_portal_user_id', 'festival_edition_id', 'festival_entry_id', 'festival_ticket_order_id', 'telegram_chat_authorization_id', 'type', 'channel', 'status', 'recipient_email', 'recipient_phone', 'recipient_name', 'subject', 'text', 'dedupe_key', 'payload', 'attempts', 'available_at', 'sent_at', 'failed_at', 'cancelled_at', 'failure_reason'])]
 class FestivalNotification extends Model
 {
     protected $attributes = ['channel' => 'email', 'status' => 'pending', 'attempts' => 0];
@@ -52,5 +52,10 @@ class FestivalNotification extends Model
     public function ticketOrder(): BelongsTo
     {
         return $this->belongsTo(FestivalTicketOrder::class, 'festival_ticket_order_id');
+    }
+
+    public function telegramAuthorization(): BelongsTo
+    {
+        return $this->belongsTo(TelegramChatAuthorization::class, 'telegram_chat_authorization_id');
     }
 }

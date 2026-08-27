@@ -6,6 +6,7 @@ import { initEventAttendance } from './event-attendance';
 import { initEntranceOperations } from './entrance-operations';
 import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
+import { initFestivalTelegramMiniApp } from './festival-telegram-mini-app';
 
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
@@ -9013,6 +9014,7 @@ function initEventTicketPdfSharing(root = document) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initFestivalTelegramMiniApp();
     initEventAttendance();
     initEntranceOperations();
     initFestivalStreamPlayer();

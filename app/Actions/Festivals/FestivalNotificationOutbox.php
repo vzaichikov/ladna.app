@@ -12,6 +12,7 @@ use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
+use App\Models\TelegramChatAuthorization;
 use App\Support\Festivals\FestivalNotificationMessage;
 use App\Support\Festivals\FestivalNotificationRenderer;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
@@ -71,27 +72,30 @@ class FestivalNotificationOutbox
         ]);
         $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload);
 
-        $notification = $this->createChannel(
-            channel: FestivalNotificationChannel::Email,
-            dedupeBase: $dedupeBase,
-            attributes: [
-                'account_id' => $edition->account_id,
-                'festival_portal_user_id' => $portalUser->id,
-                'festival_edition_id' => $edition->id,
-                'festival_entry_id' => $entry?->id,
-                'type' => $type,
-                'recipient_email' => $portalUser->email,
-                'recipient_phone' => $portalUser->phone,
-                'recipient_name' => $portalUser->displayName(),
-                'subject' => $message->subject,
-                'text' => $message->emailText(),
-                'payload' => $this->storedPayload($payload, $message),
-                'available_at' => now(),
-            ],
-        );
+        $notification = null;
+        if (filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)) {
+            $notification = $this->createChannel(
+                channel: FestivalNotificationChannel::Email,
+                dedupeBase: $dedupeBase,
+                attributes: [
+                    'account_id' => $edition->account_id,
+                    'festival_portal_user_id' => $portalUser->id,
+                    'festival_edition_id' => $edition->id,
+                    'festival_entry_id' => $entry?->id,
+                    'type' => $type,
+                    'recipient_email' => $portalUser->email,
+                    'recipient_phone' => $portalUser->phone,
+                    'recipient_name' => $portalUser->displayName(),
+                    'subject' => $message->subject,
+                    'text' => $message->emailText(),
+                    'payload' => $this->storedPayload($payload, $message),
+                    'available_at' => now(),
+                ],
+            );
+        }
 
         if ($this->smsIsEnabled($edition->account_id, $type)) {
-            $this->createChannel(
+            $smsNotification = $this->createChannel(
                 channel: FestivalNotificationChannel::Sms,
                 dedupeBase: $dedupeBase,
                 attributes: [
@@ -109,6 +113,33 @@ class FestivalNotificationOutbox
                     'available_at' => now(),
                 ],
             );
+            $notification ??= $smsNotification;
+        }
+
+        $telegramAuthorization = $portalUser->role === FestivalPortalRole::Registrant
+            ? $this->telegramAuthorization($portalUser, $edition, $type)
+            : null;
+        if ($telegramAuthorization) {
+            $telegramNotification = $this->createChannel(
+                channel: FestivalNotificationChannel::Telegram,
+                dedupeBase: $dedupeBase,
+                attributes: [
+                    'account_id' => $edition->account_id,
+                    'festival_portal_user_id' => $portalUser->id,
+                    'festival_edition_id' => $edition->id,
+                    'festival_entry_id' => $entry?->id,
+                    'telegram_chat_authorization_id' => $telegramAuthorization->id,
+                    'type' => $type,
+                    'recipient_email' => $portalUser->email,
+                    'recipient_phone' => $portalUser->phone,
+                    'recipient_name' => $portalUser->displayName(),
+                    'subject' => $message->subject,
+                    'text' => $message->emailText(),
+                    'payload' => $this->storedPayload($payload, $message),
+                    'available_at' => now(),
+                ],
+            );
+            $notification ??= $telegramNotification;
         }
 
         $this->ownerTelegramAlerts->execute(
@@ -168,10 +199,21 @@ class FestivalNotificationOutbox
         }
 
         if (filled($order->buyer_phone) && $this->smsIsEnabled($order->account_id, $type)) {
-            $this->createChannel(FestivalNotificationChannel::Sms, $dedupeBase, [
+            $smsNotification = $this->createChannel(FestivalNotificationChannel::Sms, $dedupeBase, [
                 ...$attributes,
                 'text' => $message->smsText,
             ]);
+            $notification ??= $smsNotification;
+        }
+
+        $telegramAuthorization = $guest ? $this->telegramAuthorization($guest, $order->edition, $type) : null;
+        if ($telegramAuthorization) {
+            $telegramNotification = $this->createChannel(FestivalNotificationChannel::Telegram, $dedupeBase, [
+                ...$attributes,
+                'telegram_chat_authorization_id' => $telegramAuthorization->id,
+                'text' => $message->emailText(),
+            ]);
+            $notification ??= $telegramNotification;
         }
 
         $this->ownerTelegramAlerts->execute(
@@ -212,6 +254,31 @@ class FestivalNotificationOutbox
             ->where('type', $type->value)
             ->where('send_sms', true)
             ->exists();
+    }
+
+    private function telegramAuthorization(FestivalPortalUser $portalUser, FestivalEdition $edition, FestivalNotificationType $type): ?TelegramChatAuthorization
+    {
+        if ($type->isOptional() && ! $portalUser->notificationPreferences()
+            ->where('type', $type->value)
+            ->where('is_enabled', true)
+            ->exists()) {
+            return null;
+        }
+
+        return TelegramChatAuthorization::query()
+            ->where('telegram_chat_authorizations.account_id', $portalUser->account_id)
+            ->where('telegram_chat_authorizations.profile', 'festival')
+            ->where('telegram_chat_authorizations.status', 'authorized')
+            ->whereHas('installation', fn ($query) => $query
+                ->where('account_id', $portalUser->account_id)
+                ->where('scope_type', 'festival_series')
+                ->where('scope_id', $edition->festival_series_id)
+                ->where('profile', 'festival')
+                ->where('is_enabled', true))
+            ->whereHas('festivalPortalLinks', fn ($query) => $query
+                ->where('account_id', $portalUser->account_id)
+                ->where('festival_portal_user_id', $portalUser->id))
+            ->first();
     }
 
     /** @param array<string, mixed> $payload */

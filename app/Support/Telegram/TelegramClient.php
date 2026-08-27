@@ -86,7 +86,7 @@ class TelegramClient
             ->post($this->methodUrl($token, 'setWebhook'), array_filter([
                 'url' => $webhookUrl,
                 'secret_token' => $installation->webhookSecret(),
-                'allowed_updates' => ['message', 'callback_query'],
+                'allowed_updates' => ['message', 'callback_query', 'my_chat_member'],
             ], fn (mixed $value): bool => $value !== null && $value !== ''));
     }
 
@@ -109,6 +109,26 @@ class TelegramClient
                 'scope' => ['type' => 'all_private_chats'],
                 'language_code' => $languageCode,
             ], fn (mixed $value): bool => $value !== null && $value !== ''));
+    }
+
+    public function setChatMenuButton(TelegramBotInstallation $installation, string $text, string $webAppUrl): ?Response
+    {
+        $token = $installation->tokenValue();
+
+        if (! $token || $webAppUrl === '') {
+            return null;
+        }
+
+        return Http::timeout(8)
+            ->connectTimeout(3)
+            ->retry([100, 300], throw: false)
+            ->post($this->methodUrl($token, 'setChatMenuButton'), [
+                'menu_button' => [
+                    'type' => 'web_app',
+                    'text' => $text,
+                    'web_app' => ['url' => $webAppUrl],
+                ],
+            ]);
     }
 
     public function getWebhookInfo(TelegramBotInstallation $installation): ?Response

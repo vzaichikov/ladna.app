@@ -15,6 +15,8 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
+use App\Models\TelegramChatAuthorization;
+use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -25,16 +27,21 @@ class CreateFestivalTicketOrder
     public function __construct(
         private readonly PaymentGatewayRegistry $gateways,
         private readonly ResolveFestivalGuest $resolveGuest,
+        private readonly FestivalTelegramIdentityLinker $telegramIdentityLinker,
     ) {}
 
     /** @param array<string, mixed> $input */
-    public function execute(FestivalEdition $edition, array $input, ?FestivalPortalUser $portalUser = null): FestivalTicketOrder
-    {
+    public function execute(
+        FestivalEdition $edition,
+        array $input,
+        ?FestivalPortalUser $portalUser = null,
+        ?TelegramChatAuthorization $telegramAuthorization = null,
+    ): FestivalTicketOrder {
         if ($portalUser && $portalUser->account_id !== $edition->account_id) {
             abort(404);
         }
 
-        return DB::transaction(function () use ($edition, $input, $portalUser): FestivalTicketOrder {
+        return DB::transaction(function () use ($edition, $input, $portalUser, $telegramAuthorization): FestivalTicketOrder {
             $edition = FestivalEdition::query()
                 ->whereKey($edition->id)
                 ->where('account_id', $edition->account_id)
@@ -196,6 +203,10 @@ class CreateFestivalTicketOrder
                     'quantity' => $row['quantity'],
                     'total_cents' => $row['total'],
                 ]);
+            }
+
+            if ($telegramAuthorization) {
+                $this->telegramIdentityLinker->linkGuestOrder($telegramAuthorization, $order);
             }
 
             return $order->load('items');

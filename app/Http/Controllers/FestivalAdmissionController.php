@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\CreateFestivalTicketOrder;
 use App\Actions\Festivals\FestivalTicketIssuer;
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\FestivalAdmissionOrderRequest;
 use App\Http\Requests\FestivalGoogleEmailPrefillRequest;
@@ -11,6 +12,8 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Support\Festivals\FestivalGoogleEmailPrefill;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalTelegramAuthorizationResolver;
+use App\Support\Festivals\FestivalTelegramCheckoutHandoff;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,14 +25,29 @@ use Throwable;
 
 class FestivalAdmissionController extends Controller
 {
-    public function store(FestivalAdmissionOrderRequest $request, string $accountSlug, string $editionSlug, CreateFestivalTicketOrder $createOrder, FestivalPaymentService $payments, FestivalTicketIssuer $tickets): RedirectResponse|View
+    public function store(FestivalAdmissionOrderRequest $request, string $accountSlug, string $editionSlug, CreateFestivalTicketOrder $createOrder, FestivalPaymentService $payments, FestivalTicketIssuer $tickets, FestivalTelegramCheckoutHandoff $telegramHandoff, FestivalTelegramAuthorizationResolver $telegramAuthorizations): RedirectResponse|View
     {
         $account = $request->attributes->get('festivalAccount');
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->firstOrFail();
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->with('series')->firstOrFail();
         $input = $request->orderInput();
         $input['locale'] = app()->getLocale();
-        $order = $createOrder->execute($edition, $input);
+        $hadTelegramHandoff = $telegramHandoff->hasSession($request, $edition);
+        $telegramAuthorization = $telegramHandoff->pullSessionAuthorization($request, $edition);
+
+        if ($hadTelegramHandoff && ! $telegramAuthorization) {
+            throw ValidationException::withMessages(['telegram' => __('app.festival_telegram_checkout_expired')]);
+        }
+
+        $telegramGuest = $telegramAuthorization
+            ? $telegramAuthorizations->linkedPortalUser($telegramAuthorization, FestivalPortalRole::Guest)
+            : null;
+        $order = $createOrder->execute(
+            $edition,
+            $input,
+            portalUser: $telegramGuest,
+            telegramAuthorization: $telegramAuthorization,
+        );
 
         if ($order->amount_cents === 0) {
             DB::transaction(function () use ($order, $tickets): void {

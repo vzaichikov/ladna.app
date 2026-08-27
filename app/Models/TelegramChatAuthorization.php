@@ -57,4 +57,9 @@ class TelegramChatAuthorization extends Model
     {
         return $this->hasMany(AiConversation::class);
     }
+
+    public function festivalPortalLinks(): HasMany
+    {
+        return $this->hasMany(TelegramFestivalPortalLink::class);
+    }
 }

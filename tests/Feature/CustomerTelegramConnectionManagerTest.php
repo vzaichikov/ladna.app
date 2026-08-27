@@ -202,7 +202,7 @@ class CustomerTelegramConnectionManagerTest extends TestCase
                     'result' => [
                         'url' => 'https://ladna.local/api/v1/telegram/webhooks/studio-key',
                         'pending_update_count' => 3,
-                        'allowed_updates' => ['message', 'callback_query'],
+                        'allowed_updates' => ['message', 'callback_query', 'my_chat_member'],
                     ],
                 ]);
             }

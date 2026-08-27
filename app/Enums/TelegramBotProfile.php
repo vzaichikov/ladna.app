@@ -6,6 +6,7 @@ enum TelegramBotProfile: string
 {
     case Owner = 'owner';
     case Customer = 'customer';
+    case Festival = 'festival';
 
     public function labelKey(): string
     {

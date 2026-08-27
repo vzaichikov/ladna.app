@@ -173,7 +173,7 @@ class CustomerTelegramBotSettingsTest extends TestCase
         ]);
 
         Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/setWebhook')
-            && $request['allowed_updates'] === ['message', 'callback_query']
+            && $request['allowed_updates'] === ['message', 'callback_query', 'my_chat_member']
             && filled($request['secret_token']));
         Http::assertSentCount(5);
         $commandLanguages = collect(Http::recorded())

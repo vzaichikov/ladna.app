@@ -13,6 +13,8 @@ use App\Http\Controllers\FestivalPortalController;
 use App\Http\Controllers\FestivalPublicController;
 use App\Http\Controllers\FestivalStreamAccessController;
 use App\Http\Controllers\FestivalSubmissionController;
+use App\Http\Controllers\FestivalTelegramLoginController;
+use App\Http\Controllers\FestivalTelegramMiniAppController;
 use App\Http\Controllers\FestivalTimelineController;
 use App\Http\Controllers\PublicFestivalEntranceController;
 use App\Http\Middleware\AuthenticateFestivalPortal;
@@ -30,6 +32,13 @@ Route::get('/festival-admission/google/callback', [FestivalAdmissionController::
 
 Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabled::class, EnsureFestivalEditionWritable::class])->group(function (): void {
     Route::get('/{accountSlug}/festivals', [FestivalPublicController::class, 'index'])->name('public.festivals.index');
+    Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram', [FestivalTelegramMiniAppController::class, 'show'])->name('public.festival-telegram.show');
+    Route::post('/{accountSlug}/festival-series/{seriesSlug}/telegram/bootstrap', [FestivalTelegramMiniAppController::class, 'bootstrap'])->middleware('throttle:120,1')->name('public.festival-telegram.bootstrap');
+    Route::post('/{accountSlug}/festival-series/{seriesSlug}/telegram/action', [FestivalTelegramMiniAppController::class, 'action'])->middleware('throttle:60,1')->name('public.festival-telegram.action');
+    Route::delete('/{accountSlug}/festival-series/{seriesSlug}/telegram/authorization', [FestivalTelegramMiniAppController::class, 'unlink'])->middleware('throttle:20,1')->name('public.festival-telegram.unlink');
+    Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/login/{token}', [FestivalTelegramLoginController::class, 'consume'])->middleware('signed')->name('public.festival-telegram.login.consume');
+    Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/orders/{token}', [FestivalTelegramLoginController::class, 'order'])->middleware('signed')->name('public.festival-telegram.order.consume');
+    Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/checkout/{editionSlug}/{token}', [FestivalTelegramLoginController::class, 'checkout'])->middleware('signed')->name('public.festival-telegram.checkout.consume');
     Route::get('/{accountSlug}/festivals/{editionSlug}', [FestivalPublicController::class, 'show'])->name('public.festivals.show');
     Route::get('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'show'])->name('public.festivals.entrance');
     Route::post('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.entrance.store');

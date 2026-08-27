@@ -153,4 +153,9 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     {
         return $this->hasMany(FestivalStreamEntitlement::class);
     }
+
+    public function telegramFestivalLinks(): HasMany
+    {
+        return $this->hasMany(TelegramFestivalPortalLink::class);
+    }
 }

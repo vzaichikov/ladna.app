@@ -16,6 +16,7 @@ use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
 use App\Support\Sms\StudioSmsSender;
+use App\Support\Telegram\FestivalTelegramNotificationSender;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -49,6 +50,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         SmsAutoTopUpService $autoTopUp,
         PhoneNumberNormalizer $phones,
         MailDeliverySettingsResolver $mailSettingsResolver,
+        FestivalTelegramNotificationSender $telegramSender,
     ): void {
         $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
 
@@ -99,6 +101,18 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         try {
             if ($notification->channel === FestivalNotificationChannel::Sms) {
                 $this->sendSms($notification, $account, $smsSender, $autoTopUp, $phones);
+
+                return;
+            }
+
+            if ($notification->channel === FestivalNotificationChannel::Telegram) {
+                $result = $telegramSender->send($notification, $account);
+
+                if ($result['sent']) {
+                    $this->markSent($notification);
+                } else {
+                    $this->cancel($notification, (string) $result['cancel_reason']);
+                }
 
                 return;
             }
@@ -222,7 +236,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                 ->where('is_active', true)
                 ->first();
 
-            if (! $portalUser || $portalUser->email !== $notification->recipient_email) {
+            if (! $portalUser || ($notification->channel !== FestivalNotificationChannel::Telegram && $portalUser->email !== $notification->recipient_email)) {
                 return null;
             }
 

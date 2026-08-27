@@ -3,6 +3,7 @@
 namespace App\Support\Telegram;
 
 use App\Enums\TelegramBotProfile;
+use App\Models\FestivalSeries;
 use App\Models\TelegramBotInstallation;
 use Illuminate\Http\Client\Response;
 use RuntimeException;
@@ -62,7 +63,9 @@ class TelegramWebhookManager
             $commandsOk = $webhookOk && collect($commandResponses)->every(
                 fn (?Response $response): bool => $this->telegramOk($response),
             );
-            $ok = $webhookOk && $commandsOk;
+            $menuResponse = $webhookOk && $commandsOk ? $this->registerMenuButton($installation) : null;
+            $menuOk = $installation->profile !== TelegramBotProfile::Festival || $this->telegramOk($menuResponse);
+            $ok = $webhookOk && $commandsOk && $menuOk;
 
             $installation->forceFill([
                 'status' => $ok ? self::StatusSynced : self::StatusFailed,
@@ -74,10 +77,11 @@ class TelegramWebhookManager
                 'message' => match (true) {
                     $ok => __('app.telegram_webhook_registered'),
                     ! $webhookOk => $this->telegramError($webhookResponse, __('app.telegram_webhook_registration_failed')),
-                    default => $this->telegramError(
+                    ! $commandsOk => $this->telegramError(
                         collect($commandResponses)->first(fn (?Response $response): bool => ! $this->telegramOk($response)),
                         __('app.telegram_bot_commands_registration_failed'),
                     ),
+                    default => $this->telegramError($menuResponse, __('app.festival_telegram_menu_registration_failed')),
                 },
                 'status' => $this->status($installation->fresh()),
             ];
@@ -288,6 +292,16 @@ class TelegramWebhookManager
                 ->all();
         }
 
+        if ($installation->profile === TelegramBotProfile::Festival) {
+            return collect(['uk', 'en'])
+                ->map(fn (string $locale): ?Response => $this->telegramClient->setCommands(
+                    $installation,
+                    $this->festivalCommands($locale),
+                    $locale,
+                ))
+                ->all();
+        }
+
         return [$this->telegramClient->setCommands($installation, $this->ownerCommands())];
     }
 
@@ -310,5 +324,39 @@ class TelegramWebhookManager
             'command' => $command,
             'description' => __('app.telegram_customer_command_'.$command, [], $locale),
         ])->all();
+    }
+
+    /**
+     * @return array<int, array{command: string, description: string}>
+     */
+    private function festivalCommands(string $locale): array
+    {
+        return collect(['start', 'festival', 'unlink'])
+            ->map(fn (string $command): array => [
+                'command' => $command,
+                'description' => __('app.festival_telegram_command_'.$command, [], $locale),
+            ])->all();
+    }
+
+    private function registerMenuButton(TelegramBotInstallation $installation): ?Response
+    {
+        if ($installation->profile !== TelegramBotProfile::Festival) {
+            return null;
+        }
+
+        $series = FestivalSeries::query()
+            ->whereKey($installation->scope_id)
+            ->where('account_id', $installation->account_id)
+            ->first();
+
+        if (! $series) {
+            return null;
+        }
+
+        return $this->telegramClient->setChatMenuButton(
+            $installation,
+            __('app.festival_telegram_open_app', locale: $series->account()->value('default_language')),
+            route('public.festival-telegram.show', [$series->account()->value('slug'), $series->slug]),
+        );
     }
 }

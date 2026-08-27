@@ -18,6 +18,7 @@ class TelegramUpdateDispatcher
     public function __construct(
         private readonly Application $application,
         private readonly CustomerTelegramUpdateProcessor $customerProcessor,
+        private readonly FestivalTelegramUpdateProcessor $festivalProcessor,
     ) {}
 
     public function process(int $telegramUpdateId): void
@@ -31,6 +32,19 @@ class TelegramUpdateDispatcher
         try {
             if ($telegramUpdate->profile === TelegramBotProfile::Customer) {
                 $processed = $this->customerProcessor->handle($telegramUpdate);
+                $telegramUpdate->forceFill([
+                    'status' => $processed ? TelegramUpdateStatus::Processed->value : TelegramUpdateStatus::Ignored->value,
+                    'error_message' => null,
+                    'available_at' => null,
+                    'processing_started_at' => null,
+                    'processed_at' => now(),
+                ])->save();
+
+                return;
+            }
+
+            if ($telegramUpdate->profile === TelegramBotProfile::Festival) {
+                $processed = $this->festivalProcessor->handle($telegramUpdate);
                 $telegramUpdate->forceFill([
                     'status' => $processed ? TelegramUpdateStatus::Processed->value : TelegramUpdateStatus::Ignored->value,
                     'error_message' => null,

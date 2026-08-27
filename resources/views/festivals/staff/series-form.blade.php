@@ -68,5 +68,79 @@
             <x-ui.button type="submit" size="lg">{{ __('app.save') }}</x-ui.button>
         </div>
     </form>
+
+    @if ($series->exists)
+        <section class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.festival_telegram_bot_title') }}</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">{{ __('app.festival_telegram_bot_help') }}</p>
+                </div>
+                @if ($telegramInstallation?->is_enabled)
+                    <span class="crm-status-active">{{ __('app.telegram_webhook_synced') }}</span>
+                @elseif ($telegramInstallation?->tokenValue())
+                    <span class="crm-status-warning">{{ __('app.telegram_bot_disabled') }}</span>
+                @else
+                    <span class="crm-status-muted">{{ __('app.telegram_not_configured') }}</span>
+                @endif
+            </div>
+
+            @if ($telegramInstallation?->bot_username)
+                <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-3">
+                    <div class="rounded-xl bg-slate-50 p-4">
+                        <dt class="text-slate-500">{{ __('app.telegram_bot') }}</dt>
+                        <dd class="mt-1 font-semibold text-slate-950">{{ '@'.$telegramInstallation->bot_username }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-4">
+                        <dt class="text-slate-500">{{ __('app.telegram_bot_token') }}</dt>
+                        <dd class="mt-1 font-mono font-semibold text-slate-950">••••{{ $telegramInstallation->token_last_four }}</dd>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-4">
+                        <dt class="text-slate-500">{{ __('app.status') }}</dt>
+                        <dd class="mt-1 font-semibold text-slate-950">{{ __('app.'.$telegramInstallation->status) }}</dd>
+                    </div>
+                </dl>
+            @endif
+
+            @if ($canManageTelegramToken)
+                <form method="POST" action="{{ route('dashboard.accounts.festivals.series.telegram-bot.update', [$account, $series]) }}" class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+                    @csrf
+                    @method('PUT')
+                    <label class="min-w-0 flex-1">
+                        <span class="crm-label">{{ __('app.telegram_bot_token') }}</span>
+                        <input type="password" name="token" autocomplete="off" class="crm-field" placeholder="{{ $telegramInstallation?->tokenValue() ? __('app.telegram_bot_token_keep_placeholder') : '' }}">
+                        <x-ui.field-error name="token" />
+                    </label>
+                    <x-ui.button type="submit">{{ $telegramInstallation?->tokenValue() ? __('app.telegram_bot_reconnect') : __('app.telegram_bot_connect') }}</x-ui.button>
+                </form>
+            @else
+                <p class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">{{ __('app.festival_telegram_token_permission_required') }}</p>
+            @endif
+
+            @if ($telegramInstallation?->tokenValue())
+                <div class="mt-5 flex flex-wrap gap-3">
+                    <form method="POST" action="{{ route('dashboard.accounts.festivals.series.telegram-bot.check', [$account, $series]) }}">
+                        @csrf
+                        <x-ui.button type="submit" variant="secondary">{{ __('app.telegram_check_connection') }}</x-ui.button>
+                    </form>
+                    <form method="POST" action="{{ route('dashboard.accounts.festivals.series.telegram-bot.reconnect', [$account, $series]) }}">
+                        @csrf
+                        <x-ui.button type="submit" variant="secondary">{{ __('app.telegram_bot_reconnect') }}</x-ui.button>
+                    </form>
+                    <form method="POST" action="{{ route('dashboard.accounts.festivals.series.telegram-bot.disable', [$account, $series]) }}">
+                        @csrf
+                        <x-ui.button type="submit" variant="secondary">{{ __('app.disable') }}</x-ui.button>
+                    </form>
+                    @if ($canManageTelegramToken)
+                        <form method="POST" action="{{ route('dashboard.accounts.festivals.series.telegram-bot.destroy', [$account, $series]) }}">
+                            @csrf
+                            @method('DELETE')
+                            <x-ui.button type="submit" variant="danger">{{ __('app.disconnect') }}</x-ui.button>
+                        </form>
+                    @endif
+                </div>
+            @endif
+        </section>
+    @endif
 </div>
 @endsection

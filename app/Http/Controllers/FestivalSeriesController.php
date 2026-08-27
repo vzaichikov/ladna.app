@@ -41,6 +41,8 @@ class FestivalSeriesController extends Controller
         return view('festivals.staff.series-form', [
             'account' => $account,
             'series' => $festivalSeries,
+            'telegramInstallation' => $festivalSeries->telegramBotInstallation,
+            'canManageTelegramToken' => (bool) $request->user()?->can('manageStudioSettings', $account),
         ]);
     }
 
