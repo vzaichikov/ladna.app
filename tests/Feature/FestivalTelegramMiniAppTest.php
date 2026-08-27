@@ -143,7 +143,7 @@ class FestivalTelegramMiniAppTest extends TestCase
             'type' => 'category_header',
             'published_at' => now(),
         ]);
-        FestivalEntry::factory()->for($category)->create([
+        $entry = FestivalEntry::factory()->for($category)->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
             'festival_portal_user_id' => $linked['registrant']->id,
@@ -155,6 +155,7 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('authorized', true)
             ->assertJsonPath('identity.registrant_linked', true)
             ->assertJsonFragment(['name' => 'Series-only entry'])
+            ->assertJsonFragment(['edition_id' => $edition->id, 'id' => $entry->id])
             ->assertJsonFragment(['name' => $category->name])
             ->assertJsonMissing(['title' => $otherEdition->title]);
     }

@@ -24,6 +24,7 @@ export function initFestivalTelegramMiniApp() {
     let contactPoll = null;
     let timelinePoll = null;
     let automaticActionOpened = false;
+    let selectedEditionId = null;
 
     telegram?.ready();
     telegram?.expand();
@@ -57,14 +58,24 @@ export function initFestivalTelegramMiniApp() {
         else window.location.assign(url);
     };
 
-    const actionButton = (text, action, targetId, secondary = false) => {
+    const confirmAction = (message) => new Promise((resolve) => {
+        if (telegram?.showConfirm) {
+            telegram.showConfirm(message, resolve);
+            return;
+        }
+
+        resolve(window.confirm(message));
+    });
+
+    const actionButton = (text, action, targetId, secondary = false, confirmation = null) => {
         const button = element('button', secondary
-            ? 'inline-flex min-h-10 items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-slate-100'
-            : 'festival-telegram-accent-button inline-flex min-h-10 items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-white', text);
+            ? 'inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-slate-100'
+            : 'festival-telegram-accent-button inline-flex min-h-10 w-full items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold text-white', text);
         button.type = 'button';
         button.addEventListener('click', async () => {
             clearError();
             try {
+                if (confirmation && ! await confirmAction(confirmation)) return;
                 const result = await request(root.dataset.actionUrl, 'POST', { action, target_id: targetId });
                 if (result.url) openUrl(result.url);
             } catch {
@@ -75,7 +86,7 @@ export function initFestivalTelegramMiniApp() {
     };
 
     const linkButton = (text, url) => {
-        const button = element('button', 'inline-flex min-h-10 items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-slate-100', text);
+        const button = element('button', 'inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/[0.06] px-3 py-2 text-sm font-semibold text-slate-100', text);
         button.type = 'button';
         button.addEventListener('click', () => openUrl(url));
         return button;
@@ -83,47 +94,134 @@ export function initFestivalTelegramMiniApp() {
 
     const emptyCard = () => element('div', 'rounded-2xl border border-white/10 bg-white/[0.05] p-5 text-sm text-slate-300', labels.no_items);
 
-    const renderEditions = () => {
-        const container = root.querySelector('[data-festival-telegram-editions]');
-        container.replaceChildren();
-        (state.editions || []).forEach((edition) => {
-            const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/10');
-            const top = element('div', 'flex items-start justify-between gap-3');
-            const heading = element('div');
-            heading.append(element('div', 'festival-telegram-accent-text text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period));
-            heading.append(element('h2', 'mt-1 text-xl font-semibold', edition.title));
-            if (edition.starts_at) heading.append(element('p', 'mt-2 text-sm text-slate-300', new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(edition.starts_at))));
-            top.append(heading);
-            card.append(top);
-            if (edition.summary) card.append(element('p', 'mt-3 text-sm leading-6 text-slate-300', edition.summary));
-            if (edition.venue_name || edition.venue_address) card.append(element('p', 'mt-3 text-sm font-medium text-slate-200', [edition.venue_name, edition.venue_address].filter(Boolean).join(' · ')));
+    const formattedEditionDate = (edition) => edition.starts_at
+        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(edition.starts_at))
+        : '';
 
-            const actions = element('div', 'mt-4 flex flex-wrap gap-2');
-            actions.append(linkButton(labels.open_ladna, edition.public_url));
-            if (state.authorized && state.registrant && edition.registration_open) actions.append(actionButton(labels.register, 'create_entry', edition.id));
-            if (state.authorized) actions.append(actionButton(labels.tickets, 'ticket_checkout', edition.id, true));
-            card.append(actions);
+    const editionThumbnail = (edition, sizeClasses) => {
+        if (!edition.thumbnail_url) {
+            return element('div', `festival-telegram-accent-button ${sizeClasses} flex shrink-0 items-center justify-center rounded-2xl text-2xl font-semibold text-white`, edition.title.slice(0, 1));
+        }
 
-            [['timeline', edition.timeline], ['schedule', edition.schedule], ['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
-                if (!items?.length) return;
-                const details = element('details', 'mt-4 rounded-xl border border-white/10 bg-black/10 p-3');
-                details.append(element('summary', 'cursor-pointer text-sm font-semibold text-slate-100', `${labels[name]} · ${items.length}`));
-                const list = element('div', 'mt-3 space-y-2');
-                if (name === 'timeline') {
-                    items.forEach((scene) => {
-                        list.append(element('div', 'rounded-lg bg-fuchsia-500/10 px-3 py-2 text-sm', `${scene.scene_name}: ${scene.items?.find((item) => item.status === 'active')?.label || scene.next_label || '—'}`));
-                    });
-                } else if (name === 'documents') {
-                    items.forEach((item) => list.append(linkButton(item.title, item.url)));
-                } else {
-                    items.slice(0, 12).forEach((item) => list.append(element('div', 'rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-slate-200', item.name || [item.rank, item.entry_name, item.category].filter(Boolean).join(' · '))));
-                }
-                details.append(list);
-                card.append(details);
-            });
-            container.append(card);
+        const image = element('img', `${sizeClasses} shrink-0 rounded-2xl object-cover`);
+        image.src = edition.thumbnail_url;
+        image.alt = edition.thumbnail_alt || edition.title;
+        image.loading = 'lazy';
+
+        return image;
+    };
+
+    const editionActions = (edition) => {
+        const actions = element('div', 'mt-5 grid gap-2');
+        const applicationCount = (state.registrant?.entries || []).filter((entry) => entry.edition_id === edition.id).length;
+        if (state.authorized && state.registrant && edition.registration_open) {
+            actions.append(actionButton(
+                labels.new_application,
+                'create_entry',
+                edition.id,
+                false,
+                applicationCount > 0 ? labels.additional_application_confirmation : null,
+            ));
+        }
+        if (state.authorized && state.registrant) {
+            actions.append(actionButton(labels.my_applications_count.replace('__count__', String(applicationCount)), 'entries', null, true));
+        }
+        actions.append(linkButton(labels.open_ladna, edition.public_url));
+        if (state.authorized) actions.append(actionButton(labels.tickets, 'ticket_checkout', edition.id, true));
+
+        return actions;
+    };
+
+    const appendEditionSections = (container, edition) => {
+        [['timeline', edition.timeline], ['schedule', edition.schedule], ['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
+            if (!items?.length) return;
+            const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
+            details.append(element('summary', 'cursor-pointer text-base font-semibold text-slate-100', `${labels[name]} · ${items.length}`));
+            const list = element('div', 'mt-3 space-y-2');
+            if (name === 'timeline') {
+                items.forEach((scene) => {
+                    list.append(element('div', 'rounded-lg bg-fuchsia-500/10 px-3 py-2 text-sm', `${scene.scene_name}: ${scene.items?.find((item) => item.status === 'active')?.label || scene.next_label || '—'}`));
+                });
+            } else if (name === 'documents') {
+                items.forEach((item) => list.append(linkButton(item.title, item.url)));
+            } else {
+                items.slice(0, 12).forEach((item) => list.append(element('div', 'rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-slate-200', item.name || [item.rank, item.entry_name, item.category].filter(Boolean).join(' · '))));
+            }
+            details.append(list);
+            container.append(details);
         });
-        if (!container.children.length) container.append(emptyCard());
+    };
+
+    const renderEditionDetail = (edition, container) => {
+        const back = element('button', 'mb-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-100', `← ${labels.back}`);
+        back.type = 'button';
+        back.dataset.festivalTelegramEditionBack = '';
+        back.addEventListener('click', () => {
+            selectedEditionId = null;
+            renderEditions();
+            renderAuthorization();
+            root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        container.append(back);
+
+        const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/10');
+        const header = element('div', 'flex items-start gap-4');
+        header.append(editionThumbnail(edition, 'h-24 w-24'));
+        const heading = element('div', 'min-w-0 flex-1');
+        heading.append(element('div', 'festival-telegram-accent-text text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period));
+        heading.append(element('h2', 'mt-1 text-xl font-semibold leading-tight', edition.title));
+        if (edition.starts_at) heading.append(element('p', 'mt-2 text-sm text-slate-300', formattedEditionDate(edition)));
+        header.append(heading);
+        card.append(header);
+        if (edition.venue_name || edition.venue_address) card.append(element('p', 'mt-4 text-sm font-medium text-slate-200', [edition.venue_name, edition.venue_address].filter(Boolean).join(' · ')));
+        if (edition.summary) card.append(element('p', 'mt-3 text-sm leading-6 text-slate-300', edition.summary));
+        card.append(editionActions(edition));
+        container.append(card);
+
+        const sections = element('div', 'mt-4 space-y-3');
+        appendEditionSections(sections, edition);
+        container.append(sections);
+    };
+
+    const renderEditions = () => {
+        const list = root.querySelector('[data-festival-telegram-editions]');
+        const detail = root.querySelector('[data-festival-telegram-edition-detail]');
+        list.replaceChildren();
+        detail.replaceChildren();
+
+        let selectedEdition = (state.editions || []).find((edition) => edition.id === selectedEditionId);
+        if (selectedEditionId !== null && !selectedEdition) {
+            selectedEditionId = null;
+            selectedEdition = null;
+        }
+        list.classList.toggle('hidden', Boolean(selectedEdition));
+        detail.classList.toggle('hidden', !selectedEdition);
+
+        if (selectedEdition) {
+            renderEditionDetail(selectedEdition, detail);
+            return;
+        }
+
+        (state.editions || []).forEach((edition) => {
+            const button = element('button', 'grid w-full grid-cols-[4.5rem_1fr] items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-left shadow-lg shadow-black/10 transition active:scale-[0.99]');
+            button.type = 'button';
+            button.dataset.festivalTelegramEdition = String(edition.id);
+            button.append(editionThumbnail(edition, 'h-18 w-18'));
+            const copy = element('span', 'min-w-0');
+            copy.append(element('span', 'festival-telegram-accent-text block text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period));
+            copy.append(element('span', 'mt-1 block text-lg font-semibold leading-tight text-white', edition.title));
+            if (edition.starts_at) copy.append(element('span', 'mt-2 block text-sm text-slate-300', formattedEditionDate(edition)));
+            if (edition.venue_name) copy.append(element('span', 'mt-1 block truncate text-xs text-slate-400', edition.venue_name));
+            button.append(copy);
+            button.addEventListener('click', () => {
+                selectedEditionId = edition.id;
+                renderEditions();
+                renderAuthorization();
+                root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+            list.append(button);
+        });
+        if (!list.children.length) list.append(emptyCard());
     };
 
     const renderMine = () => {
@@ -133,7 +231,7 @@ export function initFestivalTelegramMiniApp() {
         const profile = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5');
         profile.append(element('h2', 'text-xl font-semibold', state.registrant.name));
         if (!state.registrant.profile_complete) profile.append(element('p', 'mt-2 text-sm font-semibold text-amber-200', labels.profile_incomplete));
-        const actions = element('div', 'mt-4 flex flex-wrap gap-2');
+        const actions = element('div', 'mt-4 grid gap-2');
         actions.append(actionButton(labels.open_profile, 'profile'));
         actions.append(actionButton(labels.applications, 'entries', null, true));
         profile.append(actions);
@@ -195,7 +293,7 @@ export function initFestivalTelegramMiniApp() {
         const card = element('article', 'rounded-2xl border border-white/10 bg-white/[0.06] p-5');
         card.append(element('h2', 'text-xl font-semibold', state.series.organizer || state.series.name));
         [state.series.phone, state.series.email].filter(Boolean).forEach((value) => card.append(element('p', 'mt-2 text-sm text-slate-200', value)));
-        const links = element('div', 'mt-4 flex flex-wrap gap-2');
+        const links = element('div', 'mt-4 grid gap-2');
         if (state.series.telegram_url) links.append(linkButton('Telegram', state.series.telegram_url));
         if (state.series.instagram_url) links.append(linkButton('Instagram', state.series.instagram_url));
         card.append(links);
@@ -218,8 +316,10 @@ export function initFestivalTelegramMiniApp() {
         const card = root.querySelector('[data-festival-telegram-authorization]');
         const button = root.querySelector('[data-festival-telegram-contact]');
         const navigation = root.querySelector('[data-festival-telegram-nav]');
+        const seriesHero = root.querySelector('[data-festival-telegram-series-hero]');
         card.classList.toggle('hidden', state.authorized);
-        navigation.classList.toggle('hidden', !state.authorized);
+        navigation.classList.toggle('hidden', !state.authorized || selectedEditionId !== null);
+        seriesHero.classList.toggle('hidden', selectedEditionId !== null);
         button.hidden = state.authorized;
 
         if (state.authorized) {
@@ -276,8 +376,11 @@ export function initFestivalTelegramMiniApp() {
 
     root.querySelectorAll('[data-festival-telegram-tab]').forEach((tab) => {
         tab.addEventListener('click', () => {
+            selectedEditionId = null;
             root.querySelectorAll('[data-festival-telegram-tab]').forEach((candidate) => { candidate.dataset.active = String(candidate === tab); });
             root.querySelectorAll('[data-festival-telegram-panel]').forEach((panel) => panel.classList.toggle('hidden', panel.dataset.festivalTelegramPanel !== tab.dataset.festivalTelegramTab));
+            renderEditions();
+            renderAuthorization();
         });
     });
 

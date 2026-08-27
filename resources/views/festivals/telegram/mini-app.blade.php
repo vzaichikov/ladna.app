@@ -28,7 +28,8 @@
 
         <div class="mx-auto max-w-3xl pb-[max(2rem,env(safe-area-inset-bottom))]">
             <header
-                class="relative flex overflow-hidden border-b border-white/10 bg-gradient-to-br from-violet-950 via-slate-950 to-fuchsia-950 px-5 pb-7 pt-[max(1.25rem,env(safe-area-inset-top))] {{ $hero ? 'min-h-72 items-end' : '' }}"
+                class="relative flex overflow-hidden border-b border-white/10 bg-gradient-to-br from-violet-950 via-slate-950 to-fuchsia-950 px-5 pb-6 pt-[max(1.25rem,env(safe-area-inset-top))] {{ $hero ? 'min-h-52 items-end' : '' }}"
+                data-festival-telegram-series-hero
                 @if ($hero) data-festival-telegram-hero-edition="{{ $hero['edition_id'] }}" @endif
             >
                 @if ($hero)
@@ -87,7 +88,8 @@
                 </nav>
 
                 <section data-festival-telegram-panel="calendar">
-                    <div class="space-y-4" data-festival-telegram-editions></div>
+                    <div class="space-y-3" data-festival-telegram-editions></div>
+                    <div class="hidden" data-festival-telegram-edition-detail></div>
                 </section>
                 <section class="hidden" data-festival-telegram-panel="mine"><div class="space-y-4" data-festival-telegram-mine></div></section>
                 <section class="hidden" data-festival-telegram-panel="tickets"><div class="space-y-4" data-festival-telegram-tickets></div></section>

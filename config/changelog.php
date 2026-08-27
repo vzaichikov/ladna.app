@@ -23,7 +23,7 @@ return [
                 'version' => '0.153.2',
                 'date' => '2026-08-27',
                 'title' => 'Compact Festival Telegram experience',
-                'items' => ['Authorized Festival subscribers now move directly from the edition hero to the Mini App navigation without the redundant Series summary or large authorization card. After phone authorization, the bot explicitly removes Telegram’s contact-sharing keyboard before presenting the Festival button.'],
+                'items' => ['Authorized Festival subscribers now move directly from the compact Series hero to the Mini App navigation without the redundant Series summary or large authorization card. The Calendar is a compact edition list; opening one Festival replaces the poster with an Evolution-style operational view using a small cover, date, venue, expandable published information, and a clear back action. Edition actions now mirror the participant cabinet with New application, confirmation for an additional application, and the existing application count in one aligned full-width stack. After phone authorization, the bot explicitly removes Telegram’s contact-sharing keyboard before presenting the Festival button.'],
                 'meta' => 'Pending release commit.',
             ],
             [
@@ -1371,7 +1371,7 @@ return [
                 'version' => '0.153.2',
                 'date' => '2026-08-27',
                 'title' => 'Компактний Festival Telegram',
-                'items' => ['Авторизовані підписники фестивалю тепер одразу переходять від обкладинки фестивалю до навігації Mini App без зайвого опису серії та великої картки авторизації. Після авторизації за номером телефону бот явно прибирає клавіатуру Telegram для поширення контакту перед показом кнопки фестивалю.'],
+                'items' => ['Авторизовані підписники фестивалю тепер одразу переходять від компактної обкладинки серії до навігації Mini App без зайвого опису серії та великої картки авторизації. Календар став компактним списком видань; відкриття окремого фестивалю замінює постер на операційний екран у стилі Evolution з невеликою обкладинкою, датою, місцем, розгортаною опублікованою інформацією та зрозумілим поверненням. Дії видання повторюють логіку кабінету учасника: Нова заявка, підтвердження додаткової заявки та кількість наявних заявок в одному вирівняному стосі кнопок на всю ширину. Після авторизації за номером телефону бот явно прибирає клавіатуру Telegram для поширення контакту перед показом кнопки фестивалю.'],
                 'meta' => 'Очікує релізного коміту.',
             ],
             [

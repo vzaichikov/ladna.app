@@ -145,6 +145,8 @@ class FestivalTelegramMiniAppData
             'timezone' => $edition->timezone,
             'venue_name' => $edition->venue_name,
             'venue_address' => $edition->venue_address,
+            'thumbnail_url' => $this->imageUrl($edition->mobileCoverMedia) ?? $this->imageUrl($edition->coverMedia),
+            'thumbnail_alt' => $edition->mobileCoverMedia?->alt_text ?: ($edition->coverMedia?->alt_text ?: $edition->title),
             'public_url' => route('public.festivals.show', [$edition->account->slug, $edition->slug]),
             'documents' => $edition->documents->map(fn ($document): array => [
                 'id' => $document->id,
@@ -206,6 +208,7 @@ class FestivalTelegramMiniAppData
                 'id' => $entry->id,
                 'code' => $entry->code,
                 'name' => $entry->entry_name,
+                'edition_id' => $entry->festival_edition_id,
                 'edition' => $entry->edition->title,
                 'category' => $entry->category?->name,
                 'status' => $entry->status->value,
