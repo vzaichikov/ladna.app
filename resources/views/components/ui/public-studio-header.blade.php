@@ -25,9 +25,15 @@
             </span>
         </a>
 
-        <x-ui.button :href="route('public.studio', $account->slug)" variant="secondary" size="sm" class="self-start sm:self-auto">
-            <x-ui.icon name="external-link" class="h-4 w-4" />
-            {{ __('app.studio_public_landing') }}
-        </x-ui.button>
+        <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            @isset($actions)
+                {{ $actions }}
+            @endisset
+
+            <x-ui.button :href="route('public.studio', $account->slug)" variant="secondary" size="sm">
+                <x-ui.icon name="external-link" class="h-4 w-4" />
+                {{ __('app.studio_public_landing') }}
+            </x-ui.button>
+        </div>
     </div>
 </header>

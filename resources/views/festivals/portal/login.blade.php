@@ -153,8 +153,20 @@
                 @endif
             @endif
 
-            <div class="mt-6 border-t border-stone-100 pt-5 text-sm">
+            <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-5 text-sm">
                 <a href="{{ route('public.festivals.index', $account->slug) }}" class="font-semibold text-slate-500 hover:text-slate-950">← {{ __('app.festivals') }}</a>
+                @if($isRegistrant)
+                    <a
+                        href="{{ route('help.show', 'festival-participants') }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="inline-flex items-center gap-2 font-semibold text-slate-500 transition hover:text-slate-950"
+                        data-festival-participant-help-link
+                    >
+                        <x-ui.icon name="circle-help" class="h-4 w-4" />
+                        {{ __('app.help') }}
+                    </a>
+                @endif
             </div>
         </section>
     </div>

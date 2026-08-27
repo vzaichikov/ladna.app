@@ -1,6 +1,18 @@
 @php($portalUser = $portalUser ?? request()->user('festival'))
 @php($isJudge = $portalUser?->role === \App\Enums\FestivalPortalRole::Judge)
-<x-ui.public-studio-header :account="$account" />
+@php($isRegistrant = $portalUser?->role === \App\Enums\FestivalPortalRole::Registrant)
+@if($isRegistrant)
+    <x-ui.public-studio-header :account="$account">
+        <x-slot:actions>
+            <form method="POST" action="{{ route('festival.portal.logout', $account->slug) }}" data-festival-header-logout>
+                @csrf
+                <x-ui.button type="submit" variant="ghost" size="sm">{{ __('app.logout') }}</x-ui.button>
+            </form>
+        </x-slot:actions>
+    </x-ui.public-studio-header>
+@else
+    <x-ui.public-studio-header :account="$account" />
+@endif
 <nav class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3 shadow-crm" aria-label="{{ __('app.festival_portal') }}">
     @if ($isJudge)
         <a href="{{ route('festival.portal.judge.dashboard', $account->slug) }}" class="crm-tab" @if(request()->routeIs('festival.portal.judge.dashboard')) aria-current="page" @endif>{{ __('app.festival_judge_cabinet') }}</a>
@@ -25,5 +37,18 @@
         <a href="{{ route('festival.portal.judging.index', [$account->slug, $edition->slug]) }}" class="crm-tab" @if(request()->routeIs('festival.portal.judging.*')) aria-current="page" @endif>{{ __('app.festival_judging') }}</a>
         <a href="{{ route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]) }}" class="crm-tab" @if(request()->routeIs('festival.portal.battle-votes.*')) aria-current="page" @endif>{{ __('app.festival_battle_voting') }}</a>
     @endif
-    <form method="POST" action="{{ route('festival.portal.logout', $account->slug) }}" class="ml-auto">@csrf<button type="submit" class="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-950">{{ __('app.logout') }}</button></form>
+    @if($isRegistrant)
+        <a
+            href="{{ route('help.show', 'festival-participants') }}"
+            target="_blank"
+            rel="noopener"
+            class="crm-tab ml-auto gap-2"
+            data-festival-participant-help-link
+        >
+            <x-ui.icon name="circle-help" class="h-4 w-4" />
+            {{ __('app.help') }}
+        </a>
+    @else
+        <form method="POST" action="{{ route('festival.portal.logout', $account->slug) }}" class="ml-auto" data-festival-nav-logout>@csrf<button type="submit" class="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-950">{{ __('app.logout') }}</button></form>
+    @endif
 </nav>

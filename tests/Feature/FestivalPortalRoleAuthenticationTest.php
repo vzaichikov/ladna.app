@@ -40,17 +40,35 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
         $participant = FestivalPortalUser::factory()->for($account)->create();
         $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
 
-        $this->actingAs($participant, 'festival')
+        $participantResponse = $this->actingAs($participant, 'festival')
             ->get(route('festival.portal.dashboard', $account->slug))
             ->assertOk()
             ->assertSee('data-public-studio-header', false)
+            ->assertSee('data-festival-header-logout', false)
+            ->assertDontSee('data-festival-nav-logout', false)
+            ->assertSee(route('help.show', 'festival-participants'), false)
+            ->assertSee('data-festival-participant-help-link', false)
+            ->assertSee('target="_blank"', false)
+            ->assertSee('rel="noopener"', false)
+            ->assertSee('data-lucide="circle-help"', false)
             ->assertSee('data-public-studio-footer-identity', false)
             ->assertSee('data-public-studio-footer-name', false);
+
+        $participantResponse->assertSeeInOrder([
+            'data-public-studio-header',
+            'data-festival-header-logout',
+            '</header>',
+            'data-festival-participant-help-link',
+        ], false);
 
         $this->actingAs($judge, 'festival')
             ->get(route('festival.portal.judge.dashboard', $account->slug))
             ->assertOk()
             ->assertSee('data-public-studio-header', false)
+            ->assertDontSee('data-festival-header-logout', false)
+            ->assertSee('data-festival-nav-logout', false)
+            ->assertDontSee(route('help.show', 'festival-participants'), false)
+            ->assertDontSee('data-festival-participant-help-link', false)
             ->assertSee('data-public-studio-footer-identity', false)
             ->assertSee('data-public-studio-footer-name', false);
     }

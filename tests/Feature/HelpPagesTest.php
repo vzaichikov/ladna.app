@@ -7,12 +7,12 @@ use Tests\TestCase;
 
 class HelpPagesTest extends TestCase
 {
-    public function test_help_index_is_public_and_links_to_all_owner_pages(): void
+    public function test_help_index_is_public_and_links_to_all_pages(): void
     {
         $response = $this->get(route('help.index', absolute: false));
 
         $response->assertStatus(200);
-        $response->assertSee('Допомога для власниці студії', false);
+        $response->assertSee('Допомога Ladna', false);
         $response->assertSee('Як все повʼязано', false);
 
         foreach (array_keys(config('help.pages')) as $slug) {
@@ -156,6 +156,106 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_festival_participant_help_is_a_structured_public_chapter(): void
+    {
+        $chapterSlugs = [
+            'festival-participant-access',
+            'festival-participant-application',
+            'festival-participant-fields',
+            'festival-participant-confirmation',
+        ];
+
+        $indexResponse = $this->get(route('help.index', [], false))
+            ->assertOk()
+            ->assertSee('data-help-submenu="festival-participants"', false);
+
+        $parentResponse = $this->get(route('help.show', 'festival-participants', false))
+            ->assertOk()
+            ->assertSee('Гід учасника фестивалю', false)
+            ->assertSee('Як пройти весь шлях реєстрації', false)
+            ->assertSee('Увесь процес відбувається у вебкабінеті Ladna', false)
+            ->assertSee('assets/help/screenshots/festival-participant-login.png', false)
+            ->assertSee('assets/help/screenshots/festival-participant-new-application.png', false)
+            ->assertSee('assets/help/screenshots/festival-participant-summary.png', false);
+
+        $this->assertMatchesRegularExpression(
+            '/<details[^>]*data-help-submenu="festival-participants"[^>]*\sopen\b/',
+            $parentResponse->getContent(),
+        );
+
+        foreach ($chapterSlugs as $slug) {
+            $page = config("help.pages.{$slug}");
+
+            $this->assertSame('festival-participants', $page['parent'] ?? null);
+
+            $indexResponse->assertSee(route('help.show', $slug, false), false);
+            $parentResponse->assertSee($page['title'], false);
+
+            $this->get(route('help.show', $slug, false))
+                ->assertOk()
+                ->assertSee($page['title'], false)
+                ->assertSee('assets/help/screenshots/', false);
+        }
+    }
+
+    public function test_festival_participant_help_covers_the_complete_in_ladna_flow(): void
+    {
+        $expectedCopy = [
+            'festival-participant-access' => [
+                'Як увійти або створити профіль',
+                'підтвердження телефону',
+                'Як заповнити поля профілю',
+                'Як підготувати Мою команду',
+                'це не загальний список учасників фестивалю',
+                'assets/help/screenshots/festival-participant-profile.png',
+                'assets/help/screenshots/festival-participant-team.png',
+            ],
+            'festival-participant-application' => [
+                'Як вибрати фестиваль і категорію',
+                'кількість людей, вікові межі, дозволену тривалість виступу',
+                'Як заповнити основу виступу й склад',
+                'зберігається як чернетка',
+                'assets/help/screenshots/festival-participant-new-application.png',
+            ],
+            'festival-participant-fields' => [
+                'Як заповнювати різні типи полів',
+                'всієї заявки, вас як представника або кожної людини у складі',
+                'Зберегти — не те саме, що Подати',
+                'просте редагування не повертає крок організатору',
+                'assets/help/screenshots/festival-participant-fields.png',
+            ],
+            'festival-participant-confirmation' => [
+                'Подати заявку й оплатити',
+                'Невдалу або прострочену онлайн-спробу можна повторити',
+                'Summary — це підсумковий крок лише для читання',
+                'Прийнято',
+                'Зміни очікують підтвердження',
+                'Моїх заявках та виступах',
+                'assets/help/screenshots/festival-participant-summary.png',
+            ],
+        ];
+
+        foreach ($expectedCopy as $slug => $needles) {
+            $response = $this->get(route('help.show', $slug, false))
+                ->assertOk()
+                ->assertDontSee('Telegram', false)
+                ->assertDontSee('Mini App', false);
+
+            foreach ($needles as $needle) {
+                $response->assertSee($needle, false);
+            }
+        }
+
+        $participantPages = array_intersect_key(
+            config('help.pages'),
+            array_flip(['festival-participants', ...array_keys($expectedCopy)]),
+        );
+        $participantCopy = json_encode($participantPages, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $this->assertStringNotContainsString('Telegram', $participantCopy);
+        $this->assertStringNotContainsString('Mini App', $participantCopy);
+    }
+
     public function test_festival_help_chapters_cover_the_current_owner_workflows(): void
     {
         $expectedCopy = [
@@ -283,6 +383,23 @@ class HelpPagesTest extends TestCase
             'як автоматично створити програму фестивалю' => 'festival-program-timeline',
             'як видати квитки учасникам і суддям' => 'festival-tickets-entrance',
             'де перевірити помилку доставки фестивалю' => 'festival-communication-history',
+        ];
+
+        foreach ($questions as $question => $expectedSlug) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame($expectedSlug, $result[0]['slug'] ?? null, $question);
+        }
+    }
+
+    public function test_help_search_finds_festival_participant_workflows(): void
+    {
+        $questions = [
+            'як увійти в кабінет учасника фестивалю' => 'festival-participant-access',
+            'як додати людину в мою команду' => 'festival-participant-access',
+            'як створити нову заявку на фестиваль' => 'festival-participant-application',
+            'чим зберегти відрізняється від подати' => 'festival-participant-fields',
+            'що означає summary в заявці' => 'festival-participant-confirmation',
         ];
 
         foreach ($questions as $question => $expectedSlug) {
