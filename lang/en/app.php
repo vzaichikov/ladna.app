@@ -312,6 +312,7 @@ return [
     'festival_media_playback_unavailable' => 'Your browser cannot play this media file.',
     'festival_editable_until' => 'Editable until',
     'festival_editable_until_help' => 'Required when post-confirmation editing is enabled. Uses the same relative date rule.',
+    'festival_editable_until_value' => 'Until :date',
     'festival_resolved_editable_until' => 'Applicants can currently edit this field until :date.',
     'festival_registration_field_extensions_help' => 'Allowed filename extensions for private-file uploads, separated by commas or lines. Leave empty to allow any extension; when MIME types are also set, the file must satisfy both lists.',
     'festival_registration_field_mime_types_help' => 'Allowed detected MIME types for private-file uploads, separated by commas or lines. Leave empty to allow any detected type; when extensions are also set, the file must satisfy both lists.',

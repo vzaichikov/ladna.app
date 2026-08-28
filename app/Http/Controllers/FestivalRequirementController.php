@@ -54,6 +54,16 @@ class FestivalRequirementController extends Controller
             ->orderBy('id')
             ->paginate(20)
             ->withQueryString();
+        $postConfirmationEditingByRequirement = $requirements->getCollection()
+            ->mapWithKeys(function (FestivalRequirementDefinition $requirement) use ($festivalEdition): array {
+                $requirement->setRelation('edition', $festivalEdition);
+                $allowed = $this->deadlineResolver->allowsPostConfirmationEdits($requirement);
+
+                return [$requirement->id => [
+                    'allowed' => $allowed,
+                    'editable_until' => $allowed ? $this->deadlineResolver->editableUntil($requirement) : null,
+                ]];
+            });
 
         return view('festivals.staff.settings.requirements', [
             'account' => $account,
@@ -61,6 +71,7 @@ class FestivalRequirementController extends Controller
             'requirements' => $requirements,
             'categories' => $festivalEdition->categories()->get(['id', 'name']),
             'workflows' => $festivalEdition->workflows()->with('steps:id,festival_workflow_id,title')->get(['id', 'name']),
+            'postConfirmationEditingByRequirement' => $postConfirmationEditingByRequirement,
             'filters' => $filters,
             'hasFilters' => $filters['q'] !== ''
                 || $filters['status'] !== ''

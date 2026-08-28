@@ -193,6 +193,41 @@ class FestivalSettingsManagementTest extends TestCase
         $this->assertFalse($requirement->refresh()->show_in_media_report);
     }
 
+    public function test_registration_fields_list_shows_media_report_and_post_confirmation_editing_columns(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $requirement = FestivalRequirementDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_workflow_step_id' => $step->id,
+            'name' => 'Music upload',
+            'show_in_media_report' => true,
+            'validation' => [
+                'allow_post_confirmation_edits' => true,
+                'editable_until_rule' => ['reference' => 'starts_at', 'offset_days' => -10],
+            ],
+        ]);
+        $editableUntil = app(FestivalRequirementDeadlineResolver::class)
+            ->editableUntil($requirement)
+            ->timezone($edition->timezone)
+            ->format('d.m.Y H:i');
+
+        $response = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
+
+        $response
+            ->assertOk()
+            ->assertSee(__('app.festival_media_report'))
+            ->assertSee(__('app.festival_allow_post_confirmation_edits'))
+            ->assertSee(__('app.festival_editable_until_value', ['date' => $editableUntil]))
+            ->assertSee('lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.55fr)_minmax(0,0.85fr)_15rem]', false);
+        $this->assertSame(2, substr_count(
+            $response->getContent(),
+            'lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.55fr)_minmax(0,0.85fr)_15rem]',
+        ));
+    }
+
     public function test_content_sections_use_the_rich_text_editor_and_can_be_permanently_deleted_with_tenant_guards(): void
     {
         [$account, $edition, $owner] = $this->festival();

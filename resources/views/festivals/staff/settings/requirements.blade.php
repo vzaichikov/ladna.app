@@ -20,12 +20,44 @@
     </x-ui.filter-bar>
 
     <x-ui.panel padding="none" class="overflow-hidden">
+        <div class="hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.55fr)_minmax(0,0.85fr)_15rem] lg:items-center" data-festival-registration-field-header>
+            <div>{{ __('app.name') }}</div>
+            <div>{{ __('app.festival_registration_workflow_step') }}</div>
+            <div>{{ __('app.festival_media_report') }}</div>
+            <div>{{ __('app.festival_allow_post_confirmation_edits') }}</div>
+            <div class="text-right">{{ __('app.actions') }}</div>
+        </div>
+
         @forelse ($requirements as $requirement)
-            @php($globalIndex = ($requirements->firstItem() ?? 1) + $loop->index)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center">
+            @php
+                $globalIndex = ($requirements->firstItem() ?? 1) + $loop->index;
+                $postConfirmationEditing = $postConfirmationEditingByRequirement->get($requirement->id);
+                $editableUntil = $postConfirmationEditing['editable_until'] ?? null;
+            @endphp
+            <div class="crm-row lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.55fr)_minmax(0,0.85fr)_15rem] lg:items-center" data-festival-registration-field-row>
                 <div><div class="flex flex-wrap items-center gap-2"><h2 class="font-semibold text-slate-950">{{ $requirement->name }}</h2>@unless ($requirement->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_input_'.$requirement->input_type->value) }} · {{ __('app.festival_scope_'.$requirement->subject_scope->value) }}</p></div>
-                <p class="text-sm text-slate-500">{{ $requirement->workflowStep?->workflow?->name }} · {{ $requirement->workflowStep?->title }} · {{ $requirement->category?->name ?? __('app.all') }}</p>
+                <div><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_registration_workflow_step') }}</p><p class="mt-1 text-sm text-slate-500 lg:mt-0">{{ $requirement->workflowStep?->workflow?->name }} · {{ $requirement->workflowStep?->title }} · {{ $requirement->category?->name ?? __('app.all') }}</p></div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_media_report') }}</p>
+                    <span @class([
+                        'mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold lg:mt-0',
+                        'bg-emerald-100 text-emerald-800' => $requirement->show_in_media_report,
+                        'bg-stone-100 text-stone-600' => ! $requirement->show_in_media_report,
+                    ])>{{ $requirement->show_in_media_report ? __('app.yes') : __('app.no') }}</span>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_allow_post_confirmation_edits') }}</p>
+                    <span @class([
+                        'mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold lg:mt-0',
+                        'bg-emerald-100 text-emerald-800' => $postConfirmationEditing['allowed'] ?? false,
+                        'bg-stone-100 text-stone-600' => ! ($postConfirmationEditing['allowed'] ?? false),
+                    ])>{{ ($postConfirmationEditing['allowed'] ?? false) ? __('app.yes') : __('app.no') }}</span>
+                    @if ($editableUntil)
+                        <time class="mt-1 block text-xs leading-5 text-slate-500" datetime="{{ $editableUntil->toAtomString() }}">{{ __('app.festival_editable_until_value', ['date' => $editableUntil->timezone($edition->timezone)->format('d.m.Y H:i')]) }}</time>
+                    @endif
+                </div>
                 <x-festivals.settings-actions
+                    class="lg:w-60"
                     :active="$requirement->is_active"
                     :toggle-route="route('dashboard.accounts.festivals.requirements.toggle', [$account, $edition, $requirement])"
                     :move-route="route('dashboard.accounts.festivals.requirements.move', [$account, $edition, $requirement])"
