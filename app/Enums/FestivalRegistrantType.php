@@ -9,11 +9,13 @@ enum FestivalRegistrantType: string
     case AdultAthlete = 'adult_athlete';
 
     /** @return list<self> */
-    public static function selectableCases(?self $current = null): array
+    public static function selectableCases(?self $current = null, bool $locked = false): array
     {
-        $cases = $current === self::AdultAthlete
-            ? [self::AdultAthlete]
-            : [self::AdultAthlete, self::Coach];
+        if ($locked && $current !== null) {
+            return [$current];
+        }
+
+        $cases = [self::AdultAthlete, self::Coach];
 
         if ($current === self::Guardian) {
             $cases[] = self::Guardian;

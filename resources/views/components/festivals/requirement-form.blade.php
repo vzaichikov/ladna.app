@@ -20,7 +20,7 @@
     $editableUntilOffsetDays = old('editable_until_offset_days', data_get($editableUntilRule, 'offset_days'));
 @endphp
 
-<form method="POST" action="{{ $editing ? route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]) : route('dashboard.accounts.festivals.requirements.store', [$account, $edition]) }}" class="space-y-4">
+<form method="POST" action="{{ $editing ? route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]) : route('dashboard.accounts.festivals.requirements.store', [$account, $edition]) }}" class="space-y-4" data-festival-requirement-constructor data-helper-selection-type="{{ \App\Enums\FestivalRequirementType::HelperSelection->value }}">
     @csrf
     @if ($editing)
         @method('PUT')
@@ -76,7 +76,7 @@
                 </select>
                 <x-ui.field-error name="festival_category_id" />
             </div>
-            <div>
+            <div data-festival-requirement-scope-field>
                 <x-ui.field-label for="requirement-answer-scope" :label="__('app.festival_field_scope')" :help="__('app.festival_registration_field_scope_help')" />
                 <select id="requirement-answer-scope" name="subject_scope" class="crm-field">
                     @foreach (\App\Enums\FestivalFieldScope::cases() as $scope)
@@ -91,7 +91,7 @@
     <section class="rounded-xl border border-stone-200 bg-slate-50/60 p-4 sm:p-5" data-requirement-section>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.festival_requirement_section_response') }}</h2>
         <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div>
+            <div data-festival-requirement-input-field>
                 <x-ui.field-label for="requirement-input-type" :label="__('app.festival_input_type')" :help="__('app.festival_registration_field_input_type_help')" />
                 <select id="requirement-input-type" name="input_type" class="crm-field">
                     @foreach (\App\Enums\FestivalRequirementInputType::cases() as $inputType)
@@ -100,22 +100,22 @@
                 </select>
                 <x-ui.field-error name="input_type" />
             </div>
-            <div>
+            <div data-festival-requirement-file-setting>
                 <x-ui.field-label for="requirement-max-file-size" :label="__('app.festival_max_file_kb')" :help="__('app.festival_registration_field_max_file_size_help')" />
                 <input id="requirement-max-file-size" type="number" name="max_size_kb" value="{{ old('max_size_kb', $requirement?->max_size_kb ?? 20480) }}" min="1" class="crm-field">
                 <x-ui.field-error name="max_size_kb" />
             </div>
-            <div>
+            <div data-festival-requirement-file-setting>
                 <x-ui.field-label for="requirement-min-duration" :label="__('app.minimum_duration_seconds')" :help="__('app.festival_registration_field_min_duration_help')" />
                 <input id="requirement-min-duration" type="number" min="1" name="min_duration_seconds" value="{{ old('min_duration_seconds', $requirement?->min_duration_seconds) }}" class="crm-field">
                 <x-ui.field-error name="min_duration_seconds" />
             </div>
-            <div>
+            <div data-festival-requirement-file-setting>
                 <x-ui.field-label for="requirement-max-duration" :label="__('app.maximum_duration_seconds')" :help="__('app.festival_registration_field_max_duration_help')" />
                 <input id="requirement-max-duration" type="number" min="1" name="max_duration_seconds" value="{{ old('max_duration_seconds', $requirement?->max_duration_seconds) }}" class="crm-field">
                 <x-ui.field-error name="max_duration_seconds" />
             </div>
-            <div class="sm:col-span-2 xl:col-span-4">
+            <div class="sm:col-span-2 xl:col-span-4" data-festival-requirement-option-setting>
                 <x-ui.field-label for="requirement-option-label-0" :label="__('app.festival_select_options')" :help="__('app.festival_registration_field_options_help')" />
                 <div class="mt-2 space-y-2">
                     @foreach ($options as $index => $option)
@@ -138,19 +138,19 @@
                 </div>
                 <x-ui.field-error name="options" />
             </div>
-            <div>
+            <div data-festival-requirement-file-setting>
                 <x-ui.field-label for="requirement-allowed-extensions" :label="__('app.festival_allowed_extensions')" :help="__('app.festival_registration_field_extensions_help')" />
                 <input id="requirement-allowed-extensions" name="allowed_extensions_text" value="{{ old('allowed_extensions_text', collect($requirement?->allowed_extensions ?? [])->join(', ')) }}" placeholder="mp3, mp4, pdf" class="crm-field">
                 <x-ui.field-error name="allowed_extensions" />
                 <x-ui.field-error name="allowed_extensions.*" />
             </div>
-            <div>
+            <div data-festival-requirement-file-setting>
                 <x-ui.field-label for="requirement-allowed-mime-types" :label="__('app.festival_allowed_mime_types')" :help="__('app.festival_registration_field_mime_types_help')" />
                 <input id="requirement-allowed-mime-types" name="allowed_mime_types_text" value="{{ old('allowed_mime_types_text', collect($requirement?->allowed_mime_types ?? [])->join(', ')) }}" placeholder="audio/mpeg, video/mp4" class="crm-field">
                 <x-ui.field-error name="allowed_mime_types" />
                 <x-ui.field-error name="allowed_mime_types.*" />
             </div>
-            <div class="sm:col-span-2">
+            <div class="sm:col-span-2" data-festival-requirement-url-setting>
                 <x-ui.field-label for="requirement-allowed-hosts" :label="__('app.festival_allowed_url_hosts')" :help="__('app.festival_registration_field_url_hosts_help')" />
                 <input id="requirement-allowed-hosts" name="allowed_hosts_text" value="{{ old('allowed_hosts_text', collect(data_get($requirement?->validation, 'allowed_hosts', []))->join(', ')) }}" placeholder="youtube.com, instagram.com" class="crm-field">
                 <x-ui.field-error name="allowed_hosts" />
@@ -162,7 +162,7 @@
     <section class="rounded-xl border border-stone-200 bg-slate-50/60 p-4 sm:p-5" data-requirement-section>
         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.festival_requirement_section_commercial') }}</h2>
         <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div>
+            <div data-festival-requirement-pricing-field>
                 <x-ui.field-label for="requirement-pricing-mode" :label="__('app.festival_pricing_mode')" :help="__('app.festival_registration_field_pricing_mode_help')" />
                 <select id="requirement-pricing-mode" name="pricing_mode" class="crm-field">
                     @foreach (['none', 'flat_when_true', 'per_unit', 'option_prices'] as $mode)
@@ -172,7 +172,12 @@
                 <x-ui.field-error name="pricing_mode" />
             </div>
             <div>
-                <x-ui.field-label for="requirement-price-amount" :label="__('app.festival_amount', ['currency' => $account->default_currency])" :help="__('app.festival_registration_field_amount_help')" />
+                <div data-festival-requirement-standard-price-label>
+                    <x-ui.field-label for="requirement-price-amount" :label="__('app.festival_amount', ['currency' => $account->default_currency])" :help="__('app.festival_registration_field_amount_help')" />
+                </div>
+                <div class="hidden" data-festival-requirement-helper-price-label>
+                    <x-ui.field-label for="requirement-price-amount" :label="__('app.festival_helper_unit_price', ['currency' => $account->default_currency])" :help="__('app.festival_helper_unit_price_help')" />
+                </div>
                 <input id="requirement-price-amount" type="number" name="price_amount" min="0" max="999999.99" step="0.01" inputmode="decimal" value="{{ old('price_amount', isset($pricing['amount_cents']) || isset($pricing['unit_amount_cents']) ? \App\Support\Payments\PaymentAmounts::centsToDecimalString((int) ($pricing['amount_cents'] ?? $pricing['unit_amount_cents'])) : null) }}" class="crm-field">
                 <x-ui.field-error name="price_amount" />
             </div>
@@ -222,7 +227,7 @@
                 <x-ui.field-label for="requirement-allow-post-confirmation-edits" :label="__('app.festival_allow_post_confirmation_edits')" :help="__('app.festival_allow_post_confirmation_edits_help')" />
             </div>
             <input type="hidden" name="show_in_media_report" value="0">
-            <div class="flex min-w-52 items-center gap-2">
+            <div class="flex min-w-52 items-center gap-2" data-festival-requirement-media-report-setting>
                 <input id="requirement-show-in-media-report" type="checkbox" name="show_in_media_report" value="1" @checked(old('show_in_media_report', $requirement?->show_in_media_report ?? false))>
                 <x-ui.field-label for="requirement-show-in-media-report" :label="__('app.festival_show_in_media_report')" :help="__('app.festival_show_in_media_report_help')" />
             </div>

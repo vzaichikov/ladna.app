@@ -8,6 +8,7 @@ use App\Http\Controllers\FestivalEntryStepController;
 use App\Http\Controllers\FestivalFileController;
 use App\Http\Controllers\FestivalJudgingController;
 use App\Http\Controllers\FestivalParticipantController;
+use App\Http\Controllers\FestivalParticipantPhotoController;
 use App\Http\Controllers\FestivalPortalAuthController;
 use App\Http\Controllers\FestivalPortalController;
 use App\Http\Controllers\FestivalPublicController;
@@ -77,6 +78,7 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
         Route::post('logout', [FestivalPortalAuthController::class, 'logout'])->name('logout');
         Route::middleware([EnsureFestivalPortalRole::class.':registrant', EnsureFestivalProfileComplete::class])->group(function (): void {
             Route::get('profile', [FestivalPortalController::class, 'editProfile'])->name('profile.edit');
+            Route::get('profile/photo', [FestivalParticipantPhotoController::class, 'portalProfile'])->name('profile.photo');
             Route::put('profile', [FestivalPortalController::class, 'updateProfile'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.update');
             Route::put('profile/application', [FestivalPortalController::class, 'updateApplicationProfile'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.application.update');
             Route::post('profile/phone/send', [FestivalPortalController::class, 'sendProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-profile-otp'])->name('profile.phone.send');
@@ -85,6 +87,7 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
             Route::post('profile/phone/verify', [FestivalPortalController::class, 'verifyProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-login'])->name('profile.phone.verify');
             Route::get('/', [FestivalPortalController::class, 'dashboard'])->name('dashboard');
             Route::get('participants', [FestivalParticipantController::class, 'index'])->name('participants.index');
+            Route::get('participants/{festivalParticipant}/photo', [FestivalParticipantPhotoController::class, 'portalParticipant'])->name('participants.photo');
             Route::post('participants', [FestivalParticipantController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.store');
             Route::put('participants/{festivalParticipant}', [FestivalParticipantController::class, 'update'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.update');
             Route::delete('participants/{festivalParticipant}', [FestivalParticipantController::class, 'destroy'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.destroy');

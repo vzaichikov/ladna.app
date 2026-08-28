@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\SaveFestivalProfilePhoto;
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalPortalRole;
@@ -124,11 +125,14 @@ class FestivalPortalController extends Controller
         FestivalPortalProfileRequest $request,
         string $accountSlug,
         SyncFestivalProfileParticipant $syncParticipant,
+        SaveFestivalProfilePhoto $saveProfilePhoto,
         CustomerAuthAvailability $availability,
     ): RedirectResponse {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $data = $request->validated();
         Arr::pull($data, 'profile_action');
+        $photo = Arr::pull($data, 'photo');
+        $removePhoto = (bool) Arr::pull($data, 'remove_photo', false);
         $dateOfBirth = Arr::pull($data, 'date_of_birth');
         $phoneVerificationAvailable = $portalUser->role === FestivalPortalRole::Registrant
             && $availability->methodsFor($account)->otp;
@@ -156,11 +160,18 @@ class FestivalPortalController extends Controller
             $data['phone_verified_at'] = null;
         }
 
-        DB::transaction(function () use ($portalUser, $data, $dateOfBirth, $syncParticipant): void {
-            $lockedPortalUser = FestivalPortalUser::query()->whereKey($portalUser)->lockForUpdate()->firstOrFail();
+        $saveProfilePhoto->execute($portalUser, $photo, $removePhoto, function (FestivalPortalUser $lockedPortalUser) use ($data, $dateOfBirth, $syncParticipant): void {
+            if ($lockedPortalUser->registrantTypeIsLocked()
+                && array_key_exists('registrant_type', $data)
+                && $lockedPortalUser->registrant_type?->value !== $data['registrant_type']) {
+                throw ValidationException::withMessages([
+                    'registrant_type' => __('app.festival_registrant_type_locked'),
+                ]);
+            }
+
             $lockedPortalUser->update($data);
             $syncParticipant->execute($lockedPortalUser, $dateOfBirth);
-        }, 3);
+        });
 
         if ($pendingPhone) {
             $request->session()->put($this->profilePhoneSessionKey($account, $portalUser), $pendingPhone);

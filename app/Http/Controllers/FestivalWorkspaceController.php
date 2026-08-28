@@ -632,7 +632,7 @@ class FestivalWorkspaceController extends Controller
         $entry->load('category.direction');
 
         if ($permissions['registrations']) {
-            $entry->load(['portalUser', 'participants', 'steps.workflowStep', 'requirements.definition', 'requirements.participant', 'requirements.submissions']);
+            $entry->load(['portalUser', 'participants', 'steps.workflowStep', 'requirements.definition', 'requirements.participant', 'requirements.selectedHelpers', 'requirements.submissions']);
         }
 
         if ($permissions['finance']) {

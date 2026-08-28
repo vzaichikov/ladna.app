@@ -71,6 +71,7 @@ class FestivalPaymentService
                     'edition.account',
                     'steps.workflowStep',
                     'steps.requirements.definition.edition',
+                    'steps.requirements.selectedHelpers',
                     'steps.requirements.submissions',
                     'steps.charges',
                 ])
@@ -80,7 +81,7 @@ class FestivalPaymentService
                 ->firstOrFail();
             if ($requestedCharge->festival_entry_step_id !== null) {
                 $entryStep = FestivalEntryStep::query()
-                    ->with(['workflowStep', 'requirements.definition.edition', 'requirements.submissions', 'charges'])
+                    ->with(['workflowStep', 'requirements.definition.edition', 'requirements.selectedHelpers', 'requirements.submissions', 'charges'])
                     ->whereKey($requestedCharge->festival_entry_step_id)
                     ->where('festival_entry_id', $entry->id)
                     ->lockForUpdate()
@@ -432,7 +433,7 @@ class FestivalPaymentService
     private function submitPaidEntryStep(int $stepId): void
     {
         $step = FestivalEntryStep::query()
-            ->with(['entry.edition', 'entry.steps.workflowStep', 'workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])
+            ->with(['entry.edition', 'entry.steps.workflowStep', 'workflowStep', 'requirements.definition', 'requirements.selectedHelpers', 'requirements.submissions', 'charges'])
             ->find($stepId);
 
         if (! $step

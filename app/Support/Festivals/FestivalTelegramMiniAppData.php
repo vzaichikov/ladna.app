@@ -329,7 +329,7 @@ class FestivalTelegramMiniAppData
     /** @return array<string, mixed> */
     private function registrant(FestivalSeries $series, FestivalPortalUser $registrant): array
     {
-        $participants = $registrant->participants()->whereNull('archived_at')->orderBy('last_name')->orderBy('first_name')->get();
+        $participants = $registrant->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get();
         $entries = $registrant->entries()
             ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
             ->with(['edition:id,title,slug,festival_series_id', 'category:id,name'])
@@ -356,6 +356,7 @@ class FestivalTelegramMiniAppData
             'participants' => $participants->map(fn ($participant): array => [
                 'id' => $participant->id,
                 'name' => trim($participant->first_name.' '.$participant->last_name),
+                'member_type' => $participant->member_type->value,
             ])->all(),
             'entries' => $entries->map(fn ($entry): array => [
                 'id' => $entry->id,

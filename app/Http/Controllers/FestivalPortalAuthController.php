@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalRegistrantType;
 use App\Http\Requests\FestivalEmailLoginRequest;
 use App\Http\Requests\FestivalOtpSendRequest;
 use App\Http\Requests\FestivalOtpVerifyRequest;
@@ -57,6 +58,7 @@ class FestivalPortalAuthController extends Controller
                 return FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
                     'role' => $role,
+                    'registrant_type' => $role === FestivalPortalRole::Registrant ? FestivalRegistrantType::AdultAthlete : null,
                     'is_active' => true,
                     'email' => $validated['email'],
                     'email_normalized' => $validated['email'],
@@ -196,6 +198,7 @@ class FestivalPortalAuthController extends Controller
                 return FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
                     'role' => $role,
+                    'registrant_type' => $role === FestivalPortalRole::Registrant ? FestivalRegistrantType::AdultAthlete : null,
                     'is_active' => true,
                     'phone' => $result->challenge->phone,
                     'phone_normalized' => $result->challenge->phone,
@@ -281,6 +284,7 @@ class FestivalPortalAuthController extends Controller
                 $portalUser = FestivalPortalUser::query()->create([
                     'account_id' => $account->id,
                     'role' => $role,
+                    'registrant_type' => $role === FestivalPortalRole::Registrant ? FestivalRegistrantType::AdultAthlete : null,
                     'is_active' => true,
                     'first_name' => $firstName,
                     'last_name' => $lastName,

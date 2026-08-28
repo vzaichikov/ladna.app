@@ -2,10 +2,73 @@
 
 @section('title', __('app.festival_portal_my_team').' - '.$account->name)
 
+@php
+    $failedTeamForm = old('team_form_mode');
+    $addModalOpen = $failedTeamForm === 'add'
+        || request()->query->has('add');
+    $editModalOpen = ($failedTeamForm === 'edit' || request()->filled('edit')) && $editParticipant !== null;
+    $editMemberTypeLocked = $editParticipant
+        && (((int) ($editParticipant->entries_count ?? 0)) > 0 || ((int) ($editParticipant->helper_requirements_count ?? 0)) > 0);
+@endphp
+
 @section('content')
-<main class="min-h-screen bg-canvas px-4 py-6 sm:px-5 sm:py-8"><div class="mx-auto max-w-6xl">@include('festivals.portal._nav')<header class="mt-8"><h1 class="text-3xl font-semibold sm:text-4xl">{{ __('app.festival_portal_my_team') }}</h1><p class="mt-2 text-slate-600">{{ __('app.festival_portal_team_copy') }}</p></header>@if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
-    <div class="mt-6 grid gap-5 lg:grid-cols-[1fr_23rem]"><section class="space-y-3">@forelse($participants as $participant)<details class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm"><summary class="cursor-pointer font-semibold">{{ $participant->displayName() }} <span class="ml-2 text-sm font-normal text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}</span></summary>@if($participant->is_profile_owner)<p class="mt-4 text-sm text-slate-600">{{ __('app.festival_participant_profile') }}</p><a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="mt-2 inline-flex text-sm font-semibold text-brand-700">{{ __('app.edit_profile') }}</a>@else<form method="POST" action="{{ route('festival.portal.participants.update', [$account->slug, $participant]) }}" class="mt-4 grid gap-3 sm:grid-cols-2">@csrf @method('PUT')<input name="first_name" value="{{ $participant->first_name }}" required class="crm-field"><input name="last_name" value="{{ $participant->last_name }}" required class="crm-field"><input name="patronymic" value="{{ $participant->patronymic }}" class="crm-field"><input type="date" name="date_of_birth" value="{{ $participant->date_of_birth->format('Y-m-d') }}" required class="crm-field"><textarea name="notes" class="crm-field sm:col-span-2">{{ $participant->notes }}</textarea><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></form><form method="POST" action="{{ route('festival.portal.participants.destroy', [$account->slug, $participant]) }}" class="mt-3">@csrf @method('DELETE')<button class="text-sm font-semibold text-rose-700">{{ __('app.festival_portal_remove_from_team') }}</button></form>@endif</details>@empty<x-ui.empty-state icon="users">{{ __('app.festival_portal_team_empty') }}</x-ui.empty-state>@endforelse</section>
-        <aside><form method="POST" action="{{ route('festival.portal.participants.store', $account->slug) }}" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">@csrf<h2 class="text-xl font-semibold">{{ __('app.festival_portal_add_to_team') }}</h2><div class="mt-4 space-y-3"><input name="first_name" required placeholder="{{ __('app.first_name') }}" class="crm-field"><input name="last_name" required placeholder="{{ __('app.last_name') }}" class="crm-field"><input name="patronymic" placeholder="{{ __('app.patronymic') }}" class="crm-field"><label><span class="crm-label">{{ __('app.date_of_birth') }}</span><input type="date" name="date_of_birth" required class="crm-field"></label><textarea name="notes" rows="3" placeholder="{{ __('app.notes') }}" class="crm-field"></textarea><x-ui.button type="submit" class="w-full">{{ __('app.festival_portal_add_to_team') }}</x-ui.button></div></form></aside>
+<main class="min-h-screen bg-canvas px-4 py-6 sm:px-5 sm:py-8" data-festival-team-page>
+    <div class="mx-auto max-w-6xl">
+        @include('festivals.portal._nav')
+
+        <header class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h1 class="text-3xl font-semibold text-slate-950 sm:text-4xl">{{ __('app.festival_portal_my_team') }}</h1>
+                <p class="mt-2 max-w-3xl text-slate-600">{{ __('app.festival_portal_team_copy') }}</p>
+            </div>
+            <x-ui.button :href="route('festival.portal.participants.index', ['accountSlug' => $account->slug, 'add' => 'new'])" class="shrink-0" data-festival-team-add-open>
+                <x-ui.icon name="plus" class="h-4 w-4" />
+                {{ __('app.festival_team_add_member') }}
+            </x-ui.button>
+        </header>
+
+        <div class="mt-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+            <x-ui.icon name="triangle-alert" class="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+                <p class="font-semibold">{{ __('app.festival_team_member_type_warning_title') }}</p>
+                <p class="mt-1">{{ __('app.festival_team_member_type_warning_copy') }}</p>
+            </div>
+        </div>
+
+        <div
+            class="mt-5 {{ session('status') ? '' : 'hidden' }} rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-xs"
+            role="status"
+            aria-live="polite"
+            data-async-status
+            data-error-message="{{ __('app.async_request_failed') }}"
+            data-validation-message="{{ __('app.async_validation_failed') }}"
+        >{{ session('status') }}</div>
+
+        <div class="mt-8">
+            @include('festivals.portal.team._list', ['account' => $account, 'participants' => $participants])
+        </div>
     </div>
-</div></main>
+</main>
+
+@include('festivals.portal.team._member-modal', [
+    'account' => $account,
+    'modalId' => 'festival-team-add-modal',
+    'mode' => 'add',
+    'defaultMemberType' => $failedTeamForm === 'add' ? old('member_type') : $addMemberType,
+    'fragmentContext' => 'team',
+    'open' => $addModalOpen,
+    'showErrors' => $failedTeamForm === 'add',
+])
+
+@include('festivals.portal.team._member-modal', [
+    'account' => $account,
+    'modalId' => 'festival-team-edit-modal',
+    'mode' => 'edit',
+    'participant' => $editParticipant,
+    'defaultMemberType' => $editParticipant?->member_type ?? \App\Enums\FestivalTeamMemberType::Performer,
+    'fragmentContext' => 'team',
+    'open' => $editModalOpen,
+    'showErrors' => $editModalOpen,
+    'memberTypeLocked' => $editMemberTypeLocked,
+])
 @endsection

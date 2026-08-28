@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Festivals\SaveFestivalProfilePhoto;
 use App\Actions\Festivals\SyncFestivalProfileParticipant;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalRegistrantType;
 use App\Enums\FestivalTicketStatus;
 use App\Http\Requests\StoreFestivalPortalUserRequest;
 use App\Http\Requests\UpdateFestivalPortalUserRequest;
@@ -14,7 +16,6 @@ use App\Support\Festivals\FestivalWorkspaceAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -99,26 +100,36 @@ class FestivalPortalUserController extends Controller
 
         return $this->formView($account, $festivalEdition, new FestivalPortalUser([
             'role' => $portalRole,
+            'registrant_type' => $portalRole === FestivalPortalRole::Registrant ? FestivalRegistrantType::AdultAthlete : null,
             'is_active' => true,
             'locale' => $account->default_language,
         ]), $permissions, $request->query('return_to') === 'ticket-issuance' ? 'ticket-issuance' : null);
     }
 
-    public function store(StoreFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, string $role, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
+    public function store(StoreFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, string $role, SyncFestivalProfileParticipant $syncParticipant, SaveFestivalProfilePhoto $saveProfilePhoto): RedirectResponse
     {
         $portalRole = $this->role($role);
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->authorizeRole($portalRole, $permissions);
         $data = $request->validated();
+        $photo = Arr::pull($data, 'photo');
+        Arr::pull($data, 'remove_photo');
         $dateOfBirth = Arr::pull($data, 'date_of_birth');
-        $portalUser = DB::transaction(function () use ($account, $portalRole, $data, $dateOfBirth, $syncParticipant): FestivalPortalUser {
+        $portalUser = DB::transaction(function () use ($account, $portalRole, $data, $dateOfBirth, $syncParticipant, $saveProfilePhoto, $photo): FestivalPortalUser {
             $portalUser = FestivalPortalUser::query()->create([
                 'account_id' => $account->id,
                 'role' => $portalRole,
                 ...Arr::except($data, ['password_confirmation']),
+                'registrant_type' => $portalRole === FestivalPortalRole::Registrant
+                    ? ($data['registrant_type'] ?? FestivalRegistrantType::AdultAthlete)
+                    : null,
                 'is_active' => $data['is_active'] ?? true,
             ]);
             $syncParticipant->execute($portalUser, $dateOfBirth);
+
+            if ($portalRole === FestivalPortalRole::Registrant && $photo) {
+                $portalUser = $saveProfilePhoto->execute($portalUser, $photo, false, static function (FestivalPortalUser $lockedPortalUser): void {});
+            }
 
             return $portalUser;
         }, 3);
@@ -131,52 +142,81 @@ class FestivalPortalUserController extends Controller
         return $this->redirectToEdit($account, $festivalEdition, $portalUser);
     }
 
-    public function edit(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser): View
+    public function edit(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser): View|RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->assertPortalUser($account, $festivalPortalUser);
         $this->authorizeRole($festivalPortalUser->role, $permissions);
-        $pageTab = $festivalPortalUser->role === FestivalPortalRole::Registrant
-            && $request->query('tab') === 'notifications'
-            ? 'notifications'
-            : 'profile';
-        $festivalNotifications = null;
 
-        if ($pageTab === 'notifications') {
-            $festivalNotifications = $festivalPortalUser->festivalNotifications()
-                ->where('account_id', $account->id)
-                ->with([
-                    'edition:id,account_id,title,timezone',
-                    'entry:id,account_id,festival_edition_id,code,entry_name',
-                ])
-                ->latest('id')
-                ->paginate(20, ['*'], 'notifications_page')
-                ->withQueryString();
-        } else {
-            $festivalPortalUser->load([
-                'participants' => fn ($query) => $query->withCount('entries')->orderBy('archived_at')->orderBy('last_name')->orderBy('first_name'),
-                'judgeAssignments' => fn ($query) => $query->with('edition')->latest(),
+        if ($festivalPortalUser->role === FestivalPortalRole::Registrant && $request->query('tab') === 'notifications') {
+            $page = max(1, $request->integer('notifications_page', 1));
+
+            return redirect()->route('dashboard.accounts.festivals.users.notifications', [
+                $account,
+                $festivalEdition,
+                $festivalPortalUser,
+                ...($page > 1 ? ['page' => $page] : []),
             ]);
         }
 
-        return $this->formView($account, $festivalEdition, $festivalPortalUser, $permissions, pageTab: $pageTab, festivalNotifications: $festivalNotifications);
+        $festivalPortalUser->load([
+            'profileParticipant',
+            'judgeAssignments' => fn ($query) => $query->with('edition')->latest(),
+        ]);
+
+        return $this->formView($account, $festivalEdition, $festivalPortalUser, $permissions);
     }
 
-    public function update(UpdateFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser, SyncFestivalProfileParticipant $syncParticipant): RedirectResponse
+    public function notifications(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        $this->assertPortalUser($account, $festivalPortalUser);
+        abort_unless($festivalPortalUser->role === FestivalPortalRole::Registrant, 404);
+        $this->authorizeRole($festivalPortalUser->role, $permissions);
+
+        $festivalNotifications = $festivalPortalUser->festivalNotifications()
+            ->where('account_id', $account->id)
+            ->with([
+                'edition:id,account_id,title,timezone',
+                'entry:id,account_id,festival_edition_id,code,entry_name',
+            ])
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.users.notifications', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'portalUser' => $festivalPortalUser,
+            'festivalNotifications' => $festivalNotifications,
+            'workspacePermissions' => $permissions,
+        ]);
+    }
+
+    public function update(UpdateFestivalPortalUserRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalPortalUser $festivalPortalUser, SyncFestivalProfileParticipant $syncParticipant, SaveFestivalProfilePhoto $saveProfilePhoto): RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         $this->assertPortalUser($account, $festivalPortalUser);
         $this->authorizeRole($festivalPortalUser->role, $permissions);
         $data = $request->validated();
+        $photo = Arr::pull($data, 'photo');
+        $removePhoto = (bool) Arr::pull($data, 'remove_photo', false);
         $dateOfBirth = Arr::pull($data, 'date_of_birth');
 
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
 
-        DB::transaction(function () use ($account, $festivalPortalUser, $data, $dateOfBirth, $syncParticipant): void {
-            $portalUser = FestivalPortalUser::query()->whereKey($festivalPortalUser->id)->lockForUpdate()->firstOrFail();
+        $saveProfilePhoto->execute($festivalPortalUser, $photo, $removePhoto, function (FestivalPortalUser $portalUser) use ($account, $data, $dateOfBirth, $syncParticipant): void {
             $this->assertPortalUser($account, $portalUser);
+
+            if ($portalUser->registrantTypeIsLocked()
+                && array_key_exists('registrant_type', $data)
+                && $portalUser->registrant_type?->value !== $data['registrant_type']) {
+                throw ValidationException::withMessages([
+                    'registrant_type' => __('app.festival_registrant_type_locked'),
+                ]);
+            }
 
             if ($portalUser->role === FestivalPortalRole::Judge && ! $data['is_active'] && $portalUser->judgeAssignments()->where('is_active', true)->exists()) {
                 throw ValidationException::withMessages(['is_active' => __('app.festival_judge_profile_assignment_block')]);
@@ -191,25 +231,21 @@ class FestivalPortalUserController extends Controller
 
             $portalUser->update(Arr::except($data, ['role']));
             $syncParticipant->execute($portalUser, $dateOfBirth);
-        }, 3);
+        });
 
         return $this->redirectToEdit($account, $festivalEdition, $festivalPortalUser);
     }
 
     /** @param array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool} $permissions */
-    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions, ?string $returnTo = null, string $pageTab = 'profile', ?LengthAwarePaginator $festivalNotifications = null): View
+    private function formView(Account $account, FestivalEdition $edition, FestivalPortalUser $portalUser, array $permissions, ?string $returnTo = null): View
     {
-        if ($pageTab === 'profile') {
-            $portalUser->loadMissing('profileParticipant');
-        }
+        $portalUser->loadMissing('profileParticipant');
 
         return view('festivals.staff.users.form', [
             'account' => $account,
             'edition' => $edition,
             'portalUser' => $portalUser,
             'returnTo' => $returnTo,
-            'pageTab' => $pageTab,
-            'festivalNotifications' => $festivalNotifications,
             'workspacePermissions' => $permissions,
         ]);
     }

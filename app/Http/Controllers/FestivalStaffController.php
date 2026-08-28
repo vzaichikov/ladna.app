@@ -385,7 +385,7 @@ class FestivalStaffController extends Controller
         $data = $request->validate(['status' => ['required', Rule::in([FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Rejected->value, FestivalRequirementStatus::Waived->value])], 'review_notes' => ['nullable', 'string', 'max:5000']]);
         $reviewDedupeToken = (string) Str::uuid();
         DB::transaction(function () use ($festivalEntryRequirement, $request, $data, $activity, $festivalEdition, $notifications, $reviewDedupeToken): void {
-            $requirement = FestivalEntryRequirement::query()->with(['definition', 'submissions', 'entry.account', 'entry.edition', 'entry.portalUser', 'entryStep.workflowStep'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
+            $requirement = FestivalEntryRequirement::query()->with(['definition', 'selectedHelpers', 'submissions', 'entry.account', 'entry.edition', 'entry.portalUser', 'entryStep.workflowStep'])->whereKey($festivalEntryRequirement->id)->lockForUpdate()->firstOrFail();
             if ($data['status'] === FestivalRequirementStatus::Waived->value
                 && $requirement->definition->input_type === FestivalRequirementInputType::Agreement) {
                 throw ValidationException::withMessages(['status' => __('app.festival_condition_confirmation_cannot_be_waived')]);
@@ -409,7 +409,7 @@ class FestivalStaffController extends Controller
         });
 
         if ($request->expectsJson()) {
-            $festivalEntryRequirement->refresh()->load(['definition', 'submissions']);
+            $festivalEntryRequirement->refresh()->load(['definition', 'selectedHelpers', 'submissions']);
 
             return response()->json([
                 'message' => __('app.festival_requirement_reviewed'),

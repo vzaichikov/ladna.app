@@ -3,6 +3,8 @@
     $isGuest = $portalUser->role === \App\Enums\FestivalPortalRole::Guest;
     $isRegistrant = $portalUser->role === \App\Enums\FestivalPortalRole::Registrant;
     $directoryTab = $isJudge ? 'judges' : ($isGuest ? 'guests' : 'participants');
+    $selectedRegistrantType = old('registrant_type', $portalUser->registrant_type?->value ?? \App\Enums\FestivalRegistrantType::AdultAthlete->value);
+    $registrantTypeLocked = $portalUser->registrantTypeIsLocked();
 @endphp
 
 @extends('layouts.app')
@@ -21,15 +23,10 @@
     @endif
 
     @if ($portalUser->exists && $isRegistrant)
-        <nav class="flex gap-1 overflow-x-auto rounded-2xl bg-slate-100 p-1" aria-label="{{ __('app.festival_participant_edit_tabs') }}">
-            @foreach (['profile', 'notifications'] as $participantTab)
-                <a href="{{ route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser, 'tab' => $participantTab]) }}" class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold {{ ($pageTab ?? 'profile') === $participantTab ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950' }}" @if(($pageTab ?? 'profile') === $participantTab) aria-current="page" @endif>{{ __('app.festival_participant_edit_tab_'.$participantTab) }}</a>
-            @endforeach
-        </nav>
+        @include('festivals.staff.users._detail-nav', ['activeDetailPage' => 'profile'])
     @endif
 
-    @if (($pageTab ?? 'profile') === 'profile')
-    <form method="POST" action="{{ $portalUser->exists ? route('dashboard.accounts.festivals.users.update', [$account, $edition, $portalUser]) : route('dashboard.accounts.festivals.users.store', [$account, $edition, $portalUser->role->value]) }}" class="max-w-4xl space-y-6">
+    <form method="POST" enctype="multipart/form-data" action="{{ $portalUser->exists ? route('dashboard.accounts.festivals.users.update', [$account, $edition, $portalUser]) : route('dashboard.accounts.festivals.users.store', [$account, $edition, $portalUser->role->value]) }}" class="max-w-4xl space-y-6">
         @csrf
         @if ($portalUser->exists) @method('PUT') @endif
         @if (($returnTo ?? null) === 'ticket-issuance')<input type="hidden" name="return_to" value="ticket-issuance">@endif
@@ -50,10 +47,33 @@
                 @unless ($isGuest)<label><span class="crm-label">{{ __('app.festival_stage_name') }}</span><input name="stage_name" value="{{ old('stage_name', $portalUser->stage_name) }}" class="crm-field">@error('stage_name')<span class="crm-help">{{ $message }}</span>@enderror</label>@endunless
 
                 @if ($isRegistrant)
-                    <label><span class="crm-label">{{ __('app.festival_profile_type') }}</span><select name="registrant_type" required class="crm-field" data-festival-registrant-type>@foreach (\App\Enums\FestivalRegistrantType::selectableCases($portalUser->registrant_type) as $type)<option value="{{ $type->value }}" @selected(old('registrant_type', $portalUser->registrant_type?->value) === $type->value)>{{ __('app.festival_registrant_'.$type->value) }}</option>@endforeach</select>@error('registrant_type')<span class="crm-help">{{ $message }}</span>@enderror</label>
-                    <label><span class="crm-label">{{ __('app.date_of_birth') }}<span class="text-rose-600 {{ old('registrant_type', $portalUser->registrant_type?->value) === 'adult_athlete' ? '' : 'hidden' }}" data-participant-required-marker>*</span></span><input type="date" name="date_of_birth" value="{{ old('date_of_birth', $portalUser->profileParticipant?->date_of_birth?->format('Y-m-d')) }}" @required(old('registrant_type', $portalUser->registrant_type?->value) === 'adult_athlete') class="crm-field" data-participant-required-input>@error('date_of_birth')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                    <div class="sm:col-span-2">
+                        <label><span class="crm-label">{{ __('app.festival_profile_type') }}</span><select name="registrant_type" required class="crm-field" data-festival-registrant-type aria-describedby="staff-registrant-type-warning" @disabled($registrantTypeLocked)>@foreach (\App\Enums\FestivalRegistrantType::selectableCases($portalUser->registrant_type, $registrantTypeLocked) as $type)<option value="{{ $type->value }}" @selected($selectedRegistrantType === $type->value)>{{ __('app.festival_registrant_'.$type->value) }}</option>@endforeach</select>@if($registrantTypeLocked)<input type="hidden" name="registrant_type" value="{{ $portalUser->registrant_type?->value }}">@endif @error('registrant_type')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                        <div id="staff-registrant-type-warning" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                            <p>{{ __('app.festival_registrant_type_warning') }}</p>
+                            @if($portalUser->registrant_type === \App\Enums\FestivalRegistrantType::Guardian)<p class="mt-2">{{ __('app.festival_registrant_guardian_legacy_warning') }}</p>@endif
+                        </div>
+                    </div>
+                    <label><span class="crm-label">{{ __('app.date_of_birth') }}<span class="text-rose-600 {{ $selectedRegistrantType === 'adult_athlete' ? '' : 'hidden' }}" data-participant-required-marker>*</span></span><input type="date" name="date_of_birth" value="{{ old('date_of_birth', $portalUser->profileParticipant?->date_of_birth?->format('Y-m-d')) }}" @required($selectedRegistrantType === 'adult_athlete') class="crm-field" data-participant-required-input>@error('date_of_birth')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 @endif
             </div>
+
+            @if($isRegistrant)
+                <div class="mt-5 border-t border-stone-200 pt-5">
+                    <span class="crm-label">{{ __('app.photo') }}</span>
+                    <div class="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center">
+                        @if($portalUser->avatar_path)
+                            <img src="{{ route('dashboard.accounts.festivals.users.photo', [$account, $edition, $portalUser]) }}" alt="" class="h-20 w-20 rounded-full border border-stone-200 object-cover">
+                        @endif
+                        <div class="min-w-0 flex-1">
+                            <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" class="crm-field">
+                            <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_photo_help') }}</p>
+                            @error('photo')<span class="crm-help">{{ $message }}</span>@enderror
+                            @if($portalUser->avatar_path)<label class="mt-3 flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="remove_photo" value="1" class="crm-checkbox">{{ __('app.festival_remove_photo') }}</label>@endif
+                        </div>
+                    </div>
+                </div>
+            @endif
         </section>
 
         <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
@@ -93,53 +113,5 @@
         </div>
     </form>
 
-    @if ($portalUser->exists && $isRegistrant)
-        <section class="space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div><h2 class="text-2xl font-semibold text-slate-950">{{ __('app.festival_roster') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_roster_staff_copy') }}</p></div>
-                <x-ui.button :href="route('dashboard.accounts.festivals.users.participants.create', [$account, $edition, $portalUser])"><x-ui.icon name="plus" class="h-4 w-4" />{{ __('app.festival_add_participant') }}</x-ui.button>
-            </div>
-            <x-ui.panel padding="none" class="overflow-hidden">
-                @forelse ($portalUser->participants as $participant)
-                    <div class="crm-row lg:grid-cols-[minmax(0,1fr)_160px_auto] lg:items-center">
-                        <div><p class="font-semibold text-slate-950">{{ $participant->displayName() }}</p><p class="mt-1 text-sm text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}@if($participant->is_profile_owner) · {{ __('app.festival_participant_profile') }}@endif</p></div>
-                        <div class="text-sm text-slate-500">{{ trans_choice('app.festival_entries_usage_count', $participant->entries_count, ['count' => $participant->entries_count]) }}@if($participant->archived_at)<span class="mt-1 block">{{ __('app.archived') }}</span>@endif</div>
-                        <div class="flex justify-end gap-2">
-                            @unless($participant->is_profile_owner)
-                                <x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $participant])" :label="__('app.edit')" />
-                                @unless($participant->archived_at)
-                                    <x-ui.action-button :href="route('dashboard.accounts.festivals.users.participants.archive', [$account, $edition, $portalUser, $participant])" icon="archive" :label="__('app.archive')" />
-                                @endunless
-                            @endunless
-                        </div>
-                    </div>
-                @empty
-                    <x-ui.empty-state :title="__('app.festival_participants_empty')" icon="users" class="m-5" />
-                @endforelse
-            </x-ui.panel>
-        </section>
-    @endif
-    @elseif ($portalUser->exists && $isRegistrant)
-        <section aria-labelledby="festival-participant-notifications-title">
-            <div>
-                <h2 id="festival-participant-notifications-title" class="text-xl font-semibold text-slate-950">{{ __('app.festival_participant_notifications_history') }}</h2>
-                <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_participant_notifications_history_copy') }}</p>
-            </div>
-
-            <div class="mt-5 space-y-4">
-                @forelse ($festivalNotifications as $notification)
-                    <x-festivals.staff.notification-card
-                        :$notification
-                        :timezone="$notification->edition?->timezone ?? $edition->timezone"
-                        :show-recipient="false"
-                        :show-context="true"
-                    />
-                @empty
-                    <x-ui.empty-state icon="bell">{{ __('app.festival_participant_notifications_empty') }}</x-ui.empty-state>
-                @endforelse
-            </div>
-            <div>{{ $festivalNotifications->links() }}</div>
-        </section>
-    @endif
 </x-festivals.staff.workspace>
 @endsection

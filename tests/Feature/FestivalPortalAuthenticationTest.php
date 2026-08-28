@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalRegistrantType;
+use App\Enums\FestivalTeamMemberType;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Customer;
@@ -11,9 +13,11 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\TelegramBotInstallation;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FestivalPortalAuthenticationTest extends TestCase
@@ -36,6 +40,7 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(FestivalPortalRole::Registrant, $portalUser->role);
+        $this->assertSame(FestivalRegistrantType::AdultAthlete, $portalUser->registrant_type);
         $this->assertTrue($portalUser->is_active);
         $this->assertTrue(Hash::check('secret1', (string) $portalUser->password));
         $this->assertNotSame('secret1', $portalUser->password);
@@ -44,6 +49,14 @@ class FestivalPortalAuthenticationTest extends TestCase
 
         $this->get(route('festival.portal.dashboard', $account->slug))
             ->assertRedirect(route('festival.portal.profile.edit', $account->slug));
+        $profile = $this->get(route('festival.portal.profile.edit', $account->slug));
+        $profile->assertOk()
+            ->assertSee(__('app.festival_registrant_type_warning'))
+            ->assertDontSee('За замовчуванням обрано «Учасник».');
+        $this->assertMatchesRegularExpression(
+            '/<option\s+value="adult_athlete"\s+selected>/',
+            $profile->getContent(),
+        );
     }
 
     public function test_participant_and_judge_email_logins_use_existing_role_specific_profiles(): void
@@ -381,7 +394,8 @@ class FestivalPortalAuthenticationTest extends TestCase
         $this->actingAs($portalUser, 'festival')
             ->get(route('festival.portal.profile.edit', $account->slug))
             ->assertOk()
-            ->assertSee('value="guardian"', false);
+            ->assertSee('value="guardian"', false)
+            ->assertSee(__('app.festival_registrant_guardian_legacy_warning'));
 
         $this->put(route('festival.portal.profile.update', $account->slug), [
             'registrant_type' => 'guardian',
@@ -398,6 +412,18 @@ class FestivalPortalAuthenticationTest extends TestCase
 
         $this->assertSame('guardian', $portalUser->refresh()->registrant_type->value);
         $this->assertSame('Updated city', $portalUser->city);
+
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => FestivalRegistrantType::Coach->value,
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'en',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(FestivalRegistrantType::Coach, $portalUser->refresh()->registrant_type);
     }
 
     public function test_role_specific_login_pages_do_not_cross_link_and_show_distinct_mascots(): void
@@ -475,6 +501,7 @@ class FestivalPortalAuthenticationTest extends TestCase
             'first_name' => 'Forged',
             'last_name' => 'Roster edit',
             'date_of_birth' => '1999-01-01',
+            'member_type' => FestivalTeamMemberType::Performer->value,
         ])->assertStatus(409);
         $this->delete(route('festival.portal.participants.destroy', [$account->slug, $portalUser->profileParticipant]))->assertStatus(409);
 
@@ -485,11 +512,13 @@ class FestivalPortalAuthenticationTest extends TestCase
         $this->assertSame('Марічка', $portalUser->profileParticipant()->firstOrFail()->first_name);
     }
 
-    public function test_adult_participant_profile_cannot_change_to_coach(): void
+    public function test_participant_can_switch_profile_type_before_the_first_application_and_restore_the_owner_performer(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
         $portalUser = FestivalPortalUser::factory()->for($account)->create([
             'registrant_type' => 'adult_athlete',
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
         ]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create([
             'account_id' => $account->id,
@@ -501,7 +530,7 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->get($profileUrl)
             ->assertOk()
             ->assertSee('value="adult_athlete"', false)
-            ->assertDontSee('value="coach"', false);
+            ->assertSee('value="coach"', false);
 
         $this->from($profileUrl)
             ->put(route('festival.portal.profile.update', $account->slug), [
@@ -514,11 +543,87 @@ class FestivalPortalAuthenticationTest extends TestCase
                 'studio_name' => $portalUser->studio_name,
                 'locale' => 'en',
             ])
-            ->assertRedirect($profileUrl)
-            ->assertSessionHasErrors('registrant_type');
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame('adult_athlete', $portalUser->refresh()->registrant_type->value);
-        $this->assertTrue($portalUser->profileParticipant->is($participant));
+        $this->assertSame(FestivalRegistrantType::Coach, $portalUser->refresh()->registrant_type);
+        $this->assertNotNull($participant->refresh()->archived_at);
+
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => FestivalRegistrantType::AdultAthlete->value,
+            'first_name' => 'Restored',
+            'last_name' => $portalUser->last_name,
+            'date_of_birth' => '2000-01-01',
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'en',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame(FestivalRegistrantType::AdultAthlete, $portalUser->refresh()->registrant_type);
+        $this->assertNull($participant->refresh()->archived_at);
+        $this->assertSame(FestivalTeamMemberType::Performer, $participant->member_type);
+        $this->assertSame('Restored', $participant->first_name);
+    }
+
+    public function test_participant_profile_photo_is_private_replaceable_and_removable(): void
+    {
+        Storage::fake('local');
+        $account = Account::factory()->create(['enable_festivals' => true, 'default_language' => 'en']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type' => FestivalRegistrantType::AdultAthlete,
+            'phone' => '+380501112233',
+            'phone_normalized' => '+380501112233',
+        ]);
+        FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'is_profile_owner' => true,
+            'member_type' => FestivalTeamMemberType::Performer,
+        ]);
+        $payload = [
+            'registrant_type' => FestivalRegistrantType::AdultAthlete->value,
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'date_of_birth' => '2000-01-01',
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => 'en',
+        ];
+
+        $this->actingAs($portalUser, 'festival')
+            ->put(route('festival.portal.profile.update', $account->slug), [
+                ...$payload,
+                'photo' => UploadedFile::fake()->image('first.jpg', 300, 300),
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $firstPath = $portalUser->refresh()->avatar_path;
+        $this->assertNotNull($firstPath);
+        Storage::disk('local')->assertExists($firstPath);
+        $photoResponse = $this->get(route('festival.portal.profile.photo', $account->slug));
+        $photoResponse->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertStringContainsString('private', (string) $photoResponse->headers->get('Cache-Control'));
+        $this->assertStringContainsString('no-store', (string) $photoResponse->headers->get('Cache-Control'));
+
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            ...$payload,
+            'photo' => UploadedFile::fake()->image('second.png', 320, 320),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $secondPath = $portalUser->refresh()->avatar_path;
+        $this->assertNotSame($firstPath, $secondPath);
+        Storage::disk('local')->assertMissing($firstPath);
+        Storage::disk('local')->assertExists($secondPath);
+
+        $this->put(route('festival.portal.profile.update', $account->slug), [
+            ...$payload,
+            'remove_photo' => 1,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertNull($portalUser->refresh()->avatar_path);
+        Storage::disk('local')->assertMissing($secondPath);
+        $this->get(route('festival.portal.profile.photo', $account->slug))->assertNotFound();
     }
 
     public function test_judge_profile_rejects_registrant_identity_fields(): void
@@ -613,8 +718,66 @@ class FestivalPortalAuthenticationTest extends TestCase
             ->assertSee(__('app.festival_portal_team'))
             ->assertSee(__('app.festival_portal_my_team'))
             ->assertSee(__('app.festival_portal_team_copy'))
-            ->assertSee(__('app.festival_portal_add_to_team'))
+            ->assertSee(__('app.festival_team_add_member'))
             ->assertDontSee(__('app.festival_participants_copy'));
+    }
+
+    public function test_portal_team_modal_flow_requires_a_role_and_returns_grouped_photo_fragments(): void
+    {
+        Storage::fake('local');
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $storeUrl = route('festival.portal.participants.store', $account->slug);
+
+        $this->actingAs($portalUser, 'festival')
+            ->postJson($storeUrl, [
+                'first_name' => 'No',
+                'last_name' => 'Role',
+                'date_of_birth' => '2001-01-01',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('member_type');
+
+        $created = $this->withHeader('Accept', 'application/json')->post($storeUrl, [
+            'first_name' => 'Stage',
+            'last_name' => 'Helper',
+            'date_of_birth' => '2001-01-01',
+            'member_type' => FestivalTeamMemberType::Helper->value,
+            'fragment_context' => 'helper_selection',
+            'photo' => UploadedFile::fake()->image('helper.webp', 300, 300),
+        ]);
+        $created->assertOk()
+            ->assertJsonPath('message', __('app.festival_portal_team_saved'));
+        $this->assertStringContainsString('data-festival-team-group="helpers"', $created->json('team_html'));
+        $this->assertStringContainsString('name="value[helper_ids][]"', $created->json('helper_option_html'));
+
+        $participant = $portalUser->participants()->where('first_name', 'Stage')->sole();
+        $this->assertSame(FestivalTeamMemberType::Helper, $participant->member_type);
+        $this->assertNotNull($participant->photo_path);
+        Storage::disk('local')->assertExists($participant->photo_path);
+        $this->get(route('festival.portal.participants.photo', [$account->slug, $participant]))
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $otherPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        $this->actingAs($otherPortalUser, 'festival')
+            ->get(route('festival.portal.participants.photo', [$account->slug, $participant]))
+            ->assertNotFound();
+
+        $oldPath = $participant->photo_path;
+        $updated = $this->actingAs($portalUser, 'festival')
+            ->withHeader('Accept', 'application/json')
+            ->put(route('festival.portal.participants.update', [$account->slug, $participant]), [
+                'first_name' => 'Stage',
+                'last_name' => 'Performer',
+                'date_of_birth' => '2001-01-01',
+                'member_type' => FestivalTeamMemberType::Performer->value,
+                'remove_photo' => 1,
+            ]);
+        $updated->assertOk()->assertJsonPath('helper_option_html', null);
+        $this->assertSame(FestivalTeamMemberType::Performer, $participant->refresh()->member_type);
+        $this->assertNull($participant->photo_path);
+        Storage::disk('local')->assertMissing($oldPath);
     }
 
     public function test_magic_link_runtime_and_routes_are_removed(): void

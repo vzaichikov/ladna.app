@@ -11,6 +11,7 @@ use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
@@ -77,6 +78,8 @@ class StoreFestivalPortalUserRequest extends FormRequest
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => [Rule::requiredIf($role !== FestivalPortalRole::Guest), 'nullable', 'confirmed', Password::defaults(), 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
+            'photo' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), 'nullable', File::image()->types(['jpg', 'jpeg', 'png', 'webp'])->max('4mb')],
+            'remove_photo' => ['prohibited'],
         ];
     }
 
@@ -101,12 +104,18 @@ class StoreFestivalPortalUserRequest extends FormRequest
             ? app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $account->country_code)
             : null;
 
-        $this->merge([
+        $prepared = [
             'email' => $email,
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
             'instagram_url' => filled($this->input('instagram_url')) ? trim((string) $this->input('instagram_url')) : null,
-        ]);
+        ];
+
+        if (FestivalPortalRole::tryFrom((string) $this->route('role')) === FestivalPortalRole::Registrant && blank($this->input('registrant_type'))) {
+            $prepared['registrant_type'] = FestivalRegistrantType::AdultAthlete->value;
+        }
+
+        $this->merge($prepared);
     }
 }

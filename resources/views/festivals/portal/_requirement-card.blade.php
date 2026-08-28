@@ -7,6 +7,13 @@
         ?? ($definition->subject_scope === \App\Enums\FestivalFieldScope::Registrant ? $portalUser->displayName() : $entry->entry_name);
     $latest = $requirement->submissions->first();
     $currentValue = $latest?->value_json['value'] ?? null;
+    $teamHelpers = collect($teamHelpers ?? []);
+    $helperSelectionEnabled = $inputType === \App\Enums\FestivalRequirementInputType::HelperSelection
+        && is_array($currentValue)
+        && ($currentValue['enabled'] ?? false) === true;
+    $selectedHelperIds = $requirement->relationLoaded('selectedHelpers')
+        ? $requirement->selectedHelpers->modelKeys()
+        : [];
     $isRejected = $requirement->status === \App\Enums\FestivalRequirementStatus::Rejected;
     $requirementMutable = $requirementState['requirement_mutability'][$requirement->id] ?? $requirementState['mutable'];
     $requirementBlocking = $definition->is_required || $inputType === \App\Enums\FestivalRequirementInputType::Agreement;
@@ -60,7 +67,58 @@
     @endif
 
     @if ($requirementMutable)
-        @if ($inputType === \App\Enums\FestivalRequirementInputType::File)
+        @if ($inputType === \App\Enums\FestivalRequirementInputType::HelperSelection)
+            @php($helperListId = 'festival-helper-list-'.$requirement->id)
+            <form
+                method="POST"
+                action="{{ route('festival.portal.entry-step-responses.store', [$account->slug, $entry, $requirementStep, $requirement]) }}"
+                data-async-form
+                data-festival-helper-selection-form
+                class="mt-4"
+            >
+                @csrf
+                <div data-async-form-status data-error-message="{{ __('app.async_request_failed') }}" data-validation-message="{{ __('app.async_validation_failed') }}" class="hidden"></div>
+                <input type="hidden" name="value[enabled]" value="0">
+                <label class="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 transition has-checked:border-brand-500 has-checked:bg-brand-50">
+                    <input
+                        type="checkbox"
+                        name="value[enabled]"
+                        value="1"
+                        class="crm-checkbox"
+                        aria-controls="{{ $helperListId }}"
+                        aria-expanded="{{ $helperSelectionEnabled ? 'true' : 'false' }}"
+                        data-festival-helper-enabled
+                        @checked($helperSelectionEnabled)
+                    >
+                    <span class="font-semibold text-slate-800">{{ $definition->name }}</span>
+                </label>
+                <div id="{{ $helperListId }}" @class(['mt-3', 'hidden' => ! $helperSelectionEnabled]) data-festival-helper-list>
+                    <div class="grid gap-3 sm:grid-cols-2" data-festival-helper-options>
+                        @foreach($teamHelpers as $helper)
+                            <label class="flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border border-stone-200 p-3 transition has-checked:border-brand-500 has-checked:bg-brand-50" data-festival-helper-option data-festival-helper-id="{{ $helper->id }}">
+                                @if($helper->photo_path)
+                                    <img src="{{ route('festival.portal.participants.photo', [$account->slug, $helper]) }}" alt="" class="h-11 w-11 shrink-0 rounded-full object-cover">
+                                @else
+                                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800" aria-hidden="true">{{ mb_strtoupper(mb_substr((string) $helper->first_name, 0, 1).mb_substr((string) $helper->last_name, 0, 1)) }}</span>
+                                @endif
+                                <input type="checkbox" name="value[helper_ids][]" value="{{ $helper->id }}" class="crm-checkbox" data-festival-helper-choice @checked(in_array($helper->id, $selectedHelperIds, true))>
+                                <span class="min-w-0"><strong class="block truncate text-sm text-slate-900">{{ $helper->displayName() }}</strong><span class="text-xs text-slate-500">{{ $helper->date_of_birth->format('d.m.Y') }}</span></span>
+                            </label>
+                        @endforeach
+                    </div>
+                    @if($teamHelpers->isEmpty())
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" data-festival-helper-empty>
+                            <p>{{ __('app.festival_helpers_empty') }}</p>
+                            <a href="{{ route('festival.portal.participants.index', ['accountSlug' => $account->slug, 'add' => 'helper']) }}" class="mt-3 inline-flex min-h-11 items-center font-semibold text-brand-700" data-festival-helper-add>{{ __('app.festival_add_helper') }}</a>
+                        </div>
+                    @endif
+                </div>
+                <div data-async-error-for="value" class="mt-2"></div>
+                <div data-async-error-for="value.enabled"></div>
+                <div data-async-error-for="value.helper_ids"></div>
+                <div class="mt-3 flex justify-end"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div>
+            </form>
+        @elseif ($inputType === \App\Enums\FestivalRequirementInputType::File)
             <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" data-async-form class="mt-4">
                 @csrf
                 <div data-async-form-status data-error-message="{{ __('app.async_request_failed') }}" class="hidden"></div>
@@ -143,7 +201,19 @@
             </form>
         @endif
     @elseif ($inputType !== \App\Enums\FestivalRequirementInputType::File && $latest)
-        <x-festivals.response-value :definition="$definition" :value="$currentValue" class="mt-3 block rounded-lg bg-white/70 p-3 text-sm" />
+        <x-festivals.response-value :definition="$definition" :value="$currentValue" :helpers="$requirement->selectedHelpers" class="mt-3 block rounded-lg bg-white/70 p-3 text-sm" />
+    @endif
+
+    @if($requirementMutable && $inputType === \App\Enums\FestivalRequirementInputType::HelperSelection)
+        @include('festivals.portal.team._member-modal', [
+            'account' => $account,
+            'modalId' => 'festival-helper-add-modal-'.$requirement->id,
+            'mode' => 'add',
+            'defaultMemberType' => \App\Enums\FestivalTeamMemberType::Helper,
+            'fragmentContext' => 'helper_selection',
+            'open' => false,
+            'showErrors' => false,
+        ])
     @endif
 
     @if ($latest?->path)

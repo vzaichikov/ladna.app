@@ -28,7 +28,7 @@ class FestivalEntryWorkflowState
      */
     public function forEntry(FestivalEntry $entry): Collection
     {
-        $entry->loadMissing(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.submissions', 'steps.charges']);
+        $entry->loadMissing(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges']);
         $priorApproved = true;
         $states = collect();
         $chargesSettled = $entry->steps
@@ -121,7 +121,7 @@ class FestivalEntryWorkflowState
 
     public function assertRequirementMutable(FestivalEntryRequirement $requirement): bool
     {
-        $requirement->loadMissing(['definition.edition', 'entry.edition', 'entry.steps.workflowStep', 'entry.steps.requirements.definition.edition', 'entry.steps.requirements.submissions', 'entry.steps.charges', 'entryStep.workflowStep']);
+        $requirement->loadMissing(['definition.edition', 'entry.edition', 'entry.steps.workflowStep', 'entry.steps.requirements.definition.edition', 'entry.steps.requirements.selectedHelpers', 'entry.steps.requirements.submissions', 'entry.steps.charges', 'entryStep.workflowStep']);
         abort_unless($requirement->entryStep && $requirement->entryStep->festival_entry_id === $requirement->entry->id, 404);
         $state = $this->forEntry($requirement->entry)->first(fn (array $state): bool => $state['step']->is($requirement->entryStep));
         abort_unless($state, 409);

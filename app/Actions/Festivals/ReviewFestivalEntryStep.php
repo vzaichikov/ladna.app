@@ -47,7 +47,7 @@ class ReviewFestivalEntryStep
         $reviewDedupeToken = (string) Str::uuid();
 
         return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes, $reviewDedupeToken): FestivalEntryStep {
-            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.account', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+            $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.account', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.selectedHelpers', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             abort_unless($step->status === FestivalEntryStepStatus::Submitted, 409);
             $postConfirmationReview = $step->entry->status === FestivalEntryStatus::ChangesPending;
 

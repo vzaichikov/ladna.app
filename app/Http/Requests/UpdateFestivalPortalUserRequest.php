@@ -11,6 +11,7 @@ use App\Support\PhoneNumberNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
@@ -75,13 +76,15 @@ class UpdateFestivalPortalUserRequest extends FormRequest
                     ->ignore($portalUser instanceof FestivalPortalUser ? $portalUser->id : 0),
             ],
             'phone_normalized' => ['nullable'],
-            'registrant_type' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null))],
+            'registrant_type' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser instanceof FestivalPortalUser ? $portalUser->registrant_type : null, $portalUser instanceof FestivalPortalUser && $portalUser->registrantTypeIsLocked()))],
             'city' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'studio_name' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), Rule::requiredIf($role === FestivalPortalRole::Registrant), 'nullable', 'string', 'max:255'],
             'instagram_url' => [Rule::prohibitedIf($role === FestivalPortalRole::Guest), 'nullable', 'string', 'max:2048', FestivalSocialLink::instagram()],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
             'is_active' => ['required', 'boolean'],
+            'photo' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), 'nullable', File::image()->types(['jpg', 'jpeg', 'png', 'webp'])->max('4mb')],
+            'remove_photo' => [Rule::prohibitedIf($role !== FestivalPortalRole::Registrant), 'sometimes', 'boolean'],
         ];
     }
 
@@ -106,12 +109,19 @@ class UpdateFestivalPortalUserRequest extends FormRequest
             ? app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $account->country_code)
             : null;
 
-        $this->merge([
+        $prepared = [
             'email' => $email,
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
             'instagram_url' => filled($this->input('instagram_url')) ? trim((string) $this->input('instagram_url')) : null,
-        ]);
+        ];
+
+        $portalUser = $this->route('festivalPortalUser');
+        if ($portalUser instanceof FestivalPortalUser && $portalUser->role === FestivalPortalRole::Registrant && blank($this->input('registrant_type'))) {
+            $prepared['registrant_type'] = $portalUser->registrant_type?->value ?? FestivalRegistrantType::AdultAthlete->value;
+        }
+
+        $this->merge($prepared);
     }
 }

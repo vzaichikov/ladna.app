@@ -62,6 +62,22 @@ class FestivalRequirementRequest extends FormRequest
                 ->all(),
         ];
 
+        if ($this->input('type') === FestivalRequirementType::HelperSelection->value) {
+            $prepared['input_type'] = FestivalRequirementInputType::HelperSelection->value;
+            $prepared['subject_scope'] = FestivalFieldScope::Entry->value;
+            $prepared['pricing_mode'] = 'per_unit';
+            $prepared['options'] = [];
+            $prepared['allowed_extensions'] = [];
+            $prepared['allowed_mime_types'] = [];
+            $prepared['allowed_hosts'] = [];
+            $prepared['max_size_kb'] = $requirement instanceof FestivalRequirementDefinition
+                ? ($requirement->max_size_kb ?? 20480)
+                : 20480;
+            $prepared['min_duration_seconds'] = null;
+            $prepared['max_duration_seconds'] = null;
+            $prepared['show_in_media_report'] = false;
+        }
+
         if ($edition instanceof FestivalEdition) {
             $prepared['code'] = $requirement instanceof FestivalRequirementDefinition && filled($requirement->code)
                 ? $requirement->code
@@ -124,6 +140,22 @@ class FestivalRequirementRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
+            $helperSelectionType = $this->input('type') === FestivalRequirementType::HelperSelection->value;
+            $helperSelectionInput = $this->input('input_type') === FestivalRequirementInputType::HelperSelection->value;
+
+            if ($helperSelectionType !== $helperSelectionInput) {
+                $validator->errors()->add('input_type', __('validation.in', [
+                    'attribute' => __('app.festival_registration_field'),
+                ]));
+            }
+
+            if ($helperSelectionType && ($this->input('subject_scope') !== FestivalFieldScope::Entry->value
+                || $this->input('pricing_mode') !== 'per_unit')) {
+                $validator->errors()->add('type', __('validation.in', [
+                    'attribute' => __('app.festival_registration_field'),
+                ]));
+            }
+
             $edition = $this->route('festivalEdition');
             if (! $edition instanceof FestivalEdition) {
                 return;

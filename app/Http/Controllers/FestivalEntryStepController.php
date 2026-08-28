@@ -34,6 +34,7 @@ class FestivalEntryStepController extends Controller
         $festivalEntry->load($this->entryRelations());
         $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryStep->id);
         $workflowStates = $workflowState->forEntry($festivalEntry);
+        $teamHelpers = $portalUser->helpers()->active()->orderBy('last_name')->orderBy('first_name')->orderBy('id')->get();
 
         return view('festivals.portal.entry', [
             'account' => $account,
@@ -44,6 +45,7 @@ class FestivalEntryStepController extends Controller
             'selectedStep' => $selectedStep,
             'postConfirmationRequirements' => $workflowState->postConfirmationRequirements($workflowStates),
             'paymentGroups' => $chargePaymentGroups->forStep($selectedStep),
+            'teamHelpers' => $teamHelpers,
         ]);
     }
 
@@ -56,12 +58,13 @@ class FestivalEntryStepController extends Controller
         $store->execute($festivalEntryRequirement, $portalUser, $request->input('value'));
 
         if ($request->expectsJson()) {
-            $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'submissions']);
+            $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'selectedHelpers', 'submissions']);
             $festivalEntry->refresh()->load($this->entryRelations());
             $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryStep->id);
             $selectedState = $workflowState->forEntry($festivalEntry)->first(fn (array $state): bool => $state['step']->is($selectedStep));
             $account = $request->attributes->get('festivalAccount');
             $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);
+            $teamHelpers = $portalUser->helpers()->active()->orderBy('last_name')->orderBy('first_name')->orderBy('id')->get();
 
             return response()->json([
                 'message' => __('app.festival_response_saved'),
@@ -74,6 +77,7 @@ class FestivalEntryStepController extends Controller
                     'selectedStep' => $selectedStep,
                     'selectedState' => $selectedState,
                     'requirement' => $festivalEntryRequirement,
+                    'teamHelpers' => $teamHelpers,
                 ])->render(),
                 'payment_html' => view('festivals.portal._payment-fragment', [
                     'account' => $account,
@@ -182,6 +186,7 @@ class FestivalEntryStepController extends Controller
             'steps.workflowStep',
             'steps.requirements.definition',
             'steps.requirements.participant',
+            'steps.requirements.selectedHelpers',
             'steps.requirements.submissions',
             'steps.charges.paymentAllocations.attempt',
             'chargeAdjustments',

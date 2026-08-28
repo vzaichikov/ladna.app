@@ -138,8 +138,8 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertSee('value="agreement"', false)
             ->assertSee(__('app.festival_input_agreement'));
         $this->assertSame(5, substr_count($response->getContent(), 'data-requirement-section'));
-        $this->assertSame(24, substr_count($response->getContent(), 'data-field-help-toggle'));
-        $this->assertSame(24, substr_count($response->getContent(), 'data-field-help-popover'));
+        $this->assertSame(25, substr_count($response->getContent(), 'data-field-help-toggle'));
+        $this->assertSame(25, substr_count($response->getContent(), 'data-field-help-popover'));
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $requirement]), [
             'festival_workflow_step_id' => $step->id,
@@ -423,6 +423,60 @@ class FestivalSettingsManagementTest extends TestCase
                 'price_amount' => '-0.01',
             ])
             ->assertSessionHasErrors('price_amount');
+    }
+
+    public function test_helper_selection_requirement_normalizes_its_input_scope_and_per_helper_pricing(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
+        $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);
+        $payload = [
+            'festival_workflow_step_id' => $step->id,
+            'type' => 'helper_selection',
+            'subject_scope' => 'participant',
+            'input_type' => 'boolean',
+            'name' => 'Stage helpers',
+            'pricing_mode' => 'flat_when_true',
+            'price_amount' => '250.50',
+            'allowed_extensions_text' => 'pdf',
+            'allowed_mime_types_text' => 'application/pdf',
+            'allowed_hosts_text' => 'example.com',
+            'min_duration_seconds' => 10,
+            'max_duration_seconds' => 20,
+            'is_required' => 1,
+            'is_active' => 1,
+            'show_in_media_report' => 1,
+        ];
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), $payload)
+            ->assertSessionHasNoErrors();
+
+        $requirement = FestivalRequirementDefinition::query()
+            ->where('festival_edition_id', $edition->id)
+            ->where('name', 'Stage helpers')
+            ->sole();
+        $this->assertSame('helper_selection', $requirement->type->value);
+        $this->assertSame('helper_selection', $requirement->input_type->value);
+        $this->assertSame('entry', $requirement->subject_scope->value);
+        $this->assertSame(['mode' => 'per_unit', 'unit_amount_cents' => 25050], $requirement->pricing);
+        $this->assertSame([], $requirement->options);
+        $this->assertSame([], $requirement->allowed_extensions);
+        $this->assertSame([], $requirement->allowed_mime_types);
+        $this->assertSame([], data_get($requirement->validation, 'allowed_hosts'));
+        $this->assertSame(20480, $requirement->max_size_kb);
+        $this->assertNull($requirement->min_duration_seconds);
+        $this->assertNull($requirement->max_duration_seconds);
+        $this->assertFalse($requirement->show_in_media_report);
+
+        $this->actingAs($owner)
+            ->post(route('dashboard.accounts.festivals.requirements.store', [$account, $edition]), [
+                ...$payload,
+                'type' => 'custom_document',
+                'input_type' => 'helper_selection',
+                'name' => 'Mismatched helper field',
+            ])
+            ->assertSessionHasErrors('input_type');
     }
 
     public function test_referenced_workflow_step_can_be_deactivated(): void

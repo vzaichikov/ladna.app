@@ -7,8 +7,9 @@
         \App\Enums\FestivalPortalRole::Judge => 'festival.portal.judge.profile',
         default => 'festival.portal.profile',
     };
-    $selectedRegistrantType = old('registrant_type', $portalUser->registrant_type?->value);
+    $selectedRegistrantType = old('registrant_type', $portalUser->registrant_type?->value ?? \App\Enums\FestivalRegistrantType::AdultAthlete->value);
     $isParticipant = $selectedRegistrantType === \App\Enums\FestivalRegistrantType::AdultAthlete->value;
+    $registrantTypeLocked = $portalUser->registrantTypeIsLocked();
     $phoneChallengeActive = (bool) ($profilePhoneVerification['challenge_active'] ?? false);
     $phoneVerificationHasPhone = filled($profilePhoneVerification['phone'] ?? null);
     $phoneValue = old('phone', $profilePhoneVerification['phone'] ?? $portalUser->phone);
@@ -31,7 +32,7 @@
         </header>
         @if(session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
 
-        <form method="POST" action="{{ route($profileRoutePrefix.'.update', $account->slug) }}" class="mt-6 space-y-6" novalidate @unless($isJudge) data-festival-participant-profile-form data-server-validation-scroll @endunless>
+        <form method="POST" enctype="multipart/form-data" action="{{ route($profileRoutePrefix.'.update', $account->slug) }}" class="mt-6 space-y-6" novalidate @unless($isJudge) data-festival-participant-profile-form data-server-validation-scroll @endunless>
             @csrf
             @method('PUT')
 
@@ -39,15 +40,22 @@
                 <h2 class="text-xl font-semibold">{{ __('app.festival_profile_personal_details') }}</h2>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
                     @if($isRegistrant)
-                        <label for="registrant-type">
+                        <div class="sm:col-span-2">
+                            <label for="registrant-type">
                             <span class="crm-label">{{ __('app.festival_profile_type') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span>
-                            <select id="registrant-type" name="registrant_type" required class="crm-field" data-festival-registrant-type aria-invalid="{{ $errors->has('registrant_type') ? 'true' : 'false' }}">
-                                @foreach(\App\Enums\FestivalRegistrantType::selectableCases($portalUser->registrant_type) as $type)
+                            <select id="registrant-type" name="registrant_type" required class="crm-field" data-festival-registrant-type aria-describedby="registrant-type-warning" aria-invalid="{{ $errors->has('registrant_type') ? 'true' : 'false' }}" @disabled($registrantTypeLocked)>
+                                @foreach(\App\Enums\FestivalRegistrantType::selectableCases($portalUser->registrant_type, $registrantTypeLocked) as $type)
                                     <option value="{{ $type->value }}" @selected($selectedRegistrantType === $type->value)>{{ __('app.festival_registrant_'.$type->value) }}</option>
                                 @endforeach
                             </select>
+                            @if($registrantTypeLocked)<input type="hidden" name="registrant_type" value="{{ $portalUser->registrant_type?->value }}">@endif
                             <x-ui.field-error name="registrant_type" />
-                        </label>
+                            </label>
+                            <div id="registrant-type-warning" class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                                <p>{{ __('app.festival_registrant_type_warning') }}</p>
+                                @if($portalUser->registrant_type === \App\Enums\FestivalRegistrantType::Guardian)<p class="mt-2">{{ __('app.festival_registrant_guardian_legacy_warning') }}</p>@endif
+                            </div>
+                        </div>
                     @endif
                     <label for="first-name"><span class="crm-label">{{ __('app.first_name') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="first-name" name="first_name" value="{{ old('first_name', $portalUser->first_name) }}" required class="crm-field"><x-ui.field-error name="first_name" /></label>
                     <label for="last-name"><span class="crm-label">{{ __('app.last_name') }}<span class="text-rose-600" aria-hidden="true" data-required-marker>*</span><span class="sr-only"> ({{ __('app.required') }})</span></span><input id="last-name" name="last_name" value="{{ old('last_name', $portalUser->last_name) }}" required class="crm-field"><x-ui.field-error name="last_name" /></label>
@@ -61,6 +69,27 @@
                         </label>
                     @endif
                 </div>
+
+                @if($isRegistrant)
+                    <div class="mt-5 border-t border-stone-200 pt-5">
+                        <span class="crm-label">{{ __('app.photo') }}</span>
+                        <div class="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center">
+                            @if($portalUser->avatar_path)
+                                <img src="{{ route('festival.portal.profile.photo', $account->slug) }}" alt="" class="h-20 w-20 rounded-full border border-stone-200 object-cover">
+                            @else
+                                <span class="flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-800" aria-hidden="true">{{ mb_strtoupper(mb_substr((string) $portalUser->first_name, 0, 1).mb_substr((string) $portalUser->last_name, 0, 1)) }}</span>
+                            @endif
+                            <div class="min-w-0 flex-1">
+                                <input id="profile-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp" class="crm-field">
+                                <p class="mt-1 text-sm text-slate-500">{{ __('app.festival_photo_help') }}</p>
+                                <x-ui.field-error name="photo" />
+                                @if($portalUser->avatar_path)
+                                    <label class="mt-3 flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="remove_photo" value="1" class="crm-checkbox">{{ __('app.festival_remove_photo') }}</label>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </section>
 
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">

@@ -55,7 +55,7 @@ class FullyConfirmFestivalEntry
                 ->lockForUpdate()
                 ->get();
             $requirements = FestivalEntryRequirement::query()
-                ->with(['definition', 'submissions'])
+                ->with(['definition', 'selectedHelpers', 'submissions'])
                 ->where('festival_entry_id', $entry->id)
                 ->orderBy('id')
                 ->lockForUpdate()

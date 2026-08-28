@@ -13,14 +13,14 @@ class FestivalEntryStepCompletion
 {
     public function requirementsComplete(FestivalEntryStep $step): bool
     {
-        $step->loadMissing(['requirements.definition', 'requirements.submissions']);
+        $step->loadMissing(['requirements.definition', 'requirements.selectedHelpers', 'requirements.submissions']);
 
         return $step->requirements->every(fn (FestivalEntryRequirement $requirement): bool => $this->requirementComplete($requirement));
     }
 
     public function requirementComplete(FestivalEntryRequirement $requirement): bool
     {
-        $requirement->loadMissing(['definition', 'submissions']);
+        $requirement->loadMissing(['definition', 'selectedHelpers', 'submissions']);
         $agreement = $requirement->definition->input_type === FestivalRequirementInputType::Agreement;
         $blocking = $requirement->definition->is_required || $agreement;
 

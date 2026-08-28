@@ -27,7 +27,7 @@ class InitializeFestivalEntryWorkflow
             $entry = FestivalEntry::query()->with(['account', 'edition', 'category.direction', 'category.registrationWorkflow.steps', 'participants', 'portalUser'])->whereKey($entry->id)->lockForUpdate()->firstOrFail();
 
             if ($entry->steps()->exists()) {
-                return $entry->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges']);
+                return $entry->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges']);
             }
 
             $category = FestivalCategory::query()
@@ -59,7 +59,7 @@ class InitializeFestivalEntryWorkflow
             $hasQualification = $workflow->steps->contains(fn ($step): bool => $step->review_effect === FestivalWorkflowReviewEffect::Qualification);
             $this->createCharges($entry, $runtimeSteps, $hasQualification);
 
-            return $entry->refresh()->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.submissions', 'steps.charges', 'participants', 'edition', 'category.direction']);
+            return $entry->refresh()->load(['steps.workflowStep', 'steps.requirements.definition', 'steps.requirements.participant', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges', 'participants', 'edition', 'category.direction']);
         }, 3);
     }
 

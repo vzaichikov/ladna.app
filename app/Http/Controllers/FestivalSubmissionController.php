@@ -27,8 +27,8 @@ class FestivalSubmissionController extends Controller
         $store->execute($festivalEntryRequirement, $portalUser, $request->file('file'));
 
         if ($request->expectsJson()) {
-            $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'submissions', 'entryStep']);
-            $festivalEntry->refresh()->load(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.submissions', 'steps.charges.paymentAllocations.attempt']);
+            $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'selectedHelpers', 'submissions', 'entryStep']);
+            $festivalEntry->refresh()->load(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges.paymentAllocations.attempt']);
             $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryRequirement->festival_entry_step_id);
             $selectedState = $workflowState->forEntry($festivalEntry)->first(fn (array $state): bool => $state['step']->is($selectedStep));
             $providers = app(PaymentGatewayRegistry::class)->availableSettingsFor($account);

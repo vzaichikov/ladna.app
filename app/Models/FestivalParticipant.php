@@ -2,23 +2,34 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalTeamMemberType;
 use Carbon\CarbonInterface;
 use Database\Factories\FestivalParticipantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable(['account_id', 'festival_portal_user_id', 'is_profile_owner', 'first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'archived_at'])]
+#[Fillable(['account_id', 'festival_portal_user_id', 'is_profile_owner', 'member_type', 'first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'photo_path', 'archived_at'])]
 class FestivalParticipant extends Model
 {
     /** @use HasFactory<FestivalParticipantFactory> */
     use HasFactory;
 
+    protected $attributes = [
+        'member_type' => 'performer',
+    ];
+
     protected function casts(): array
     {
-        return ['is_profile_owner' => 'boolean', 'date_of_birth' => 'date', 'archived_at' => 'datetime'];
+        return [
+            'is_profile_owner' => 'boolean',
+            'member_type' => FestivalTeamMemberType::class,
+            'date_of_birth' => 'date',
+            'archived_at' => 'datetime',
+        ];
     }
 
     public function displayName(): string
@@ -29,6 +40,35 @@ class FestivalParticipant extends Model
     public function ageOn(CarbonInterface $date): int
     {
         return (int) $this->date_of_birth->diffInYears($date);
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at');
+    }
+
+    public function scopePerformers(Builder $query): Builder
+    {
+        return $query->where('member_type', FestivalTeamMemberType::Performer->value);
+    }
+
+    public function scopeHelpers(Builder $query): Builder
+    {
+        return $query->where('member_type', FestivalTeamMemberType::Helper->value);
+    }
+
+    public function resolvedPhotoPath(): ?string
+    {
+        if ($this->is_profile_owner) {
+            return $this->portalUser?->avatar_path;
+        }
+
+        return $this->photo_path;
+    }
+
+    public function isInUse(): bool
+    {
+        return $this->entries()->exists() || $this->helperRequirements()->exists();
     }
 
     public function account(): BelongsTo
@@ -49,5 +89,15 @@ class FestivalParticipant extends Model
     public function entries(): BelongsToMany
     {
         return $this->belongsToMany(FestivalEntry::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order']);
+    }
+
+    public function helperRequirements(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FestivalEntryRequirement::class,
+            'festival_entry_requirement_helper',
+            'festival_participant_id',
+            'festival_entry_requirement_id',
+        )->withPivot('sort_order');
     }
 }

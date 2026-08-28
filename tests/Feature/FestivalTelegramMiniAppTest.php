@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionStatus;
+use App\Enums\FestivalRegistrantType;
+use App\Enums\FestivalTeamMemberType;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
@@ -14,6 +16,7 @@ use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalMedia;
+use App\Models\FestivalParticipant;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalRubricSection;
@@ -144,6 +147,17 @@ class FestivalTelegramMiniAppTest extends TestCase
             '+380501234501',
             ['first_name' => 'Telegram', 'last_name' => 'Registrant', 'language_code' => 'en'],
         );
+        $this->assertSame(FestivalRegistrantType::AdultAthlete, $linked['registrant']->registrant_type);
+        $performer = FestivalParticipant::factory()->for($linked['registrant'])->create([
+            'account_id' => $account->id,
+            'first_name' => 'MiniAppPerformer',
+            'member_type' => FestivalTeamMemberType::Performer,
+        ]);
+        FestivalParticipant::factory()->for($linked['registrant'])->create([
+            'account_id' => $account->id,
+            'first_name' => 'MiniAppHelper',
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
         $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
         FestivalScheduleSlot::query()->create([
@@ -161,14 +175,18 @@ class FestivalTelegramMiniAppTest extends TestCase
             'entry_name' => 'Series-only entry',
         ]);
 
-        $this->postJson($route, ['init_data' => $initData])
+        $authorizedResponse = $this->postJson($route, ['init_data' => $initData]);
+        $authorizedResponse
             ->assertOk()
             ->assertJsonPath('authorized', true)
             ->assertJsonPath('identity.registrant_linked', true)
+            ->assertJsonPath('registrant.participants.0.id', $performer->id)
+            ->assertJsonPath('registrant.participants.0.member_type', FestivalTeamMemberType::Performer->value)
             ->assertJsonFragment(['name' => 'Series-only entry'])
             ->assertJsonFragment(['edition_id' => $edition->id, 'id' => $entry->id])
             ->assertJsonFragment(['name' => $category->name])
-            ->assertJsonMissing(['title' => $otherEdition->title]);
+            ->assertJsonMissing(['title' => $otherEdition->title])
+            ->assertJsonMissing(['name' => 'MiniAppHelper']);
     }
 
     public function test_exact_festival_includes_only_active_public_sanitized_content_sections(): void

@@ -11,7 +11,7 @@
             @csrf
             @method('PATCH')
             <x-ui.button type="submit" variant="danger">{{ __('app.archive') }}</x-ui.button>
-            <x-ui.button :href="route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
+            <x-ui.button :href="route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
         </form>
     </x-ui.panel>
 </x-festivals.staff.workspace>

@@ -7,6 +7,7 @@ use App\Enums\FestivalRequirementStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -50,6 +51,16 @@ class FestivalEntryRequirement extends Model
         return $this->hasOne(FestivalSubmission::class)->latestOfMany();
     }
 
+    public function selectedHelpers(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FestivalParticipant::class,
+            'festival_entry_requirement_helper',
+            'festival_entry_requirement_id',
+            'festival_participant_id',
+        )->withPivot('sort_order')->orderByPivot('sort_order');
+    }
+
     public function hasSubmittedResponse(): bool
     {
         $definition = $this->relationLoaded('definition')
@@ -69,6 +80,22 @@ class FestivalEntryRequirement extends Model
 
         if ($definition->input_type === FestivalRequirementInputType::Agreement) {
             return in_array(data_get($submission->value_json, 'value'), [true, 1, '1'], true);
+        }
+
+        if ($definition->input_type === FestivalRequirementInputType::HelperSelection) {
+            $enabled = data_get($submission->value_json, 'value.enabled');
+
+            if (! is_bool($enabled)) {
+                return false;
+            }
+
+            if (! $enabled) {
+                return true;
+            }
+
+            return $this->relationLoaded('selectedHelpers')
+                ? $this->selectedHelpers->isNotEmpty()
+                : $this->selectedHelpers()->exists();
         }
 
         return is_array($submission->value_json)

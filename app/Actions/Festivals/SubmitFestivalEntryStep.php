@@ -45,7 +45,7 @@ class SubmitFestivalEntryStep
                 ->lockForUpdate()
                 ->firstOrFail();
             $entry->setRelation('category', $category);
-            $step = FestivalEntryStep::query()->with(['workflowStep', 'requirements.definition', 'requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
+            $step = FestivalEntryStep::query()->with(['workflowStep', 'requirements.definition', 'requirements.selectedHelpers', 'requirements.submissions', 'charges'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
             if ($step->workflowStep->type === FestivalWorkflowStepType::Summary) {
                 throw ValidationException::withMessages(['step' => __('app.festival_summary_organizer_confirmation_required')]);
             }

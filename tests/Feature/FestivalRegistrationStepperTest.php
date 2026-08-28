@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\DeleteFestivalEntry;
 use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\ProvisionFestivalWorkflow;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
@@ -16,6 +17,7 @@ use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalRequirementType;
+use App\Enums\FestivalTeamMemberType;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\StudioPermission;
@@ -118,6 +120,20 @@ class FestivalRegistrationStepperTest extends TestCase
         $hostile = $render('long_text', '<script>alert("unsafe")</script>');
         $this->assertStringContainsString('&lt;script&gt;', $hostile);
         $this->assertStringNotContainsString('<script>', $hostile);
+
+        $helperDefinition = new FestivalRequirementDefinition(['input_type' => 'helper_selection']);
+        $helpers = collect([
+            new FestivalParticipant(['first_name' => 'One', 'last_name' => 'Helper']),
+            new FestivalParticipant(['first_name' => 'Two', 'last_name' => 'Helper']),
+        ]);
+        $helperSummary = Blade::render(
+            '<x-festivals.response-value :definition="$definition" :value="$value" :helpers="$helpers" />',
+            ['definition' => $helperDefinition, 'value' => ['enabled' => true], 'helpers' => $helpers],
+        );
+        $this->assertStringContainsString(__('app.festival_selected_helpers_summary', [
+            'count' => 2,
+            'names' => 'Helper One, Helper Two',
+        ]), $helperSummary);
     }
 
     public function test_yes_no_fields_use_ajax_radios_and_save_an_explicit_no_value(): void
@@ -1547,6 +1563,272 @@ class FestivalRegistrationStepperTest extends TestCase
             'status' => 'pending',
             'amount_cents' => 2000,
         ]);
+    }
+
+    public function test_helper_selection_syncs_owned_helpers_and_prices_the_validated_relation_count(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $helpers = FestivalParticipant::factory()->count(2)->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $definition = $this->requirement($edition, $workflow, 'technical_form', 'stage_helpers', 'helper_selection', [
+            'mode' => 'per_unit',
+            'unit_amount_cents' => 750,
+        ]);
+        $definition->forceFill(['type' => FestivalRequirementType::HelperSelection])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Helper-priced entry'),
+        );
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $technicalStep = $this->step($entry, 'technical_form');
+        $requirement = $technicalStep->requirements->sole();
+
+        $submission = app(StoreFestivalResponse::class)->execute($requirement, $portalUser, [
+            'enabled' => '1',
+            'helper_ids' => $helpers->modelKeys(),
+        ]);
+
+        $this->assertSame(['enabled' => true], $submission->value_json['value']);
+        $this->assertSame($helpers->modelKeys(), $requirement->selectedHelpers()->pluck('festival_participants.id')->all());
+        $this->assertSame(1500, $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole()->amount_cents);
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $technicalStep]));
+        $page->assertOk()->assertSee('name="value[enabled]"', false)->assertSee('name="value[helper_ids][]"', false);
+        foreach ($helpers as $helper) {
+            $page->assertSee($helper->displayName());
+        }
+
+        $this->actingAs($portalUser, 'festival')
+            ->putJson(route('festival.portal.participants.update', [$account->slug, $helpers->first()]), [
+                'first_name' => $helpers->first()->first_name,
+                'last_name' => $helpers->first()->last_name,
+                'date_of_birth' => $helpers->first()->date_of_birth->toDateString(),
+                'member_type' => FestivalTeamMemberType::Performer->value,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('member_type');
+        $this->assertSame(FestivalTeamMemberType::Helper, $helpers->first()->refresh()->member_type);
+
+        app(StoreFestivalResponse::class)->execute($requirement, $portalUser, ['enabled' => '0']);
+
+        $this->assertSame(0, $requirement->selectedHelpers()->count());
+        $this->assertTrue($requirement
+            ->unsetRelation('definition')
+            ->unsetRelation('submissions')
+            ->unsetRelation('selectedHelpers')
+            ->hasSubmittedResponse());
+        $this->assertSame(
+            FestivalChargeStatus::Cancelled,
+            $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole()->status,
+        );
+    }
+
+    public function test_empty_helper_selection_offers_the_pretyped_add_helper_modal(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'technical_form', 'stage_helpers', 'helper_selection', [
+            'mode' => 'per_unit',
+            'unit_amount_cents' => 500,
+        ]);
+        $definition->forceFill(['type' => FestivalRequirementType::HelperSelection])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Helper modal entry'),
+        );
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $technicalStep = $this->step($entry, 'technical_form');
+
+        $page = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $technicalStep]));
+
+        $page->assertOk()
+            ->assertSee(__('app.festival_helpers_empty'))
+            ->assertSee('data-festival-helper-add', false)
+            ->assertSee('data-festival-team-modal', false)
+            ->assertSee('value="helper"', false)
+            ->assertSee('name="value[enabled]"', false);
+        $this->assertMatchesRegularExpression(
+            '/<input(?=[^>]*name="member_type")(?=[^>]*value="helper")(?=[^>]*checked)[^>]*>/s',
+            $page->getContent(),
+        );
+    }
+
+    public function test_first_application_draft_locks_profile_type_and_only_performers_can_enter_the_roster(): void
+    {
+        [$account, $edition, $portalUser, $performer, $category] = $this->festival();
+        $performer->forceFill([
+            'first_name' => 'AllowedPerformer',
+            'member_type' => FestivalTeamMemberType::Performer,
+        ])->save();
+        $helper = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'first_name' => 'ForbiddenHelper',
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $createUrl = route('festival.portal.entries.create', [$account->slug, $edition->slug]);
+        $storeUrl = route('festival.portal.entries.store', [$account->slug, $edition->slug]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get($createUrl)
+            ->assertOk()
+            ->assertSee('AllowedPerformer')
+            ->assertDontSee('ForbiddenHelper');
+
+        $this->from($createUrl)->post($storeUrl, [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$helper->id],
+            'entry_name' => 'Forged helper roster',
+        ])->assertRedirect($createUrl)->assertSessionHasErrors('participant_ids');
+        $this->assertSame(0, $portalUser->entries()->count());
+        $this->assertNull($portalUser->refresh()->registrant_type_locked_at);
+
+        $this->post($storeUrl, [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$performer->id],
+            'entry_name' => 'Valid performer roster',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $entry = $portalUser->entries()->sole();
+        $this->assertNotNull($portalUser->refresh()->registrant_type_locked_at);
+        $this->assertSame([$performer->id], $entry->participants()->pluck('festival_participants.id')->all());
+
+        $editUrl = route('festival.portal.entries.edit', [$account->slug, $entry]);
+        $this->from($editUrl)->put(route('festival.portal.entries.update', [$account->slug, $entry]), [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$helper->id],
+            'entry_name' => 'Forged replacement roster',
+        ])->assertRedirect($editUrl)->assertSessionHasErrors('participant_ids');
+        $this->assertSame([$performer->id], $entry->participants()->pluck('festival_participants.id')->all());
+
+        app(DeleteFestivalEntry::class)->execute($entry, User::factory()->create());
+        $this->assertNotNull($portalUser->refresh()->registrant_type_locked_at);
+        $profileUrl = route('festival.portal.profile.edit', $account->slug);
+        $this->from($profileUrl)->put(route('festival.portal.profile.update', $account->slug), [
+            'registrant_type' => 'adult_athlete',
+            'first_name' => $portalUser->first_name,
+            'last_name' => $portalUser->last_name,
+            'date_of_birth' => '2000-01-01',
+            'email' => $portalUser->email,
+            'phone' => $portalUser->phone,
+            'city' => $portalUser->city,
+            'studio_name' => $portalUser->studio_name,
+            'locale' => $portalUser->locale,
+        ])->assertRedirect($profileUrl)->assertSessionHasErrors('registrant_type');
+        $this->assertSame('coach', $portalUser->refresh()->registrant_type->value);
+    }
+
+    public function test_helper_selection_rejects_unowned_inactive_wrong_type_and_duplicate_members_atomically(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $validHelper = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $archivedHelper = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+            'archived_at' => now(),
+        ]);
+        $otherPortalUser = FestivalPortalUser::factory()->for($account)->create();
+        $unownedHelper = FestivalParticipant::factory()->for($otherPortalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $definition = $this->requirement($edition, $workflow, 'technical_form', 'stage_helpers', 'helper_selection', [
+            'mode' => 'per_unit',
+            'unit_amount_cents' => 1000,
+        ]);
+        $definition->forceFill(['type' => FestivalRequirementType::HelperSelection])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Scoped helper entry'),
+        );
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $requirement = $this->step($entry, 'technical_form')->requirements->sole();
+        $store = app(StoreFestivalResponse::class);
+        $submission = $store->execute($requirement, $portalUser, [
+            'enabled' => true,
+            'helper_ids' => [$validHelper->id],
+        ]);
+
+        foreach ([
+            [$participant->id],
+            [$archivedHelper->id],
+            [$unownedHelper->id],
+            [$validHelper->id, $validHelper->id],
+            [],
+        ] as $invalidHelperIds) {
+            try {
+                $store->execute($requirement, $portalUser, [
+                    'enabled' => true,
+                    'helper_ids' => $invalidHelperIds,
+                ]);
+                $this->fail('Invalid helpers must not be accepted.');
+            } catch (ValidationException $exception) {
+                $this->assertTrue(collect(array_keys($exception->errors()))
+                    ->contains(fn (string $key): bool => str($key)->startsWith('value.helper_ids')));
+            }
+
+            $this->assertSame([$validHelper->id], $requirement->selectedHelpers()->pluck('festival_participants.id')->all());
+            $this->assertSame(['enabled' => true], $submission->refresh()->value_json['value']);
+            $this->assertSame(1000, $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole()->amount_cents);
+        }
+    }
+
+    public function test_paid_helper_selection_keeps_existing_supplement_and_refund_guarantees(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $helpers = FestivalParticipant::factory()->count(3)->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $definition = $this->requirement($edition, $workflow, 'technical_form', 'stage_helpers', 'helper_selection', [
+            'mode' => 'per_unit',
+            'unit_amount_cents' => 1000,
+        ]);
+        $definition->forceFill(['type' => FestivalRequirementType::HelperSelection])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Paid helper entry'),
+        );
+        $entry->steps()->whereHas('workflowStep', fn ($query) => $query->whereIn('code', ['application', 'participation_payment']))->update([
+            'status' => FestivalEntryStepStatus::Approved->value,
+            'reviewed_at' => now(),
+        ]);
+        $entry->refresh()->load('steps.workflowStep', 'steps.requirements.definition');
+        $requirement = $this->step($entry, 'technical_form')->requirements->sole();
+        $store = app(StoreFestivalResponse::class);
+        $store->execute($requirement, $portalUser, [
+            'enabled' => true,
+            'helper_ids' => $helpers->take(2)->modelKeys(),
+        ]);
+        $paidCharge = $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->sole();
+        $paidCharge->forceFill(['status' => FestivalChargeStatus::Paid, 'paid_at' => now()])->save();
+
+        $store->execute($requirement, $portalUser, [
+            'enabled' => true,
+            'helper_ids' => [$helpers->first()->id],
+        ]);
+        $this->assertSame(1000, $entry->chargeAdjustments()->where('festival_entry_requirement_id', $requirement->id)->sole()->amount_cents);
+
+        $store->execute($requirement, $portalUser, [
+            'enabled' => true,
+            'helper_ids' => $helpers->modelKeys(),
+        ]);
+        $this->assertSame(
+            1000,
+            $entry->charges()->where('festival_entry_requirement_id', $requirement->id)->where('status', FestivalChargeStatus::Pending->value)->sole()->amount_cents,
+        );
+        $this->assertSame('cancelled', $entry->chargeAdjustments()->where('festival_entry_requirement_id', $requirement->id)->sole()->status);
     }
 
     public function test_unpaid_priced_response_reuses_one_charge_through_zero_and_back(): void

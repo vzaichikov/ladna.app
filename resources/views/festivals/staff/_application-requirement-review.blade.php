@@ -40,7 +40,7 @@
         <x-festivals.submission-media :$account :submission="$latestSubmission" class="mt-3" />
     @endif
     @if ($latestSubmission && ! $latestSubmission->path)
-        <x-festivals.response-value :definition="$requirement->definition" :value="$latestSubmission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
+        <x-festivals.response-value :definition="$requirement->definition" :value="$latestSubmission->value_json['value'] ?? null" :helpers="$requirement->selectedHelpers" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
     @endif
     <form
         method="POST"

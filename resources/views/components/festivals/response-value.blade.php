@@ -1,6 +1,7 @@
 @props([
     'definition',
     'value' => null,
+    'helpers' => null,
 ])
 
 @php
@@ -10,7 +11,13 @@
         ->mapWithKeys(fn (array $option): array => [(string) $option['value'] => (string) $option['label']]);
     $isEmpty = $value === null || $value === '' || $value === [];
 
-    if ($isEmpty) {
+    if ($inputType === \App\Enums\FestivalRequirementInputType::HelperSelection) {
+        $helperSelectionEnabled = is_array($value) && ($value['enabled'] ?? false) === true;
+        $selectedHelperNames = collect($helpers ?? [])->map->displayName()->filter()->values();
+        $displayValue = $helperSelectionEnabled
+            ? __('app.festival_selected_helpers_summary', ['count' => $selectedHelperNames->count(), 'names' => $selectedHelperNames->join(', ')])
+            : __('app.no');
+    } elseif ($isEmpty) {
         $displayValue = __('app.not_set');
     } elseif (in_array($inputType, [\App\Enums\FestivalRequirementInputType::Boolean, \App\Enums\FestivalRequirementInputType::Agreement], true)) {
         $displayValue = in_array($value, [true, 1, '1'], true) ? __('app.yes') : __('app.no');

@@ -13,4 +13,5 @@ enum FestivalRequirementInputType: string
     case Url = 'url';
     case SingleSelect = 'single_select';
     case MultiSelect = 'multi_select';
+    case HelperSelection = 'helper_selection';
 }

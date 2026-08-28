@@ -3,6 +3,7 @@
 namespace App\Support\Festivals;
 
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalRegistrantType;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\FestivalPortalUser;
@@ -77,6 +78,7 @@ class FestivalTelegramIdentityLinker
                 $registrant = FestivalPortalUser::query()->create([
                     'account_id' => $series->account_id,
                     'role' => FestivalPortalRole::Registrant,
+                    'registrant_type' => FestivalRegistrantType::AdultAthlete,
                     'is_active' => true,
                     'first_name' => trim((string) ($telegramUser['first_name'] ?? '')) ?: null,
                     'last_name' => trim((string) ($telegramUser['last_name'] ?? '')) ?: null,

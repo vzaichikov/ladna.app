@@ -57,7 +57,7 @@
                         @if($submission?->path)
                             <a href="{{ route('dashboard.accounts.festivals.submissions.download', [$account, $submission]) }}" class="mt-3 inline-flex text-sm font-semibold text-brand-700 hover:text-brand-800">{{ __('app.download') }} · {{ $submission->original_name }}</a>
                         @elseif($submission)
-                            <x-festivals.response-value :definition="$requirement->definition" :value="$submission->value_json['value'] ?? null" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
+                            <x-festivals.response-value :definition="$requirement->definition" :value="$submission->value_json['value'] ?? null" :helpers="$requirement->selectedHelpers" class="mt-3 block rounded-lg bg-slate-50 p-3 text-sm text-slate-700" />
                         @else
                             <p class="mt-3 text-sm text-slate-500">—</p>
                         @endif

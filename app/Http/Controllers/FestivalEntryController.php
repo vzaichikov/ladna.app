@@ -43,7 +43,7 @@ class FestivalEntryController extends Controller
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => new FestivalEntry,
             'canChangeCategory' => false,
             'categories' => $edition->categories()->where('is_active', true)->with('direction')->withCount('capacityOccupyingEntries')->get()->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])->values(),
-            'participants' => $portalUser->participants()->whereNull('archived_at')->orderBy('last_name')->get(),
+            'participants' => $portalUser->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get(),
         ]);
     }
 
@@ -69,6 +69,7 @@ class FestivalEntryController extends Controller
             'steps.workflowStep',
             'steps.requirements.definition',
             'steps.requirements.participant',
+            'steps.requirements.selectedHelpers',
             'steps.requirements.submissions',
             'steps.charges.paymentAllocations.attempt',
             'chargeAdjustments',
@@ -90,8 +91,9 @@ class FestivalEntryController extends Controller
             : ($workflowState->current($festivalEntry) ?? $festivalEntry->steps->last());
         $postConfirmationRequirements = $workflowState->postConfirmationRequirements($workflowStates);
         $paymentGroups = $selectedStep ? $chargePaymentGroups->forStep($selectedStep) : collect();
+        $teamHelpers = $portalUser->helpers()->active()->orderBy('last_name')->orderBy('first_name')->orderBy('id')->get();
 
-        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements', 'paymentGroups') + ['entry' => $festivalEntry]);
+        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements', 'paymentGroups', 'teamHelpers') + ['entry' => $festivalEntry]);
     }
 
     public function edit(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState, ReassignFestivalEntryCategory $reassignCategory): View
@@ -120,7 +122,7 @@ class FestivalEntryController extends Controller
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => $festivalEntry,
             'canChangeCategory' => $canChangeCategory,
             'categories' => $categories,
-            'participants' => $portalUser->participants()->whereNull('archived_at')->orderBy('last_name')->get(),
+            'participants' => $portalUser->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get(),
         ]);
     }
 
@@ -230,6 +232,11 @@ class FestivalEntryController extends Controller
         $data = $request->validated();
 
         return DB::transaction(function () use ($entry, $edition, $portalUser, $rules, $data, $repriceCharges, $reassignCategory, $activity): FestivalEntry {
+            $lockedPortalUser = FestivalPortalUser::query()
+                ->whereKey($portalUser->id)
+                ->where('account_id', $portalUser->account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
             $entry = $entry?->exists
                 ? FestivalEntry::query()
                     ->whereKey($entry->id)
@@ -256,10 +263,12 @@ class FestivalEntryController extends Controller
                 throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
             }
             $participants = FestivalParticipant::query()
-                ->where('festival_portal_user_id', $portalUser->id)
-                ->where('account_id', $portalUser->account_id)
-                ->whereNull('archived_at')
+                ->where('festival_portal_user_id', $lockedPortalUser->id)
+                ->where('account_id', $lockedPortalUser->account_id)
+                ->active()
+                ->performers()
                 ->whereKey($data['participant_ids'])
+                ->lockForUpdate()
                 ->get();
 
             if ($participants->count() !== count($data['participant_ids'])) {
@@ -293,6 +302,11 @@ class FestivalEntryController extends Controller
             ]])->all();
             $entry->participants()->sync($sync);
             $entry->refresh()->load('participants');
+
+            if (! $wasExisting && $lockedPortalUser->registrant_type_locked_at === null) {
+                $lockedPortalUser->forceFill(['registrant_type_locked_at' => $entry->created_at ?? now()])->save();
+            }
+
             if ($categoryChanged) {
                 $entry = $reassignCategory?->executeForApplicant($entry, $category, $portalUser)
                     ?? throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_unavailable')]);

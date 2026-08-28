@@ -10,6 +10,7 @@ use App\Rules\FestivalSocialLink;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Validator;
 
@@ -33,7 +34,7 @@ class FestivalPortalProfileRequest extends FormRequest
             'account_id' => ['prohibited'],
             'google_id' => ['prohibited'],
             'profile_action' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', Rule::in(['send_phone_otp'])],
-            'registrant_type' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type))],
+            'registrant_type' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', Rule::enum(FestivalRegistrantType::class)->only(FestivalRegistrantType::selectableCases($portalUser?->registrant_type, $portalUser?->registrantTypeIsLocked() ?? false))],
             'first_name' => ['required', 'string', 'max:255'],
             'last_name' => ['required', 'string', 'max:255'],
             'patronymic' => [Rule::prohibitedIf($isGuest), 'nullable', 'string', 'max:255'],
@@ -62,6 +63,8 @@ class FestivalPortalProfileRequest extends FormRequest
             'studio_name' => [Rule::prohibitedIf(! $isRegistrant), Rule::requiredIf($isRegistrant), 'nullable', 'string', 'max:255'],
             'instagram_url' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:2048', FestivalSocialLink::instagram()],
             'telegram_contact' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', 'string', 'max:255', FestivalSocialLink::telegram()],
+            'photo' => [Rule::prohibitedIf(! $isRegistrant), 'nullable', File::image()->types(['jpg', 'jpeg', 'png', 'webp'])->max('4mb')],
+            'remove_photo' => [Rule::prohibitedIf(! $isRegistrant), 'sometimes', 'boolean'],
             'locale' => ['required', Rule::in(['en', 'uk'])],
             'password' => ['nullable', 'confirmed', Password::defaults(), 'max:255'],
         ];
@@ -88,13 +91,19 @@ class FestivalPortalProfileRequest extends FormRequest
             ? app(PhoneNumberNormalizer::class)->normalize($this->input('phone'), $account->country_code)
             : null;
 
-        $this->merge([
+        $prepared = [
             'email' => $email,
             'email_normalized' => $email,
             'phone' => $phone,
             'phone_normalized' => $phone,
             'instagram_url' => filled($this->input('instagram_url')) ? trim((string) $this->input('instagram_url')) : null,
             'telegram_contact' => filled($this->input('telegram_contact')) ? trim((string) $this->input('telegram_contact')) : null,
-        ]);
+        ];
+
+        if ($this->user('festival')?->role === FestivalPortalRole::Registrant && blank($this->input('registrant_type'))) {
+            $prepared['registrant_type'] = FestivalRegistrantType::AdultAthlete->value;
+        }
+
+        $this->merge($prepared);
     }
 }

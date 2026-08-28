@@ -532,16 +532,29 @@ final class AppBreadcrumbs
             return [...$base, $users, $this->item($this->modelLabel($portalUser, __('app.festival_user')))];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.users.team') {
+            return [...$base, $users, $portalUserItem, $this->item(__('app.festival_participant_edit_tab_team'))];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.users.notifications') {
+            return [...$base, $users, $portalUserItem, $this->item(__('app.festival_participant_edit_tab_notifications'))];
+        }
+
+        $team = $this->item(
+            __('app.festival_participant_edit_tab_team'),
+            route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]),
+        );
+
         if ($routeName === 'dashboard.accounts.festivals.users.participants.create') {
-            return [...$base, $users, $portalUserItem, $this->item(__('app.festival_add_participant'))];
+            return [...$base, $users, $portalUserItem, $team, $this->item(__('app.festival_add_participant'))];
         }
 
         $participant = $this->modelParameter($request, 'festivalParticipant');
         $participantLabel = $this->modelLabel($participant, __('app.festival_participant'));
 
         return match ($routeName) {
-            'dashboard.accounts.festivals.users.participants.edit' => [...$base, $users, $portalUserItem, $this->item(__('app.breadcrumb_edit_item', ['item' => $participantLabel]))],
-            'dashboard.accounts.festivals.users.participants.archive' => [...$base, $users, $portalUserItem, $this->item(__('app.archive').' '.$participantLabel)],
+            'dashboard.accounts.festivals.users.participants.edit' => [...$base, $users, $portalUserItem, $team, $this->item(__('app.breadcrumb_edit_item', ['item' => $participantLabel]))],
+            'dashboard.accounts.festivals.users.participants.archive' => [...$base, $users, $portalUserItem, $team, $this->item(__('app.archive').' '.$participantLabel)],
             default => throw new LogicException("No Festival user breadcrumb definition exists for route [{$routeName}]."),
         };
     }

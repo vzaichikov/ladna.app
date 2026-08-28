@@ -4,6 +4,7 @@ namespace App\Actions\Festivals;
 
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalPaymentStatus;
+use App\Enums\FestivalRequirementInputType;
 use App\Models\FestivalCharge;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPaymentAttempt;
@@ -23,7 +24,7 @@ class RepriceFestivalResponse
                 return;
             }
 
-            $target = $this->targetAmount($mode, $pricing, $submission->value_json['value'] ?? null);
+            $target = $this->targetAmount($requirement, $mode, $pricing, $submission->value_json['value'] ?? null);
             $charges = $requirement->entry->charges()
                 ->with('paymentAllocations.attempt')
                 ->where('festival_entry_requirement_id', $requirement->id)
@@ -140,8 +141,14 @@ class RepriceFestivalResponse
     }
 
     /** @param array<string, mixed> $pricing */
-    private function targetAmount(string $mode, array $pricing, mixed $value): int
+    private function targetAmount(FestivalEntryRequirement $requirement, string $mode, array $pricing, mixed $value): int
     {
+        if ($requirement->definition->input_type === FestivalRequirementInputType::HelperSelection) {
+            return $mode === 'per_unit' && data_get($value, 'enabled') === true
+                ? $requirement->selectedHelpers()->count() * max(0, (int) ($pricing['unit_amount_cents'] ?? 0))
+                : 0;
+        }
+
         return match ($mode) {
             'flat_when_true' => filter_var($value, FILTER_VALIDATE_BOOL) ? (int) ($pricing['amount_cents'] ?? 0) : 0,
             'per_unit' => max(0, (int) $value) * max(0, (int) ($pricing['unit_amount_cents'] ?? 0)),

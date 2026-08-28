@@ -18,7 +18,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 
-#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'first_name', 'last_name', 'patronymic', 'stage_name', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_contact', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
+#[Fillable(['account_id', 'role', 'is_active', 'registrant_type', 'registrant_type_locked_at', 'first_name', 'last_name', 'patronymic', 'stage_name', 'email', 'email_normalized', 'password', 'google_id', 'phone', 'phone_normalized', 'city', 'studio_name', 'instagram_url', 'telegram_contact', 'telegram_user_id', 'avatar_path', 'locale', 'email_verified_at', 'phone_verified_at', 'last_login_at'])]
 #[Hidden(['password', 'remember_token', 'telegram_user_id', 'google_id'])]
 class FestivalPortalUser extends Authenticatable implements HasLocalePreference
 {
@@ -36,6 +36,7 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
             'role' => FestivalPortalRole::class,
             'is_active' => 'boolean',
             'registrant_type' => FestivalRegistrantType::class,
+            'registrant_type_locked_at' => 'datetime',
             'password' => 'hashed',
             'email_verified_at' => 'datetime',
             'phone_verified_at' => 'datetime',
@@ -63,6 +64,11 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
         return filled($this->stage_name)
             ? $this->stage_name
             : collect([$this->first_name, $this->last_name])->filter()->join(' ');
+    }
+
+    public function registrantTypeIsLocked(): bool
+    {
+        return $this->registrant_type_locked_at !== null;
     }
 
     public function profileIsComplete(bool $requiresVerifiedPhone = true): bool
@@ -102,6 +108,16 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
     public function participants(): HasMany
     {
         return $this->hasMany(FestivalParticipant::class);
+    }
+
+    public function performers(): HasMany
+    {
+        return $this->participants()->performers();
+    }
+
+    public function helpers(): HasMany
+    {
+        return $this->participants()->helpers();
     }
 
     public function festivalParticipants(): HasMany

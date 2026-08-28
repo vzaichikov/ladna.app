@@ -11,4 +11,5 @@ enum FestivalRequirementType: string
     case Insurance = 'insurance';
     case PaymentProof = 'payment_proof';
     case CustomDocument = 'custom_document';
+    case HelperSelection = 'helper_selection';
 }

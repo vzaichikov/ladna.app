@@ -8,6 +8,7 @@ use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalPortalRole;
+use App\Enums\FestivalTeamMemberType;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -20,7 +21,10 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FestivalPortalUserDirectoryTest extends TestCase
@@ -68,7 +72,7 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->assertSame(1, $listed->current_edition_entries_count);
     }
 
-    public function test_registrant_edit_has_paginated_account_wide_notification_history(): void
+    public function test_registrant_profile_and_notifications_are_independent_pages_with_a_legacy_redirect(): void
     {
         [$account, $edition, $category] = $this->festival();
         $owner = User::factory()->create();
@@ -145,14 +149,23 @@ class FestivalPortalUserDirectoryTest extends TestCase
 
         $profilePage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]));
         $profilePage->assertOk()
-            ->assertViewHas('pageTab', 'profile')
             ->assertSee(__('app.festival_participant_edit_tab_profile'))
+            ->assertSee(__('app.festival_participant_edit_tab_team'))
             ->assertSee(__('app.festival_participant_edit_tab_notifications'))
-            ->assertDontSee('Cross-edition notification');
+            ->assertDontSee('Cross-edition notification')
+            ->assertViewMissing('festivalNotifications');
 
-        $notificationPage = $this->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser, 'tab' => 'notifications']));
+        $legacyNotificationPage = route('dashboard.accounts.festivals.users.edit', [
+            $account,
+            $edition,
+            $portalUser,
+            'tab' => 'notifications',
+        ]);
+        $notificationPageUrl = route('dashboard.accounts.festivals.users.notifications', [$account, $edition, $portalUser]);
+        $this->get($legacyNotificationPage)->assertRedirect($notificationPageUrl);
+
+        $notificationPage = $this->get($notificationPageUrl);
         $notificationPage->assertOk()
-            ->assertViewHas('pageTab', 'notifications')
             ->assertSee('Previous Festival Edition')
             ->assertSee('Previous edition entry')
             ->assertSee('Cross-edition notification')
@@ -163,21 +176,161 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->assertSame(20, $notificationPage->viewData('festivalNotifications')->count());
         $this->assertSame(22, $notificationPage->viewData('festivalNotifications')->total());
 
-        $secondPage = $this->get(route('dashboard.accounts.festivals.users.edit', [
+        $legacySecondPage = route('dashboard.accounts.festivals.users.edit', [
             $account,
             $edition,
             $portalUser,
             'tab' => 'notifications',
             'notifications_page' => 2,
-        ]));
+        ]);
+        $secondPageUrl = route('dashboard.accounts.festivals.users.notifications', [
+            $account,
+            $edition,
+            $portalUser,
+            'page' => 2,
+        ]);
+        $this->get($legacySecondPage)->assertRedirect($secondPageUrl);
+
+        $secondPage = $this->get($secondPageUrl);
         $secondPage->assertOk();
         $this->assertSame(2, $secondPage->viewData('festivalNotifications')->count());
 
         $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
         $this->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $judge, 'tab' => 'notifications']))
             ->assertOk()
-            ->assertViewHas('pageTab', 'profile')
             ->assertDontSee(__('app.festival_participant_edit_tab_notifications'));
+        $this->get(route('dashboard.accounts.festivals.users.notifications', [$account, $edition, $judge]))
+            ->assertNotFound();
+    }
+
+    public function test_registrant_team_page_groups_roles_shows_avatars_and_is_not_embedded_in_profile(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'avatar_path' => 'festival/profile-owner.jpg',
+        ]);
+        $profileOwner = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'is_profile_owner' => true,
+            'member_type' => FestivalTeamMemberType::Performer,
+            'first_name' => 'ProfileOwnerUnique',
+        ]);
+        $performer = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Performer,
+            'first_name' => 'PerformerUnique',
+            'photo_path' => 'festival/performer.jpg',
+        ]);
+        $helper = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+            'first_name' => 'HelperUnique',
+        ]);
+
+        $profilePage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]));
+        $profilePage->assertOk()
+            ->assertDontSee('PerformerUnique')
+            ->assertDontSee('HelperUnique');
+
+        $teamPage = $this->get(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]));
+        $teamPage->assertOk()
+            ->assertSee('data-festival-team-group="performers"', false)
+            ->assertSee('data-festival-team-group="helpers"', false)
+            ->assertSee('ProfileOwnerUnique')
+            ->assertSee('PerformerUnique')
+            ->assertSee('HelperUnique')
+            ->assertSee(route('dashboard.accounts.festivals.users.photo', [$account, $edition, $portalUser]), false)
+            ->assertSee(route('dashboard.accounts.festivals.users.participants.photo', [$account, $edition, $portalUser, $performer]), false)
+            ->assertDontSee(route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $profileOwner]), false);
+        $this->assertCount(2, $teamPage->viewData('performers'));
+        $this->assertCount(1, $teamPage->viewData('helpers'));
+
+        $registrationManager = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
+        $this->actingAs($registrationManager)
+            ->get(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]))
+            ->assertOk();
+    }
+
+    public function test_legacy_team_and_profile_lock_backfills_preserve_rows_archives_and_application_links(): void
+    {
+        [$account, $edition, $category] = $this->festival();
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type_locked_at' => null,
+        ]);
+        $referenced = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+            'archived_at' => now()->subDay(),
+            'photo_path' => null,
+        ]);
+        $unreferenced = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+            'photo_path' => null,
+        ]);
+        $firstCreatedAt = now()->subMonths(2)->startOfSecond();
+        $firstEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'entry_name' => 'Legacy first application',
+            'created_at' => $firstCreatedAt,
+            'updated_at' => $firstCreatedAt,
+        ]);
+        FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'created_at' => $firstCreatedAt->copy()->addMonth(),
+        ]);
+        $firstEntry->participants()->attach($referenced->id, [
+            'account_id' => $account->id,
+            'sort_order' => 0,
+        ]);
+        $participantCount = FestivalParticipant::query()->count();
+        $pivotCount = DB::table('festival_entry_participant')->count();
+        $archivedAt = $referenced->archived_at;
+
+        $memberTypeMigration = require database_path('migrations/2026_08_28_175423_backfill_festival_participant_member_types.php');
+        $memberTypeMigration->up();
+        $lockMigration = require database_path('migrations/2026_08_28_175423_backfill_festival_registrant_type_locks.php');
+        $lockMigration->up();
+
+        $this->assertSame($participantCount, FestivalParticipant::query()->count());
+        $this->assertSame($pivotCount, DB::table('festival_entry_participant')->count());
+        $this->assertSame(FestivalTeamMemberType::Performer, $referenced->refresh()->member_type);
+        $this->assertSame(FestivalTeamMemberType::Performer, $unreferenced->refresh()->member_type);
+        $this->assertTrue($referenced->archived_at->equalTo($archivedAt));
+        $this->assertNull($referenced->photo_path);
+        $this->assertNull($unreferenced->photo_path);
+        $this->assertTrue($firstEntry->participants()->whereKey($referenced->id)->exists());
+        $this->assertSame('Legacy first application', $firstEntry->refresh()->entry_name);
+        $this->assertTrue($portalUser->refresh()->registrant_type_locked_at->equalTo($firstCreatedAt));
+    }
+
+    public function test_registrant_detail_pages_reject_mismatched_accounts_editions_and_non_registrants(): void
+    {
+        [$account, $edition] = $this->festival();
+        [$otherAccount, $otherEdition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $otherAccount->addOwner($owner);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $otherPortalUser = FestivalPortalUser::factory()->for($otherAccount)->create();
+        $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
+
+        $this->actingAs($owner);
+
+        foreach (['team', 'notifications'] as $page) {
+            $this->get(route('dashboard.accounts.festivals.users.'.$page, [$account, $otherEdition, $portalUser]))
+                ->assertNotFound();
+            $this->get(route('dashboard.accounts.festivals.users.'.$page, [$account, $edition, $otherPortalUser]))
+                ->assertNotFound();
+            $this->get(route('dashboard.accounts.festivals.users.'.$page, [$account, $edition, $judge]))
+                ->assertNotFound();
+        }
     }
 
     public function test_registration_managers_can_manage_participant_profiles_but_not_judges(): void
@@ -245,7 +398,15 @@ class FestivalPortalUserDirectoryTest extends TestCase
                 'value="adult_athlete"',
                 'value="coach"',
             ], false)
-            ->assertDontSee('value="guardian"', false);
+            ->assertDontSee('value="guardian"', false)
+            ->assertSee(__('app.festival_registrant_type_warning'))
+            ->assertDontSee('За замовчуванням обрано «Учасник».');
+
+        $createPage = $this->get($createUrl);
+        $this->assertMatchesRegularExpression(
+            '/<option value="adult_athlete" selected>/',
+            $createPage->getContent(),
+        );
 
         $this->from($createUrl)
             ->post(route('dashboard.accounts.festivals.users.store', [$account, $edition, 'registrant']), $this->registrantPayload([
@@ -342,12 +503,15 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->assertSame($updatedInstagramUrl, $judge->refresh()->instagram_url);
     }
 
-    public function test_staff_cannot_change_an_adult_profile_to_coach(): void
+    public function test_staff_cannot_change_a_locked_participant_profile_to_coach(): void
     {
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $portalUser = FestivalPortalUser::factory()->for($account)->create(['registrant_type' => 'adult_athlete']);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create([
+            'registrant_type' => 'adult_athlete',
+            'registrant_type_locked_at' => now(),
+        ]);
         $participant = FestivalParticipant::factory()->for($portalUser)->create([
             'account_id' => $account->id,
             'is_profile_owner' => true,
@@ -474,6 +638,7 @@ class FestivalPortalUserDirectoryTest extends TestCase
 
     public function test_staff_roster_uses_dedicated_create_edit_archive_pages_and_preserves_referenced_history(): void
     {
+        Storage::fake('local');
         [$account, $edition, $category] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
@@ -482,7 +647,8 @@ class FestivalPortalUserDirectoryTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.users.participants.create', [$account, $edition, $portalUser]))
             ->assertOk()
-            ->assertSee('name="date_of_birth"', false);
+            ->assertSee('name="date_of_birth"', false)
+            ->assertSee(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]), false);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.festivals.users.participants.store', [$account, $edition, $portalUser]), [
@@ -490,18 +656,36 @@ class FestivalPortalUserDirectoryTest extends TestCase
                 'last_name' => 'Member',
                 'date_of_birth' => '2010-05-01',
                 'notes' => 'Manual profile',
+                'member_type' => FestivalTeamMemberType::Performer->value,
+                'photo' => UploadedFile::fake()->image('performer.jpg', 300, 300),
             ])
-            ->assertRedirect(route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]));
+            ->assertRedirect(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]));
         $participant = $portalUser->participants()->where('first_name', 'Roster')->firstOrFail();
+        $this->assertNotNull($participant->photo_path);
+        Storage::disk('local')->assertExists($participant->photo_path);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.users.participants.photo', [$account, $edition, $portalUser, $participant]))
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
 
         $this->actingAs($owner)
             ->put(route('dashboard.accounts.festivals.users.participants.update', [$account, $edition, $portalUser, $participant]), [
                 'first_name' => 'Updated',
                 'last_name' => 'Member',
                 'date_of_birth' => '2010-05-01',
+                'member_type' => FestivalTeamMemberType::Performer->value,
             ])
-            ->assertRedirect();
+            ->assertRedirect(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]));
         $this->assertSame('Updated', $participant->refresh()->first_name);
+
+        $unusedParticipant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Helper,
+        ]);
+        $this->actingAs($owner)
+            ->patch(route('dashboard.accounts.festivals.users.participants.destroy', [$account, $edition, $portalUser, $unusedParticipant]))
+            ->assertRedirect(route('dashboard.accounts.festivals.users.team', [$account, $edition, $portalUser]));
+        $this->assertNotNull($unusedParticipant->refresh()->archived_at);
 
         $entry = FestivalEntry::factory()->for($category)->create([
             'account_id' => $account->id,
@@ -510,6 +694,17 @@ class FestivalPortalUserDirectoryTest extends TestCase
             'status' => 'accepted',
         ]);
         $entry->participants()->attach($participant->id, ['account_id' => $account->id, 'sort_order' => 0]);
+
+        $this->actingAs($owner)
+            ->from(route('dashboard.accounts.festivals.users.participants.edit', [$account, $edition, $portalUser, $participant]))
+            ->put(route('dashboard.accounts.festivals.users.participants.update', [$account, $edition, $portalUser, $participant]), [
+                'first_name' => $participant->first_name,
+                'last_name' => $participant->last_name,
+                'date_of_birth' => $participant->date_of_birth->toDateString(),
+                'member_type' => FestivalTeamMemberType::Helper->value,
+            ])
+            ->assertSessionHasErrors('member_type');
+        $this->assertSame(FestivalTeamMemberType::Performer, $participant->refresh()->member_type);
 
         $archiveUrl = route('dashboard.accounts.festivals.users.participants.archive', [$account, $edition, $portalUser, $participant]);
         $this->actingAs($owner)->get($archiveUrl)->assertOk()->assertSee(__('app.festival_archive_participant'));
@@ -546,6 +741,7 @@ class FestivalPortalUserDirectoryTest extends TestCase
             'first_name' => 'Forged',
             'last_name' => 'Change',
             'date_of_birth' => '2000-01-01',
+            'member_type' => FestivalTeamMemberType::Performer->value,
         ])->assertStatus(409);
         $this->patch(route('dashboard.accounts.festivals.users.participants.destroy', [$account, $edition, $portalUser, $participant]))->assertStatus(409);
     }

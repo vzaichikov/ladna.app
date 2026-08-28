@@ -4654,6 +4654,8 @@ function replaceFestivalRequirementCard(cardHtml, fallbackCard) {
 
     (target ?? fallbackCard)?.replaceWith(replacement);
     syncFestivalStepProgressActions(replacement.closest('[data-festival-step-panel]'));
+    initFestivalHelperSelections(replacement);
+    initFestivalTeamModals(replacement);
     createIcons({ icons });
 
     return replacement;
@@ -4710,6 +4712,67 @@ function replaceFestivalApplicationFragment(fragmentHtml, fallbackFragment) {
 
     (target ?? fallbackFragment)?.replaceWith(replacement);
     createIcons({ icons });
+
+    return replacement;
+}
+
+function replaceFestivalTeamList(teamHtml) {
+    const template = document.createElement('template');
+    template.innerHTML = teamHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-team-list]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const target = document.querySelector('[data-festival-team-list]');
+
+    if (!target) {
+        return null;
+    }
+
+    target.replaceWith(replacement);
+    createIcons({ icons });
+
+    return replacement;
+}
+
+function replaceFestivalHelperOption(helperOptionHtml, form) {
+    const template = document.createElement('template');
+    template.innerHTML = helperOptionHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-helper-option]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const options = form.closest('[data-festival-requirement-card]')?.querySelector('[data-festival-helper-options]')
+        ?? document.querySelector('[data-festival-helper-options]');
+
+    if (!options) {
+        return null;
+    }
+
+    const helperId = replacement.dataset.festivalHelperId;
+    const existing = helperId
+        ? options.querySelector(`[data-festival-helper-option][data-festival-helper-id="${window.CSS.escape(helperId)}"]`)
+        : null;
+
+    if (existing) {
+        existing.replaceWith(replacement);
+    } else {
+        options.append(replacement);
+    }
+
+    const selectionForm = options.closest('[data-festival-helper-selection-form]');
+
+    options.closest('[data-festival-helper-list]')?.classList.remove('hidden');
+    selectionForm?.querySelector('[data-festival-helper-empty]')?.remove();
+    createIcons({ icons });
+
+    if (selectionForm?.querySelector('[data-festival-helper-enabled]')?.checked === true) {
+        window.requestAnimationFrame(() => selectionForm.requestSubmit());
+    }
 
     return replacement;
 }
@@ -5214,6 +5277,35 @@ async function submitAsyncForm(form) {
                 return;
             }
 
+            if (payload.team_html || payload.helper_option_html) {
+                const teamReplacement = payload.team_html
+                    ? replaceFestivalTeamList(payload.team_html)
+                    : null;
+                const helperReplacement = payload.helper_option_html
+                    ? replaceFestivalHelperOption(payload.helper_option_html, form)
+                    : null;
+                const replacement = teamReplacement ?? helperReplacement;
+
+                setAsyncStatus(payload.message, 'success', replacement ?? form);
+                form.dispatchEvent(new CustomEvent('async-form:success', {
+                    bubbles: true,
+                    detail: {
+                        payload,
+                        replacement,
+                        teamReplacement,
+                        helperReplacement,
+                    },
+                }));
+                document.dispatchEvent(new CustomEvent('festival-team:updated', {
+                    detail: {
+                        payload,
+                        teamReplacement,
+                        helperReplacement,
+                    },
+                }));
+                return;
+            }
+
             setAsyncStatus(payload.message, 'success', form);
 
             if ((payload.success_modal || form.dataset.asyncSuccess === 'modal' || form.dataset.asyncSuccess === 'modal-reload') && showAsyncSuccessModal(form, payload)) {
@@ -5262,6 +5354,133 @@ function initAsyncFormChangeSubmission() {
         }
 
         form.requestSubmit();
+    });
+}
+
+function initFestivalRequirementConstructors() {
+    document.querySelectorAll('[data-festival-requirement-constructor]').forEach((form) => {
+        if (form.dataset.festivalRequirementConstructorReady === 'true') {
+            return;
+        }
+
+        form.dataset.festivalRequirementConstructorReady = 'true';
+        const type = form.querySelector('#requirement-type');
+        const scope = form.querySelector('#requirement-answer-scope');
+        const inputType = form.querySelector('#requirement-input-type');
+        const pricingMode = form.querySelector('#requirement-pricing-mode');
+        const mediaReport = form.querySelector('#requirement-show-in-media-report');
+        const helperType = form.dataset.helperSelectionType;
+        const conditionalContainers = form.querySelectorAll([
+            '[data-festival-requirement-file-setting]',
+            '[data-festival-requirement-option-setting]',
+            '[data-festival-requirement-url-setting]',
+        ].join(', '));
+
+        const forceSelectValue = (select, value, helperSelected) => {
+            if (!select) {
+                return;
+            }
+
+            if (helperSelected) {
+                if (select.dataset.helperPreviousValue === undefined) {
+                    select.dataset.helperPreviousValue = select.value;
+                }
+
+                select.value = value;
+                select.disabled = true;
+                select.setAttribute('aria-disabled', 'true');
+                return;
+            }
+
+            select.disabled = false;
+            select.removeAttribute('aria-disabled');
+
+            if (select.dataset.helperPreviousValue !== undefined) {
+                select.value = select.dataset.helperPreviousValue;
+                delete select.dataset.helperPreviousValue;
+            }
+        };
+
+        const sync = () => {
+            const helperSelected = type?.value === helperType;
+
+            forceSelectValue(scope, 'entry', helperSelected);
+            forceSelectValue(inputType, 'helper_selection', helperSelected);
+            forceSelectValue(pricingMode, 'per_unit', helperSelected);
+
+            conditionalContainers.forEach((container) => {
+                container.classList.toggle('hidden', helperSelected);
+                container.querySelectorAll('input, select, textarea').forEach((control) => {
+                    control.disabled = helperSelected;
+                });
+            });
+
+            const mediaContainer = form.querySelector('[data-festival-requirement-media-report-setting]');
+            mediaContainer?.classList.toggle('hidden', helperSelected);
+
+            if (mediaReport) {
+                if (helperSelected) {
+                    mediaReport.checked = false;
+                }
+
+                mediaReport.disabled = helperSelected;
+            }
+
+            form.querySelector('[data-festival-requirement-standard-price-label]')?.classList.toggle('hidden', helperSelected);
+            form.querySelector('[data-festival-requirement-helper-price-label]')?.classList.toggle('hidden', !helperSelected);
+        };
+
+        type?.addEventListener('change', sync);
+        sync();
+    });
+}
+
+function initFestivalHelperSelections(root = document) {
+    root.querySelectorAll('[data-festival-helper-selection-form]').forEach((form) => {
+        if (form.dataset.festivalHelperSelectionReady === 'true') {
+            return;
+        }
+
+        form.dataset.festivalHelperSelectionReady = 'true';
+        const enabled = form.querySelector('[data-festival-helper-enabled]');
+        const list = form.querySelector('[data-festival-helper-list]');
+
+        const syncVisibility = (focus = false) => {
+            const expanded = enabled?.checked === true;
+            list?.classList.toggle('hidden', !expanded);
+            enabled?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+            if (!expanded || !focus) {
+                return;
+            }
+
+            const firstHelper = list?.querySelector('[data-festival-helper-choice]');
+
+            if (firstHelper) {
+                window.requestAnimationFrame(() => firstHelper.focus());
+                return;
+            }
+
+            list?.querySelector('[data-festival-helper-add]')?.click();
+        };
+
+        enabled?.addEventListener('change', () => {
+            syncVisibility(true);
+
+            if (!enabled.checked) {
+                form.requestSubmit();
+            }
+        });
+
+        form.addEventListener('change', (event) => {
+            if (!event.target.closest('[data-festival-helper-choice]') || enabled?.checked !== true) {
+                return;
+            }
+
+            form.requestSubmit();
+        });
+
+        syncVisibility();
     });
 }
 
@@ -7727,6 +7946,272 @@ function initFestivalQuickProfileModal() {
     }
 }
 
+function initFestivalTeamModals(root = document) {
+    const requestedOpenModals = [
+        ...(root.matches?.('[data-festival-team-modal][data-open="true"]') ? [root] : []),
+        ...root.querySelectorAll('[data-festival-team-modal][data-open="true"]'),
+    ].filter((modal) => modal.dataset.festivalTeamServerOpenHandled !== 'true');
+
+    if (document.documentElement.dataset.festivalTeamModalsReady === 'true') {
+        requestedOpenModals.forEach((modal) => {
+            modal.dataset.festivalTeamServerOpenHandled = 'true';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('overflow-hidden');
+            window.requestAnimationFrame(() => modal.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')?.focus());
+        });
+        return;
+    }
+
+    document.documentElement.dataset.festivalTeamModalsReady = 'true';
+    const modalOpeners = new WeakMap();
+    const visibleModal = () => document.querySelector('[data-festival-team-modal]:not(.hidden)');
+    const focusableElements = (modal) => [...modal.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => !element.closest('.hidden'));
+    const syncMemberTypeLock = (form, memberType, locked) => {
+        form.querySelectorAll('[data-festival-team-member-type]').forEach((field) => {
+            field.disabled = locked;
+            field.checked = field.value === memberType;
+        });
+
+        const hiddenInput = form.querySelector('[data-festival-team-member-type-locked-input]');
+
+        if (hiddenInput) {
+            hiddenInput.disabled = !locked;
+            hiddenInput.value = memberType;
+        }
+
+        form.querySelector('[data-festival-team-member-type-lock-note]')?.classList.toggle('hidden', !locked);
+    };
+    const modalForOpener = (opener, mode) => {
+        const targetId = opener.dataset.festivalTeamModalTarget;
+
+        if (targetId) {
+            return document.getElementById(targetId);
+        }
+
+        const scopedModal = opener.closest('[data-festival-requirement-card]')?.querySelector(`[data-festival-team-modal="${mode}"]`);
+
+        return scopedModal
+            ?? document.querySelector(`[data-festival-team-modal="${mode}"][data-festival-team-modal-context="${mode === 'add' && opener.matches('[data-festival-helper-add]') ? 'helper_selection' : 'team'}"]`)
+            ?? document.querySelector(`[data-festival-team-modal="${mode}"]`);
+    };
+    const closeModal = (modal, restoreTarget = null) => {
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+
+        if (!visibleModal()) {
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        const opener = modalOpeners.get(modal);
+        const target = restoreTarget ?? (opener?.isConnected ? opener : null);
+
+        target?.focus();
+        modalOpeners.delete(modal);
+    };
+    const openModal = (modal, opener = null, reset = true) => {
+        if (!modal) {
+            return;
+        }
+
+        const form = modal.querySelector('[data-festival-team-form]');
+
+        if (reset && form) {
+            form.reset();
+            clearAsyncFormErrors(form);
+        }
+
+        modalOpeners.set(modal, opener);
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('overflow-hidden');
+        window.requestAnimationFrame(() => form?.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')?.focus());
+    };
+    const prepareAddModal = (modal, opener) => {
+        const form = modal?.querySelector('[data-festival-team-form="add"]');
+
+        if (!form) {
+            return;
+        }
+
+        form.reset();
+        clearAsyncFormErrors(form);
+
+        const memberType = opener.matches('[data-festival-helper-add]')
+            ? 'helper'
+            : (opener.dataset.teamMemberType || '');
+
+        syncMemberTypeLock(form, memberType, false);
+        form.querySelector('[data-festival-team-participant-id]').value = '';
+    };
+    const prepareEditModal = (modal, opener) => {
+        const form = modal?.querySelector('[data-festival-team-form="edit"]');
+
+        if (!form) {
+            return;
+        }
+
+        form.reset();
+        clearAsyncFormErrors(form);
+        form.action = opener.dataset.teamEditUrl;
+
+        const values = {
+            first_name: opener.dataset.teamEditFirstName,
+            last_name: opener.dataset.teamEditLastName,
+            patronymic: opener.dataset.teamEditPatronymic,
+            date_of_birth: opener.dataset.teamEditDateOfBirth,
+            notes: opener.dataset.teamEditNotes,
+        };
+
+        Object.entries(values).forEach(([name, value]) => {
+            const field = form.elements.namedItem(name);
+
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+                field.value = value ?? '';
+            }
+        });
+
+        const participantId = form.querySelector('[data-festival-team-participant-id]');
+
+        if (participantId) {
+            participantId.value = opener.dataset.teamEditId || '';
+        }
+
+        const memberType = opener.dataset.teamEditMemberType || 'performer';
+        const memberTypeLocked = opener.dataset.teamEditMemberTypeLocked === 'true';
+
+        syncMemberTypeLock(form, memberType, memberTypeLocked);
+
+        const removePhotoContainer = form.querySelector('[data-festival-team-remove-photo-container]');
+        const removePhoto = removePhotoContainer?.querySelector('input[name="remove_photo"]');
+        const hasPhoto = opener.dataset.teamEditHasPhoto === 'true';
+
+        removePhotoContainer?.classList.toggle('hidden', !hasPhoto);
+        removePhotoContainer?.classList.toggle('flex', hasPhoto);
+
+        if (removePhoto) {
+            removePhoto.checked = false;
+            removePhoto.disabled = !hasPhoto;
+        }
+
+        const photo = form.elements.namedItem('photo');
+
+        if (photo instanceof HTMLInputElement) {
+            photo.value = '';
+        }
+    };
+
+    document.addEventListener('click', (event) => {
+        const helperAddOpener = event.target.closest('[data-festival-helper-add]');
+        const addOpener = helperAddOpener ?? event.target.closest('[data-festival-team-add-open]');
+
+        if (addOpener) {
+            const modal = modalForOpener(addOpener, 'add');
+
+            if (modal) {
+                event.preventDefault();
+                prepareAddModal(modal, addOpener);
+                openModal(modal, addOpener, false);
+            }
+
+            return;
+        }
+
+        const editOpener = event.target.closest('[data-festival-team-edit]');
+
+        if (editOpener) {
+            const modal = modalForOpener(editOpener, 'edit');
+
+            if (modal) {
+                event.preventDefault();
+                prepareEditModal(modal, editOpener);
+                openModal(modal, editOpener, false);
+            }
+
+            return;
+        }
+
+        const closeButton = event.target.closest('[data-festival-team-modal-close]');
+
+        if (closeButton) {
+            event.preventDefault();
+            closeModal(closeButton.closest('[data-festival-team-modal]'));
+            return;
+        }
+
+        const modal = event.target.matches('[data-festival-team-modal]')
+            ? event.target
+            : null;
+
+        if (modal) {
+            closeModal(modal);
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        const modal = event.target.closest('[data-festival-team-modal]:not(.hidden)');
+
+        if (!modal) {
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeModal(modal);
+            return;
+        }
+
+        if (event.key !== 'Tab') {
+            return;
+        }
+
+        const focusable = focusableElements(modal);
+        const first = focusable[0];
+        const last = focusable.at(-1);
+
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+        }
+    });
+    document.addEventListener('async-form:success', (event) => {
+        const form = event.target.closest('[data-festival-team-form]');
+        const modal = form?.closest('[data-festival-team-modal]');
+
+        if (!form || !modal) {
+            return;
+        }
+
+        const resourceId = event.detail?.payload?.resource_id;
+        const restoreTarget = resourceId
+            ? document.querySelector(`[data-festival-team-edit][data-team-edit-id="${window.CSS.escape(String(resourceId))}"]`)
+                ?? event.detail?.helperReplacement?.querySelector('input')
+            : null;
+
+        closeModal(modal, restoreTarget);
+    });
+    document.addEventListener('error', (event) => {
+        if (event.target.matches?.('[data-festival-team-avatar-image]')) {
+            event.target.remove();
+        }
+    }, true);
+
+    requestedOpenModals.forEach((modal) => {
+        modal.dataset.festivalTeamServerOpenHandled = 'true';
+        openModal(modal, null, false);
+    });
+}
+
 function initFestivalProgram() {
     const program = document.querySelector('[data-festival-program]');
     const modal = document.querySelector('[data-festival-program-modal]');
@@ -9022,6 +9507,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalAnnouncementModal();
     initFestivalApplicationPickerModal();
     initFestivalQuickProfileModal();
+    initFestivalTeamModals();
     initFestivalSceneTabs();
     initFestivalProgram();
     initFestivalTimeline();
@@ -9084,6 +9570,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initTrialClassPassOverrideForms();
     initFestivalRubricEditors();
     initFieldHelp();
+    initFestivalRequirementConstructors();
+    initFestivalHelperSelections();
     initAsyncFormChangeSubmission();
     syncPublicLegalReturnUrls();
 
