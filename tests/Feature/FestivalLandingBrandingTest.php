@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\FestivalActivityLog;
 use App\Models\FestivalAdmissionType;
@@ -15,6 +16,7 @@ use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
 use App\Models\FestivalWorkflow;
 use App\Models\FestivalWorkflowStep;
+use App\Models\TelegramBotInstallation;
 use App\Models\User;
 use App\Support\Festivals\FestivalLandingRegistry;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -208,6 +210,13 @@ class FestivalLandingBrandingTest extends TestCase
             'external_url' => 'https://example.test/desktop-hero.jpg',
             'is_cover' => true,
         ]);
+        $telegramInstallation = TelegramBotInstallation::factory()->for($account)->create([
+            'scope_type' => 'festival_series',
+            'scope_id' => $edition->festival_series_id,
+            'profile' => TelegramBotProfile::Festival->value,
+            'bot_username' => 'velvet_festival_bot',
+            'is_enabled' => true,
+        ]);
 
         $publicUrl = route('public.festivals.show', [$account->slug, $edition->slug]);
         $response = $this->get($publicUrl)
@@ -222,6 +231,9 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee('Velvet rules sentinel')
             ->assertSee(__('app.festival_apply'))
             ->assertSee(__('app.buy_tickets'))
+            ->assertSee(__('app.telegram_bot'))
+            ->assertSee('href="https://t.me/velvet_festival_bot"', false)
+            ->assertSee('class="velvet-shell velvet-timeline-slot"', false)
             ->assertSee(route('festival.login', $account->slug), false)
             ->assertSee(route('festival.judge.login', $account->slug), false)
             ->assertDontSee('/festival/guest/login', false)
@@ -231,6 +243,7 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee(__('app.powered_by_ladna'));
 
         $this->assertSame(2, substr_count($response->getContent(), $edition->series->name));
+        $this->assertSame(2, substr_count($response->getContent(), 'data-festival-telegram-bot-link'));
 
         FestivalMedia::query()->create([
             'account_id' => $account->id,
@@ -252,6 +265,13 @@ class FestivalLandingBrandingTest extends TestCase
             ->assertSee(__('app.buy_tickets'))
             ->assertSee(__('app.festival_participant_cabinet'))
             ->assertSee(__('app.festival_judge_cabinet'));
+
+        $telegramInstallation->update(['is_enabled' => false]);
+
+        $this->get($publicUrl)
+            ->assertOk()
+            ->assertDontSee('data-festival-telegram-bot-link', false)
+            ->assertDontSee('https://t.me/velvet_festival_bot', false);
     }
 
     public function test_velvet_night_content_blocks_render_only_authored_content_without_operational_data(): void

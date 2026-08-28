@@ -10,6 +10,7 @@ use App\Http\Controllers\McpOAuthDenialController;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalSeries;
 use App\Models\Location;
 use App\Policies\AccountPolicy;
 use App\Policies\FestivalEditionPolicy;
@@ -23,7 +24,9 @@ use App\Support\WorkingLocationContext;
 use App\View\Composers\AppBreadcrumbComposer;
 use App\View\Composers\FestivalWorkspaceComposer;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -160,6 +163,7 @@ class AppServiceProvider extends ServiceProvider
             $account = $view->getData()['account'] ?? null;
             $portalUser = $view->getData()['portalUser'] ?? request()->user('festival');
             $portalEntryCount = 0;
+            $festivalTelegramBotLinks = collect();
 
             if ($account instanceof Account
                 && $portalUser instanceof FestivalPortalUser
@@ -168,9 +172,32 @@ class AppServiceProvider extends ServiceProvider
                 $portalEntryCount = $portalUser->entries()
                     ->where('account_id', $account->id)
                     ->count();
+
+                $activeTelegramInstallation = static fn (Builder|Relation $query): Builder|Relation => $query
+                    ->where('is_enabled', true)
+                    ->whereNotNull('bot_username')
+                    ->where('bot_username', '!=', '');
+
+                $festivalTelegramBotLinks = $account->festivalSeries()
+                    ->where('is_active', true)
+                    ->whereHas('telegramBotInstallation', $activeTelegramInstallation)
+                    ->with(['telegramBotInstallation' => $activeTelegramInstallation])
+                    ->orderBy('name')
+                    ->get()
+                    ->map(static function (FestivalSeries $series): array {
+                        $username = ltrim((string) $series->telegramBotInstallation?->bot_username, '@');
+
+                        return [
+                            'series_name' => $series->name,
+                            'url' => 'https://t.me/'.$username,
+                        ];
+                    })
+                    ->values();
             }
 
-            $view->with('portalEntryCount', $portalEntryCount);
+            $view
+                ->with('portalEntryCount', $portalEntryCount)
+                ->with('festivalTelegramBotLinks', $festivalTelegramBotLinks);
         });
 
         RateLimiter::for('login', function (Request $request): Limit {

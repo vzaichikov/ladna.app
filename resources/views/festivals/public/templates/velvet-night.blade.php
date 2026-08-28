@@ -78,6 +78,18 @@
                     <a href="#festival-admission" class="velvet-button velvet-button-outline">
                         {{ __('app.buy_tickets') }}
                     </a>
+                    @if ($festivalTelegramBotUrl)
+                        <a
+                            href="{{ $festivalTelegramBotUrl }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="velvet-button velvet-button-outline gap-2"
+                            data-festival-telegram-bot-link
+                        >
+                            <x-ui.icon name="telegram" class="h-4 w-4" />
+                            {{ __('app.telegram_bot') }}
+                        </a>
+                    @endif
                 </div>
             </div>
 
@@ -108,7 +120,7 @@
         </div>
     </section>
 
-    <div class="velvet-shell py-8 sm:py-12">
+    <div class="velvet-shell velvet-timeline-slot">
         @include('festivals.public._timeline')
     </div>
 
@@ -201,6 +213,18 @@
 @endsection
 
 @section('festivalFooterLinks')
+    @if ($festivalTelegramBotUrl)
+        <a
+            href="{{ $festivalTelegramBotUrl }}"
+            target="_blank"
+            rel="noopener"
+            class="velvet-footer-login gap-2"
+            data-festival-telegram-bot-link
+        >
+            <x-ui.icon name="telegram" class="h-4 w-4" />
+            {{ __('app.telegram_bot') }}
+        </a>
+    @endif
     <a href="{{ route('festival.login', $account->slug) }}" class="velvet-footer-login">
         {{ __('app.festival_participant_cabinet') }}
     </a>

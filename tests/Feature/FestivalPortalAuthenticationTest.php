@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\FestivalPortalRole;
+use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalSeries;
+use App\Models\TelegramBotInstallation;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
@@ -560,6 +563,43 @@ class FestivalPortalAuthenticationTest extends TestCase
                 ->assertOk()
                 ->assertSee('max-w-6xl', false);
         }
+    }
+
+    public function test_participant_cabinet_uses_button_navigation_and_links_active_series_telegram_bots_near_help(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $portalUser = FestivalPortalUser::factory()->for($account)->create();
+        $activeSeries = FestivalSeries::factory()->for($account)->create(['name' => 'Active Festival Series']);
+        $disabledSeries = FestivalSeries::factory()->for($account)->create(['name' => 'Disabled Festival Series']);
+        TelegramBotInstallation::factory()->for($account)->create([
+            'scope_type' => 'festival_series',
+            'scope_id' => $activeSeries->id,
+            'profile' => TelegramBotProfile::Festival->value,
+            'bot_username' => 'active_festival_bot',
+            'is_enabled' => true,
+        ]);
+        TelegramBotInstallation::factory()->for($account)->create([
+            'scope_type' => 'festival_series',
+            'scope_id' => $disabledSeries->id,
+            'profile' => TelegramBotProfile::Festival->value,
+            'bot_username' => 'disabled_festival_bot',
+            'is_enabled' => false,
+        ]);
+
+        $response = $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSee('festival-portal-nav-link', false)
+            ->assertSee('data-festival-portal-nav-link', false)
+            ->assertSee('data-festival-telegram-bot-link', false)
+            ->assertSee('href="https://t.me/active_festival_bot"', false)
+            ->assertDontSee('https://t.me/disabled_festival_bot', false)
+            ->assertSeeInOrder([
+                'href="https://t.me/active_festival_bot"',
+                'data-festival-participant-help-link',
+            ], false);
+
+        $this->assertSame(1, substr_count($response->getContent(), 'data-festival-telegram-bot-link'));
     }
 
     public function test_participant_roster_is_presented_as_the_portal_users_private_team(): void

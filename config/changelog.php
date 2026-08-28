@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.155.0',
+                'date' => '2026-08-28',
+                'title' => 'Direct Festival Telegram access',
+                'items' => ['The Velvet Night landing now links its active Series Telegram bot beside the main application and ticket actions and again in the Festival footer. Empty live-timeline space no longer leaves a large gap before the authored Festival information.', 'Participant cabinets now use clear button-styled navigation and place every active Festival Series Telegram bot beside Help for quicker access.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.154.0',
                 'date' => '2026-08-27',
                 'title' => 'Festival information and independent Telegram delivery',
@@ -1374,6 +1381,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.155.0',
+                'date' => '2026-08-28',
+                'title' => 'Прямий доступ до Telegram фестивалю',
+                'items' => ['Лендінг Velvet Night тепер показує активного Telegram-бота серії поруч з основними діями подання заявки й купівлі квитків та повторює посилання у футері фестивалю. Порожній блок живого таймлайну більше не залишає великого проміжку перед авторською інформацією фестивалю.', 'Кабінет учасника тепер має виразну кнопкову навігацію та показує кожного активного Telegram-бота фестивальної серії поруч із «Допомогою» для швидкого переходу.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.154.0',
                 'date' => '2026-08-27',

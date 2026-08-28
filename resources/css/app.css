@@ -564,7 +564,11 @@
     .festival-theme[data-festival-template='velvet_night'] .velvet-body {
         display: grid;
         gap: 1.5rem;
-        padding-block: clamp(3.5rem, 8vw, 7rem);
+        padding-bottom: clamp(3.5rem, 8vw, 7rem);
+    }
+
+    .festival-theme[data-festival-template='velvet_night'] .velvet-timeline-slot:has([data-festival-timeline]) {
+        padding-block: 3rem;
     }
 
     .festival-theme[data-festival-template='velvet_night'] .velvet-story {
@@ -1015,6 +1019,14 @@
     .crm-tab[aria-current='page'],
     .customer-auth-tab[aria-selected='true'] {
         @apply bg-white text-slate-950 shadow-xs;
+    }
+
+    .festival-portal-nav-link {
+        @apply inline-flex min-h-10 items-center justify-center rounded-xl border border-stone-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600 shadow-xs transition hover:border-violet-crm-100 hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+    }
+
+    .festival-portal-nav-link[aria-current='page'] {
+        @apply border-violet-crm-100 bg-violet-crm-100 text-brand-700;
     }
 
     .crm-checkbox {

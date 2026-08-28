@@ -46,7 +46,7 @@ class FestivalPublicController extends Controller
     ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
-            ->with(['series', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->with(['series.telegramBotInstallation', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
@@ -99,6 +99,10 @@ class FestivalPublicController extends Controller
         });
         $festivalPaymentSettings = $gateways->availableSettingsFor($account);
         $festivalGoogleEmailPrefillAvailable = $authAvailability->googleSetting() !== null;
+        $telegramInstallation = $edition->series->telegramBotInstallation;
+        $festivalTelegramBotUrl = $telegramInstallation?->is_enabled && filled($telegramInstallation->bot_username)
+            ? 'https://t.me/'.ltrim((string) $telegramInstallation->bot_username, '@')
+            : null;
 
         return view($landingTemplate['view'], compact(
             'account',
@@ -111,6 +115,7 @@ class FestivalPublicController extends Controller
             'festivalAdmissionOptions',
             'festivalPaymentSettings',
             'festivalGoogleEmailPrefillAvailable',
+            'festivalTelegramBotUrl',
         ));
     }
 
