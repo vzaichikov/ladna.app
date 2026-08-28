@@ -23,6 +23,7 @@ export function initFestivalTelegramMiniApp() {
     let initData = telegram?.initData || '';
     let contactPoll = null;
     let timelinePoll = null;
+    let countdownTimer = null;
     let automaticActionOpened = false;
     let selectedEditionId = null;
 
@@ -101,9 +102,25 @@ export function initFestivalTelegramMiniApp() {
         return content;
     };
 
-    const formattedEditionDate = (edition) => edition.starts_at
-        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(edition.starts_at))
+    const disclosure = (title, count = null) => {
+        const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
+        const suffix = count === null ? '' : ` · ${count}`;
+        details.append(element('summary', 'cursor-pointer text-base font-semibold text-slate-100', `${title}${suffix}`));
+
+        return details;
+    };
+
+    const formattedDateTime = (value) => value
+        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
         : '';
+
+    const formattedTime = (value) => value
+        ? new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+        : '';
+
+    const withItem = (template, item) => (template || '').replace('__item__', item || '—');
+
+    const formattedEditionDate = (edition) => formattedDateTime(edition.starts_at);
 
     const editionThumbnail = (edition, sizeClasses) => {
         if (!edition.thumbnail_url) {
@@ -139,29 +156,222 @@ export function initFestivalTelegramMiniApp() {
         return actions;
     };
 
-    const appendEditionSections = (container, edition) => {
-        (edition.sections || []).forEach((section) => {
-            const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
-            details.append(element('summary', 'cursor-pointer text-base font-semibold text-slate-100', section.title));
-            const content = richText(section.body_html);
-            content.classList.add('mt-3');
-            details.append(content);
-            container.append(details);
-        });
+    const appendRichTextDisclosure = (container, title, html) => {
+        if (!html) return;
+        const details = disclosure(title);
+        const content = richText(html);
+        content.classList.add('mt-3');
+        details.append(content);
+        container.append(details);
+    };
 
-        [['timeline', edition.timeline], ['schedule', edition.schedule], ['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
-            if (!items?.length) return;
-            const details = element('details', 'rounded-2xl border border-white/10 bg-white/[0.05] p-4');
-            details.append(element('summary', 'cursor-pointer text-base font-semibold text-slate-100', `${labels[name]} · ${items.length}`));
-            const list = element('div', 'mt-3 space-y-2');
-            if (name === 'timeline') {
-                items.forEach((scene) => {
-                    list.append(element('div', 'rounded-lg bg-fuchsia-500/10 px-3 py-2 text-sm', `${scene.scene_name}: ${scene.items?.find((item) => item.status === 'active')?.label || scene.next_label || '—'}`));
+    const appendCategories = (container, edition) => {
+        const groups = edition.category_groups || [];
+        const count = groups.reduce((total, group) => total + (group.categories || []).length, 0);
+        if (!count) return;
+
+        const details = disclosure(labels.categories, count);
+        const body = element('div', 'mt-4 space-y-5');
+        groups.forEach((group) => {
+            const section = element('section');
+            section.append(element('h3', 'festival-telegram-accent-text text-sm font-semibold uppercase tracking-wider', group.name));
+            const list = element('div', 'mt-3 space-y-3');
+            (group.categories || []).forEach((category) => {
+                const card = element('article', 'rounded-xl border border-white/10 bg-slate-950/35 p-4');
+                card.append(element('h4', 'font-semibold text-white', category.name));
+                card.append(element('p', 'mt-1 text-xs font-medium text-slate-400', category.format));
+                if (category.limits?.length) {
+                    const chips = element('div', 'mt-3 flex flex-wrap gap-2');
+                    category.limits.forEach((limit) => chips.append(element('span', 'rounded-full bg-white/[0.07] px-2.5 py-1 text-xs text-slate-200', limit)));
+                    card.append(chips);
+                }
+                if (category.registration_closes_at) {
+                    card.append(element('p', 'mt-3 text-xs text-slate-400', `${labels.registration_closes_at}: ${formattedDateTime(category.registration_closes_at)}`));
+                }
+                if (category.requirements_html) {
+                    card.append(element('h5', 'mt-3 border-t border-white/10 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-400', labels.category_requirements));
+                    const requirements = richText(category.requirements_html);
+                    requirements.classList.add('mt-2');
+                    card.append(requirements);
+                }
+                list.append(card);
+            });
+            section.append(list);
+            body.append(section);
+        });
+        details.append(body);
+        container.append(details);
+    };
+
+    const appendRubrics = (container, edition) => {
+        const rubrics = edition.rubrics || [];
+        if (!rubrics.length) return;
+
+        const details = disclosure(labels.criteria, rubrics.length);
+        const body = element('div', 'mt-4 space-y-3');
+        rubrics.forEach((rubric) => {
+            const rubricDetails = element('details', 'rounded-xl border border-white/10 bg-slate-950/35 p-3');
+            const rubricTitle = rubric.category && !rubric.name.toLocaleLowerCase().includes(rubric.category.toLocaleLowerCase())
+                ? `${rubric.name} · ${rubric.category}`
+                : rubric.name;
+            rubricDetails.append(element('summary', 'cursor-pointer font-semibold text-white', rubricTitle));
+            const sections = element('div', 'mt-4 space-y-5');
+            (rubric.sections || []).forEach((section) => {
+                const sectionBlock = element('section');
+                const heading = element('div', 'flex flex-wrap items-center justify-between gap-2');
+                heading.append(element('h4', 'font-semibold text-slate-100', section.name));
+                const contribution = section.contribution === 'deduction' ? labels.rubric_deduction : labels.rubric_award;
+                const weight = Number(section.weight) !== 1 ? ` · ${labels.weight} ×${section.weight}` : '';
+                heading.append(element('span', section.contribution === 'deduction'
+                    ? 'rounded-full bg-rose-500/15 px-2.5 py-1 text-xs font-semibold text-rose-200'
+                    : 'rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-200', `${contribution}${weight}`));
+                sectionBlock.append(heading);
+
+                const tableWrap = element('div', 'mt-2 overflow-x-auto rounded-lg border border-white/10');
+                const table = element('table', 'min-w-full table-fixed text-left text-sm');
+                const head = element('thead', 'bg-white/[0.06] text-xs uppercase tracking-wide text-slate-400');
+                const headRow = element('tr');
+                headRow.append(element('th', 'w-auto px-3 py-2 font-semibold', labels.criteria));
+                headRow.append(element('th', 'w-20 px-3 py-2 text-right font-semibold', labels.score));
+                head.append(headRow);
+                table.append(head);
+                const tableBody = element('tbody', 'divide-y divide-white/10 text-slate-200');
+                (section.criteria || []).forEach((criterion) => {
+                    const row = element('tr');
+                    row.append(element('td', 'break-words px-3 py-2.5 align-top', criterion.name));
+                    const criterionWeight = Number(criterion.weight) !== 1 ? ` ×${criterion.weight}` : '';
+                    row.append(element('td', 'px-3 py-2.5 text-right align-top font-mono tabular-nums', `${criterion.max_score}${criterionWeight}`));
+                    tableBody.append(row);
                 });
-            } else if (name === 'documents') {
+                table.append(tableBody);
+                tableWrap.append(table);
+                sectionBlock.append(tableWrap);
+                sections.append(sectionBlock);
+            });
+            rubricDetails.append(sections);
+            body.append(rubricDetails);
+        });
+        details.append(body);
+        container.append(details);
+    };
+
+    const countProgramItems = (items) => (items || []).reduce((total, item) => total + 1 + countProgramItems(item.children), 0);
+
+    const appendProgramItems = (container, items, depth = 0) => {
+        (items || []).forEach((item) => {
+            const isHeader = item.type === 'free_header' || item.type === 'category_header';
+            const card = element('div', isHeader
+                ? 'rounded-lg bg-fuchsia-500/10 px-3 py-2.5'
+                : 'grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-lg bg-white/[0.04] px-3 py-2.5');
+            if (depth > 0) card.classList.add('ml-3');
+            if (isHeader) {
+                card.append(element('h4', 'font-semibold text-fuchsia-100', item.name));
+            } else {
+                card.append(element('time', 'font-mono text-sm font-semibold tabular-nums text-slate-300', formattedTime(item.starts_at)));
+                const copy = element('div', 'min-w-0');
+                copy.append(element('p', 'font-semibold text-slate-100', item.name));
+                copy.append(element('p', 'mt-0.5 text-xs text-slate-400', [item.category, item.type_label, item.ends_at ? formattedTime(item.ends_at) : null].filter(Boolean).join(' · ')));
+                card.append(copy);
+            }
+            container.append(card);
+            appendProgramItems(container, item.children, depth + 1);
+        });
+    };
+
+    const appendProgram = (container, edition) => {
+        const program = edition.program || [];
+        const count = program.reduce((total, stage) => total + countProgramItems(stage.items), 0);
+        if (!count) return;
+
+        const details = disclosure(labels.program, count);
+        const body = element('div', 'mt-4 space-y-5');
+        program.forEach((stage) => {
+            const scene = element('section');
+            scene.append(element('h3', 'festival-telegram-accent-text text-sm font-semibold uppercase tracking-wider', stage.stage));
+            const items = element('div', 'mt-2 space-y-2');
+            appendProgramItems(items, stage.items);
+            scene.append(items);
+            body.append(scene);
+        });
+        details.append(body);
+        container.append(details);
+    };
+
+    const liveTimeline = (edition) => {
+        const scenes = edition.timeline || [];
+        if (!scenes.length) return null;
+
+        const live = element('section', 'mt-5 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4 shadow-lg shadow-fuchsia-950/20');
+        const eyebrow = element('div', 'flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-200');
+        eyebrow.append(element('span', 'h-2.5 w-2.5 animate-pulse rounded-full bg-rose-400'));
+        eyebrow.append(element('span', '', labels.timeline_live));
+        live.append(eyebrow);
+        live.append(element('h3', 'mt-2 text-xl font-semibold text-white', labels.happening_now));
+
+        const sceneList = element('div', 'mt-4 space-y-4');
+        scenes.forEach((scene) => {
+            const sceneCard = element('article', 'rounded-xl border border-white/10 bg-slate-950/45 p-4');
+            sceneCard.append(element('h4', 'text-sm font-semibold uppercase tracking-wider text-slate-300', scene.scene_name));
+            const active = (scene.items || []).find((item) => item.status === 'active');
+            const next = (scene.items || []).find((item) => item.status === 'future');
+            if (active) {
+                const current = element('div', 'mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 p-4');
+                const currentHeader = element('div', 'flex flex-wrap items-center justify-between gap-2');
+                currentHeader.append(element('span', 'text-xs font-bold uppercase tracking-wider text-amber-200', labels.timeline_active));
+                if (scene.paused) currentHeader.append(element('span', 'rounded-full bg-rose-500/20 px-2 py-1 text-xs font-semibold text-rose-200', labels.timeline_paused));
+                current.append(currentHeader);
+                current.append(element('p', 'mt-2 text-lg font-semibold leading-tight text-white', active.label));
+                current.append(element('p', 'mt-1 text-xs text-slate-300', [active.type_label, active.duration_label].filter(Boolean).join(' · ')));
+                if (scene.next_transition_iso && !scene.paused && !scene.completed) {
+                    const countdown = element('div', 'mt-3 font-mono text-2xl font-semibold tabular-nums text-amber-100', '--:--');
+                    countdown.dataset.festivalTelegramCountdown = scene.next_transition_iso;
+                    current.append(countdown);
+                }
+                sceneCard.append(current);
+            } else {
+                const stateLabel = scene.completed
+                    ? labels.timeline_completed
+                    : withItem(labels.timeline_waiting, scene.next_label || next?.label);
+                sceneCard.append(element('p', 'mt-3 text-sm text-slate-300', stateLabel));
+            }
+            if (next && !scene.completed) {
+                sceneCard.append(element('p', 'mt-3 text-sm text-slate-300', withItem(labels.timeline_next, next.label)));
+            }
+            sceneList.append(sceneCard);
+        });
+        live.append(sceneList);
+
+        return live;
+    };
+
+    const updateCountdowns = () => {
+        root.querySelectorAll('[data-festival-telegram-countdown]').forEach((node) => {
+            const remaining = Math.max(0, Math.floor((new Date(node.dataset.festivalTelegramCountdown).getTime() - Date.now()) / 1000));
+            const hours = Math.floor(remaining / 3600);
+            const minutes = Math.floor((remaining % 3600) / 60);
+            const seconds = remaining % 60;
+            node.textContent = [hours, minutes, seconds]
+                .map((part) => String(part).padStart(2, '0'))
+                .join(':');
+        });
+    };
+
+    const appendEditionSections = (container, edition) => {
+        appendRichTextDisclosure(container, labels.details, edition.description_html);
+        (edition.sections || []).forEach((section) => appendRichTextDisclosure(container, section.title, section.body_html));
+        appendRichTextDisclosure(container, labels.rules, edition.rules_html);
+        appendCategories(container, edition);
+        appendRubrics(container, edition);
+        appendProgram(container, edition);
+
+        [['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
+            if (!items?.length) return;
+            const details = disclosure(labels[name], items.length);
+            const list = element('div', 'mt-3 space-y-2');
+            if (name === 'documents') {
                 items.forEach((item) => list.append(linkButton(item.title, item.url)));
             } else {
-                items.slice(0, 12).forEach((item) => list.append(element('div', 'rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-slate-200', item.name || [item.rank, item.entry_name, item.category].filter(Boolean).join(' · '))));
+                items.forEach((item) => list.append(element('div', 'rounded-lg bg-white/[0.04] px-3 py-2 text-sm text-slate-200', [item.rank, item.entry_name, item.category].filter(Boolean).join(' · '))));
             }
             details.append(list);
             container.append(details);
@@ -191,8 +401,14 @@ export function initFestivalTelegramMiniApp() {
         card.append(header);
         if (edition.venue_name || edition.venue_address) card.append(element('p', 'mt-4 text-sm font-medium text-slate-200', [edition.venue_name, edition.venue_address].filter(Boolean).join(' · ')));
         if (edition.summary) card.append(element('p', 'mt-3 text-sm leading-6 text-slate-300', edition.summary));
+        const liveHost = element('div');
+        liveHost.dataset.festivalTelegramLive = String(edition.id);
+        const live = liveTimeline(edition);
+        if (live) liveHost.append(live);
+        card.append(liveHost);
         card.append(editionActions(edition));
         container.append(card);
+        updateCountdowns();
 
         const sections = element('div', 'mt-4 space-y-3');
         appendEditionSections(sections, edition);
@@ -366,6 +582,29 @@ export function initFestivalTelegramMiniApp() {
         }
     };
 
+    const refreshTimeline = async () => {
+        if (!initData || !(state.editions || []).some((edition) => edition.period === 'live')) return;
+
+        try {
+            const result = await request(root.dataset.timelineUrl);
+            const updates = new Map((result.editions || []).map((edition) => [edition.id, edition]));
+            state.editions = (state.editions || []).map((edition) => updates.has(edition.id)
+                ? { ...edition, ...updates.get(edition.id) }
+                : edition);
+
+            const liveHost = root.querySelector('[data-festival-telegram-live]');
+            if (liveHost) {
+                const edition = state.editions.find((candidate) => candidate.id === Number(liveHost.dataset.festivalTelegramLive));
+                liveHost.replaceChildren();
+                const live = edition ? liveTimeline(edition) : null;
+                if (live) liveHost.append(live);
+                updateCountdowns();
+            }
+        } catch {
+            // The next public timeline poll may recover without interrupting the open Mini App.
+        }
+    };
+
     root.querySelector('[data-festival-telegram-contact]').addEventListener('click', () => {
         clearError();
         if (!telegram?.requestContact) return showError(labels.outside_telegram);
@@ -389,10 +628,12 @@ export function initFestivalTelegramMiniApp() {
     render();
     bootstrap();
     timelinePoll = window.setInterval(() => {
-        if (!document.hidden && state.authorized) bootstrap(true);
+        if (!document.hidden) refreshTimeline();
     }, 10000);
+    countdownTimer = window.setInterval(updateCountdowns, 1000);
     window.addEventListener('pagehide', () => {
         window.clearInterval(contactPoll);
         window.clearInterval(timelinePoll);
+        window.clearInterval(countdownTimer);
     }, { once: true });
 }

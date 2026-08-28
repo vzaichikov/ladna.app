@@ -130,6 +130,22 @@ class FestivalTelegramMiniAppController extends Controller
         abort(422);
     }
 
+    public function timeline(
+        FestivalTelegramMiniAppRequest $request,
+        string $accountSlug,
+        string $seriesSlug,
+        FestivalTelegramAuthorizationResolver $authorizations,
+        TelegramMiniAppInitDataValidator $validator,
+        FestivalTelegramMiniAppData $data,
+    ): JsonResponse {
+        [, $series] = $this->context($request, $accountSlug, $seriesSlug);
+        $installation = $authorizations->installation($series);
+        abort_unless($installation, 404);
+        $validator->validate($request->validated('init_data'), $installation);
+
+        return $this->privateJson(['editions' => $data->timelineUpdates($series)]);
+    }
+
     public function unlink(
         FestivalTelegramMiniAppRequest $request,
         string $accountSlug,
@@ -217,6 +233,24 @@ class FestivalTelegramMiniAppController extends Controller
             'upcoming' => __('app.festival_telegram_period_upcoming'),
             'previous' => __('app.festival_telegram_period_previous'),
             'timeline' => __('app.festival_timeline'),
+            'happening_now' => __('app.festival_timeline_public_title'),
+            'timeline_live' => __('app.festival_timeline_live_eyebrow'),
+            'timeline_active' => __('app.festival_timeline_status_active'),
+            'timeline_paused' => __('app.festival_timeline_paused'),
+            'timeline_completed' => __('app.festival_timeline_completed_state'),
+            'timeline_waiting' => __('app.festival_timeline_waiting_for', ['item' => '__item__']),
+            'timeline_next' => __('app.festival_timeline_switch_to', ['item' => '__item__']),
+            'details' => __('app.festival_details'),
+            'rules' => __('app.festival_rules'),
+            'categories' => __('app.festival_categories'),
+            'category_requirements' => __('app.festival_category_requirements'),
+            'registration_closes_at' => __('app.festival_registration_closes_at'),
+            'criteria' => __('app.festival_criteria'),
+            'program' => __('app.festival_program_title'),
+            'score' => __('app.festival_score'),
+            'weight' => __('app.weight'),
+            'rubric_award' => __('app.festival_rubric_award'),
+            'rubric_deduction' => __('app.festival_rubric_deduction'),
             'schedule' => __('app.festival_schedule'),
             'results' => __('app.festival_results'),
             'documents' => __('app.festival_documents'),

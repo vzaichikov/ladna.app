@@ -34,6 +34,7 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
     Route::get('/{accountSlug}/festivals', [FestivalPublicController::class, 'index'])->name('public.festivals.index');
     Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram', [FestivalTelegramMiniAppController::class, 'show'])->name('public.festival-telegram.show');
     Route::post('/{accountSlug}/festival-series/{seriesSlug}/telegram/bootstrap', [FestivalTelegramMiniAppController::class, 'bootstrap'])->middleware('throttle:120,1')->name('public.festival-telegram.bootstrap');
+    Route::post('/{accountSlug}/festival-series/{seriesSlug}/telegram/timeline', [FestivalTelegramMiniAppController::class, 'timeline'])->middleware('throttle:120,1')->name('public.festival-telegram.timeline');
     Route::post('/{accountSlug}/festival-series/{seriesSlug}/telegram/action', [FestivalTelegramMiniAppController::class, 'action'])->middleware('throttle:60,1')->name('public.festival-telegram.action');
     Route::delete('/{accountSlug}/festival-series/{seriesSlug}/telegram/authorization', [FestivalTelegramMiniAppController::class, 'unlink'])->middleware('throttle:20,1')->name('public.festival-telegram.unlink');
     Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/login/{token}', [FestivalTelegramLoginController::class, 'consume'])->middleware('signed')->name('public.festival-telegram.login.consume');

@@ -3,19 +3,26 @@
 namespace Tests\Feature;
 
 use App\Enums\FestivalAdmissionDeliveryMode;
+use App\Enums\FestivalEditionStatus;
 use App\Enums\TelegramBotProfile;
 use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalContentSection;
+use App\Models\FestivalDirection;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalMedia;
+use App\Models\FestivalRubric;
+use App\Models\FestivalRubricCriterion;
+use App\Models\FestivalRubricSection;
 use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalSeries;
 use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
+use App\Models\FestivalTimeline;
+use App\Models\FestivalTimelineItem;
 use App\Models\TelegramBotInstallation;
 use App\Support\FestivalAuth\TelegramFestivalLoginTokenService;
 use App\Support\Festivals\FestivalTelegramCheckoutHandoff;
@@ -206,6 +213,195 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('editions.0.sections.0.body_html', '<p>Authored Festival information.</p>')
             ->assertJsonMissing(['title' => 'Portal-only information'])
             ->assertJsonMissing(['title' => 'Inactive information']);
+    }
+
+    public function test_exact_festival_includes_public_rules_categories_criteria_and_ordered_program_without_private_facts(): void
+    {
+        [$account, $series, $edition, $installation] = $this->festival();
+        $edition->forceFill([
+            'description_html' => '<p>Full Festival description.</p><script>alert("unsafe")</script>',
+            'rules_html' => '<p>Competition rules.</p><script>alert("unsafe")</script>',
+        ])->save();
+        $direction = FestivalDirection::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Pole Art',
+            'sort_order' => 20,
+        ]);
+        $category = FestivalCategory::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_direction_id' => $direction->id,
+            'festival_workflow_id' => null,
+            'name' => 'Solo Professionals',
+            'min_members' => 1,
+            'max_members' => 1,
+            'min_age' => 18,
+            'max_age' => null,
+            'min_duration_seconds' => 150,
+            'max_duration_seconds' => 195,
+            'requirements_html' => '<p>Bring a safe costume.</p><script>alert("unsafe")</script>',
+            'sort_order' => 30,
+        ]);
+        FestivalCategory::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_direction_id' => $direction->id,
+            'name' => 'Hidden Category',
+            'is_active' => false,
+        ]);
+        $rubric = FestivalRubric::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_category_id' => $category->id,
+            'name' => 'Solo judging protocol',
+        ]);
+        $section = FestivalRubricSection::query()->create([
+            'account_id' => $account->id,
+            'festival_rubric_id' => $rubric->id,
+            'name' => 'Technique',
+            'weight' => 1,
+            'contribution' => 'award',
+            'sort_order' => 10,
+        ]);
+        FestivalRubricCriterion::query()->create([
+            'account_id' => $account->id,
+            'festival_rubric_section_id' => $section->id,
+            'name' => 'Execution quality',
+            'max_score' => 10,
+            'weight' => 1,
+            'sort_order' => 10,
+        ]);
+        FestivalRubric::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_category_id' => $category->id,
+            'name' => 'Hidden protocol',
+            'is_active' => false,
+        ]);
+        $stage = FestivalStage::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Main stage',
+            'sort_order' => 10,
+        ]);
+        $header = FestivalScheduleSlot::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'type' => 'free_header',
+            'name' => 'Evening block',
+            'sort_order' => 10,
+            'published_at' => now(),
+        ]);
+        FestivalScheduleSlot::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'parent_id' => $header->id,
+            'type' => 'custom',
+            'name' => 'Opening show',
+            'starts_at' => $edition->starts_at->copy()->addHour(),
+            'ends_at' => $edition->starts_at->copy()->addHour()->addMinutes(15),
+            'sort_order' => 20,
+            'notes' => 'Internal stage note',
+            'reschedule_reason' => 'Internal reschedule reason',
+            'published_at' => now(),
+        ]);
+        FestivalScheduleSlot::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'type' => 'custom',
+            'name' => 'Unpublished rehearsal',
+            'starts_at' => $edition->starts_at->copy()->addHours(2),
+            'ends_at' => $edition->starts_at->copy()->addHours(2)->addMinutes(15),
+            'sort_order' => 30,
+            'published_at' => null,
+        ]);
+
+        $response = $this->postJson(route('public.festival-telegram.bootstrap', [$account->slug, $series->slug]), [
+            'init_data' => $this->initData($installation, '7002601'),
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('editions.0.description_html', '<p>Full Festival description.</p>')
+            ->assertJsonPath('editions.0.rules_html', '<p>Competition rules.</p>')
+            ->assertJsonPath('editions.0.category_groups.0.name', 'Pole Art')
+            ->assertJsonPath('editions.0.category_groups.0.categories.0.name', 'Solo Professionals')
+            ->assertJsonPath('editions.0.category_groups.0.categories.0.requirements_html', '<p>Bring a safe costume.</p>')
+            ->assertJsonPath('editions.0.rubrics.0.name', 'Solo judging protocol')
+            ->assertJsonPath('editions.0.rubrics.0.sections.0.name', 'Technique')
+            ->assertJsonPath('editions.0.rubrics.0.sections.0.criteria.0.name', 'Execution quality')
+            ->assertJsonPath('editions.0.program.0.stage', 'Main stage')
+            ->assertJsonPath('editions.0.program.0.items.0.name', 'Evening block')
+            ->assertJsonPath('editions.0.program.0.items.0.children.0.name', 'Opening show')
+            ->assertJsonMissing(['name' => 'Hidden Category'])
+            ->assertJsonMissing(['name' => 'Hidden protocol'])
+            ->assertJsonMissing(['name' => 'Unpublished rehearsal']);
+        $this->assertStringNotContainsString('festival_workflow_id', $response->getContent());
+        $this->assertStringNotContainsString('Internal stage note', $response->getContent());
+        $this->assertStringNotContainsString('Internal reschedule reason', $response->getContent());
+    }
+
+    public function test_public_timeline_poll_shows_started_current_activity_without_phone_authorization_or_internal_facts(): void
+    {
+        [$account, $series, $edition, $installation] = $this->festival();
+        $edition->forceFill([
+            'status' => FestivalEditionStatus::InProgress,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHours(5),
+        ])->save();
+        $stage = FestivalStage::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'name' => 'Main stage',
+        ]);
+        $timeline = FestivalTimeline::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'started_at' => now()->subMinute(),
+            'next_transition_at' => now()->addMinutes(4),
+        ]);
+        $current = FestivalTimelineItem::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_timeline_id' => $timeline->id,
+            'label' => 'Current performance',
+            'entry_reference' => 'PRIVATE-REFERENCE',
+            'notes' => 'Private operator note',
+            'planned_starts_at' => now()->subMinute(),
+            'planned_ends_at' => now()->addMinutes(4),
+            'sort_order' => 10,
+        ]);
+        FestivalTimelineItem::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_timeline_id' => $timeline->id,
+            'label' => 'Disabled private item',
+            'notes' => 'Disabled private note',
+            'sort_order' => 20,
+            'is_enabled' => false,
+        ]);
+        $timeline->forceFill(['active_item_id' => $current->id])->save();
+
+        $response = $this->postJson(route('public.festival-telegram.timeline', [$account->slug, $series->slug]), [
+            'init_data' => $this->initData($installation, '7002701'),
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('editions.0.status', FestivalEditionStatus::InProgress->value)
+            ->assertJsonPath('editions.0.timeline.0.scene_name', 'Main stage')
+            ->assertJsonPath('editions.0.timeline.0.items.0.label', 'Current performance')
+            ->assertJsonPath('editions.0.timeline.0.items.0.status', 'active')
+            ->assertJsonMissing(['label' => 'Disabled private item']);
+        foreach (['active_item_id', 'last_finished_item_id', 'entry_reference', 'notes', 'model', 'PRIVATE-REFERENCE'] as $privateFact) {
+            $this->assertStringNotContainsString($privateFact, $response->getContent());
+        }
     }
 
     public function test_registrant_login_is_single_use_and_fails_after_revocation(): void

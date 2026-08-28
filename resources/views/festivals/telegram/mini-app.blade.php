@@ -18,6 +18,7 @@
         class="min-h-dvh bg-slate-950 text-white"
         data-festival-telegram-mini-app
         data-bootstrap-url="{{ route('public.festival-telegram.bootstrap', [$account->slug, $series->slug]) }}"
+        data-timeline-url="{{ route('public.festival-telegram.timeline', [$account->slug, $series->slug]) }}"
         data-action-url="{{ route('public.festival-telegram.action', [$account->slug, $series->slug]) }}"
         data-unlink-url="{{ route('public.festival-telegram.unlink', [$account->slug, $series->slug]) }}"
         data-csrf-token="{{ csrf_token() }}"
