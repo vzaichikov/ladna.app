@@ -4777,6 +4777,38 @@ function replaceFestivalHelperOption(helperOptionHtml, form) {
     return replacement;
 }
 
+function replaceFestivalPerformerOption(performerOptionHtml) {
+    const template = document.createElement('template');
+    template.innerHTML = performerOptionHtml.trim();
+    const replacement = template.content.querySelector('[data-festival-performer-option]');
+
+    if (!replacement) {
+        return null;
+    }
+
+    const options = document.querySelector('[data-festival-performer-options]');
+
+    if (!options) {
+        return null;
+    }
+
+    const performerId = replacement.dataset.festivalPerformerId;
+    const existing = performerId
+        ? options.querySelector(`[data-festival-performer-option][data-festival-performer-id="${window.CSS.escape(performerId)}"]`)
+        : null;
+
+    if (existing) {
+        existing.replaceWith(replacement);
+    } else {
+        options.append(replacement);
+    }
+
+    options.querySelector('[data-festival-performer-empty]')?.remove();
+    createIcons({ icons });
+
+    return replacement;
+}
+
 function closeScheduledClassTrainerModal(modal) {
     modal?.classList.add('hidden');
     modal?.classList.remove('flex');
@@ -5277,14 +5309,17 @@ async function submitAsyncForm(form) {
                 return;
             }
 
-            if (payload.team_html || payload.helper_option_html) {
+            if (payload.team_html || payload.helper_option_html || payload.performer_option_html) {
                 const teamReplacement = payload.team_html
                     ? replaceFestivalTeamList(payload.team_html)
                     : null;
                 const helperReplacement = payload.helper_option_html
                     ? replaceFestivalHelperOption(payload.helper_option_html, form)
                     : null;
-                const replacement = teamReplacement ?? helperReplacement;
+                const performerReplacement = payload.performer_option_html
+                    ? replaceFestivalPerformerOption(payload.performer_option_html)
+                    : null;
+                const replacement = teamReplacement ?? helperReplacement ?? performerReplacement;
 
                 setAsyncStatus(payload.message, 'success', replacement ?? form);
                 form.dispatchEvent(new CustomEvent('async-form:success', {
@@ -5294,6 +5329,7 @@ async function submitAsyncForm(form) {
                         replacement,
                         teamReplacement,
                         helperReplacement,
+                        performerReplacement,
                     },
                 }));
                 document.dispatchEvent(new CustomEvent('festival-team:updated', {
@@ -5301,6 +5337,7 @@ async function submitAsyncForm(form) {
                         payload,
                         teamReplacement,
                         helperReplacement,
+                        performerReplacement,
                     },
                 }));
                 return;
@@ -8045,6 +8082,14 @@ function initFestivalTeamModals(root = document) {
         form.reset();
         clearAsyncFormErrors(form);
 
+        ['first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'photo'].forEach((name) => {
+            const field = form.elements.namedItem(name);
+
+            if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+                field.value = '';
+            }
+        });
+
         const memberType = opener.matches('[data-festival-helper-add]')
             ? 'helper'
             : (opener.dataset.teamMemberType || '');
@@ -8196,6 +8241,7 @@ function initFestivalTeamModals(root = document) {
         const restoreTarget = resourceId
             ? document.querySelector(`[data-festival-team-edit][data-team-edit-id="${window.CSS.escape(String(resourceId))}"]`)
                 ?? event.detail?.helperReplacement?.querySelector('input')
+                ?? event.detail?.performerReplacement?.querySelector('input')
             : null;
 
         closeModal(modal, restoreTarget);

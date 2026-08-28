@@ -43,7 +43,7 @@ class FestivalEntryController extends Controller
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => new FestivalEntry,
             'canChangeCategory' => false,
             'categories' => $edition->categories()->where('is_active', true)->with('direction')->withCount('capacityOccupyingEntries')->get()->sortBy([['direction.sort_order', 'asc'], ['sort_order', 'asc'], ['id', 'asc']])->values(),
-            'participants' => $portalUser->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get(),
+            'participants' => $portalUser->participants()->active()->performers()->with('portalUser')->orderBy('last_name')->orderBy('first_name')->get(),
         ]);
     }
 
@@ -122,7 +122,7 @@ class FestivalEntryController extends Controller
             'account' => $account, 'portalUser' => $portalUser, 'edition' => $edition, 'entry' => $festivalEntry,
             'canChangeCategory' => $canChangeCategory,
             'categories' => $categories,
-            'participants' => $portalUser->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get(),
+            'participants' => $portalUser->participants()->active()->performers()->with('portalUser')->orderBy('last_name')->orderBy('first_name')->get(),
         ]);
     }
 

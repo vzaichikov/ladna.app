@@ -129,6 +129,14 @@ class FestivalParticipantController extends Controller
                         'selected' => true,
                     ])->render()
                     : null,
+            'performer_option_html' => $request->validated('fragment_context') === 'performer_selection'
+                && $participant->member_type === FestivalTeamMemberType::Performer
+                    ? view('festivals.portal.team._performer-option', [
+                        'account' => $account,
+                        'participant' => $participant,
+                        'selected' => true,
+                    ])->render()
+                    : null,
         ]);
     }
 

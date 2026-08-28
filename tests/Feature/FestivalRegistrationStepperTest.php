@@ -1661,6 +1661,58 @@ class FestivalRegistrationStepperTest extends TestCase
         );
     }
 
+    public function test_first_application_roster_offers_a_pretyped_add_performer_modal_and_selected_fragment(): void
+    {
+        [$account, $edition, $portalUser, , $category] = $this->festival();
+        $createUrl = route('festival.portal.entries.create', [$account->slug, $edition->slug]);
+
+        $page = $this->actingAs($portalUser, 'festival')->get($createUrl);
+
+        $page->assertOk()
+            ->assertSee('data-festival-performer-add', false)
+            ->assertSee('data-festival-performer-options', false)
+            ->assertSee('data-festival-team-modal-context="performer_selection"', false)
+            ->assertSee(route('festival.portal.participants.index', [
+                'accountSlug' => $account->slug,
+                'add' => FestivalTeamMemberType::Performer->value,
+            ]), false);
+        $this->assertMatchesRegularExpression(
+            '/<input(?=[^>]*name="member_type")(?=[^>]*value="performer")(?=[^>]*checked)[^>]*>/s',
+            $page->getContent(),
+        );
+
+        $created = $this->withHeader('Accept', 'application/json')
+            ->post(route('festival.portal.participants.store', $account->slug), [
+                'first_name' => 'New',
+                'last_name' => 'Performer',
+                'date_of_birth' => '2001-01-01',
+                'member_type' => FestivalTeamMemberType::Performer->value,
+                'fragment_context' => 'performer_selection',
+            ]);
+
+        $created->assertOk()
+            ->assertJsonPath('message', __('app.festival_portal_team_saved'))
+            ->assertJsonPath('helper_option_html', null);
+        $performerOption = $created->json('performer_option_html');
+        $this->assertIsString($performerOption);
+        $this->assertStringContainsString('data-festival-performer-option', $performerOption);
+        $this->assertStringContainsString('name="participant_ids[]"', $performerOption);
+        $this->assertStringContainsString('checked', $performerOption);
+
+        $newPerformer = $portalUser->participants()->where('first_name', 'New')->sole();
+        $this->assertSame(FestivalTeamMemberType::Performer, $newPerformer->member_type);
+
+        $this->from($createUrl)->post(route('festival.portal.entries.store', [$account->slug, $edition->slug]), [
+            'festival_category_id' => $category->id,
+            'participant_ids' => [$newPerformer->id],
+            'entry_name' => 'New inline performer',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(
+            [$newPerformer->id],
+            $portalUser->entries()->sole()->participants()->pluck('festival_participants.id')->all(),
+        );
+    }
+
     public function test_first_application_draft_locks_profile_type_and_only_performers_can_enter_the_roster(): void
     {
         [$account, $edition, $portalUser, $performer, $category] = $this->festival();

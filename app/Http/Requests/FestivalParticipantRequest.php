@@ -25,7 +25,7 @@ class FestivalParticipantRequest extends FormRequest
             'member_type' => ['required', Rule::enum(FestivalTeamMemberType::class)],
             'photo' => ['nullable', File::image()->types(['jpg', 'jpeg', 'png', 'webp'])->max('4mb')],
             'remove_photo' => ['sometimes', 'boolean'],
-            'fragment_context' => ['nullable', Rule::in(['team', 'helper_selection'])],
+            'fragment_context' => ['nullable', Rule::in(['team', 'helper_selection', 'performer_selection'])],
         ];
     }
 }

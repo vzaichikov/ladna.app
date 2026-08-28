@@ -110,18 +110,42 @@
             @include('festivals.portal._entry-profile-summary')
 
             <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
-                <div class="flex items-center justify-between gap-4"><h2 class="text-xl font-semibold">{{ __('app.festival_roster') }}</h2><a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="text-sm font-semibold text-brand-700">{{ __('app.add') }}</a></div>
-                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <div class="flex items-center justify-between gap-4">
+                    <h2 class="text-xl font-semibold">{{ __('app.festival_roster') }}</h2>
+                    <a
+                        href="{{ route('festival.portal.participants.index', ['accountSlug' => $account->slug, 'add' => 'performer']) }}"
+                        class="inline-flex min-h-11 items-center text-sm font-semibold text-brand-700"
+                        data-festival-team-add-open
+                        data-festival-team-modal-target="festival-performer-add-modal"
+                        data-team-member-type="performer"
+                        data-festival-performer-add
+                    >{{ __('app.add') }}</a>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2" data-festival-performer-options>
                     @forelse($participants as $participant)
-                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-stone-200 p-4 has-checked:border-brand-500 has-checked:bg-brand-50"><input type="checkbox" name="participant_ids[]" value="{{ $participant->id }}" @checked(collect(old('participant_ids', $entry->exists ? $entry->participants->modelKeys() : []))->contains($participant->id)) class="crm-checkbox"><span><strong class="block">{{ $participant->displayName() }}</strong><span class="text-xs text-slate-500">{{ $participant->date_of_birth->format('d.m.Y') }}</span></span></label>
+                        @include('festivals.portal.team._performer-option', [
+                            'account' => $account,
+                            'participant' => $participant,
+                            'selected' => collect(old('participant_ids', $entry->exists ? $entry->participants->modelKeys() : []))->contains($participant->id),
+                        ])
                     @empty
-                        <p class="sm:col-span-2 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">{{ __('app.festival_participants_required') }}</p>
+                        <p class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 sm:col-span-2" data-festival-performer-empty>{{ __('app.festival_participants_required') }}</p>
                     @endforelse
                 </div>
             </section>
 
             <div class="flex justify-end"><x-ui.button type="submit" size="lg">{{ __('app.save_and_continue') }}</x-ui.button></div>
         </form>
+
+        @include('festivals.portal.team._member-modal', [
+            'account' => $account,
+            'modalId' => 'festival-performer-add-modal',
+            'mode' => 'add',
+            'defaultMemberType' => \App\Enums\FestivalTeamMemberType::Performer,
+            'fragmentContext' => 'performer_selection',
+            'open' => false,
+            'showErrors' => false,
+        ])
 
         <div
             id="festival-quick-profile-modal"
