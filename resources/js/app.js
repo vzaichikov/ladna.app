@@ -7,6 +7,7 @@ import { initEntranceOperations } from './entrance-operations';
 import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
 import { initFestivalTelegramMiniApp } from './festival-telegram-mini-app';
+import { initFestivalMediaDuplicates } from './festival-media-duplicates';
 
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
@@ -10341,6 +10342,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventAttendance();
     initEntranceOperations();
     initFestivalStreamPlayer();
+    initFestivalMediaDuplicates();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
     initFestivalApplicationCategoryModal();

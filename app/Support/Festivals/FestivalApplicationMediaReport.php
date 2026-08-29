@@ -10,6 +10,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalSubmission;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -46,31 +47,9 @@ class FestivalApplicationMediaReport
     public function paginate(Account $account, FestivalEdition $edition, array $filters): LengthAwarePaginator
     {
         $searchTerms = preg_split('/\s+/u', $filters['q'], -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $markedDefinition = fn ($query) => $query
-            ->where('account_id', $account->id)
-            ->where('festival_edition_id', $edition->id)
-            ->where('show_in_media_report', true);
-        $eligibleRequirement = fn (Builder $query): Builder => $query
-            ->where('account_id', $account->id)
-            ->whereHas('definition', fn (Builder $query): Builder => $markedDefinition($query)
-                ->where('input_type', FestivalRequirementInputType::File->value))
-            ->whereHas('latestSubmission', fn (Builder $query): Builder => $query
-                ->where('account_id', $account->id)
-                ->whereNotNull('disk')
-                ->whereNotNull('path')
-                ->whereIn('mime_type', FestivalSubmission::playableMimeTypes()));
+        $markedDefinition = $this->markedDefinition($account, $edition);
 
-        return FestivalEntry::query()
-            ->where('account_id', $account->id)
-            ->where('festival_edition_id', $edition->id)
-            ->whereIn('status', [
-                FestivalEntryStatus::Draft->value,
-                FestivalEntryStatus::Submitted->value,
-                FestivalEntryStatus::UnderReview->value,
-                FestivalEntryStatus::ChangesPending->value,
-                FestivalEntryStatus::Accepted->value,
-            ])
-            ->whereHas('requirements', $eligibleRequirement)
+        return $this->eligibleEntriesQuery($account, $edition)
             ->when($searchTerms !== [], fn (Builder $query) => $query->where(function (Builder $query) use ($searchTerms): void {
                 foreach ($searchTerms as $term) {
                     $search = '%'.$term.'%';
@@ -113,6 +92,69 @@ class FestivalApplicationMediaReport
             ->withQueryString();
     }
 
+    /**
+     * @return Builder<FestivalEntry>
+     */
+    public function eligibleEntriesQuery(Account $account, FestivalEdition $edition): Builder
+    {
+        $markedDefinition = $this->markedDefinition($account, $edition);
+        $eligibleRequirement = fn (Builder $query): Builder => $query
+            ->where('account_id', $account->id)
+            ->whereHas('definition', fn (Builder $query): Builder => $markedDefinition($query)
+                ->where('input_type', FestivalRequirementInputType::File->value))
+            ->whereHas('latestSubmission', fn (Builder $query): Builder => $query
+                ->where('account_id', $account->id)
+                ->whereNotNull('disk')
+                ->whereNotNull('path')
+                ->whereIn('mime_type', FestivalSubmission::playableMimeTypes()));
+
+        return FestivalEntry::query()
+            ->where('account_id', $account->id)
+            ->where('festival_edition_id', $edition->id)
+            ->whereIn('status', [
+                FestivalEntryStatus::Draft->value,
+                FestivalEntryStatus::Submitted->value,
+                FestivalEntryStatus::UnderReview->value,
+                FestivalEntryStatus::ChangesPending->value,
+                FestivalEntryStatus::Accepted->value,
+            ])
+            ->whereHas('requirements', $eligibleRequirement);
+    }
+
+    /**
+     * @return Collection<int, FestivalEntry>
+     */
+    public function duplicateCandidateEntries(Account $account, FestivalEdition $edition): Collection
+    {
+        $markedTextDefinition = fn ($query) => $this->markedDefinition($account, $edition)($query)
+            ->whereIn('input_type', [
+                FestivalRequirementInputType::ShortText->value,
+                FestivalRequirementInputType::LongText->value,
+            ]);
+
+        return $this->eligibleEntriesQuery($account, $edition)
+            ->with([
+                'portalUser' => fn ($query) => $query->where('account_id', $account->id),
+                'requirements' => fn ($query) => $query
+                    ->where('account_id', $account->id)
+                    ->whereHas('definition', $markedTextDefinition)
+                    ->with([
+                        'definition' => $markedTextDefinition,
+                        'participant' => fn ($query) => $query->where('account_id', $account->id),
+                        'latestSubmission' => fn ($query) => $query->where('account_id', $account->id),
+                    ])
+                    ->orderBy(
+                        FestivalRequirementDefinition::query()
+                            ->select('sort_order')
+                            ->whereColumn('festival_requirement_definitions.id', 'festival_entry_requirements.festival_requirement_definition_id'),
+                    )
+                    ->orderBy('festival_entry_requirements.id'),
+            ])
+            ->latest('submitted_at')
+            ->latest('id')
+            ->get();
+    }
+
     public function hasConfiguredFields(Account $account, FestivalEdition $edition): bool
     {
         return FestivalRequirementDefinition::query()
@@ -121,5 +163,16 @@ class FestivalApplicationMediaReport
             ->where('show_in_media_report', true)
             ->where('input_type', FestivalRequirementInputType::File->value)
             ->exists();
+    }
+
+    /**
+     * @return Closure(mixed): mixed
+     */
+    private function markedDefinition(Account $account, FestivalEdition $edition): Closure
+    {
+        return fn ($query) => $query
+            ->where('account_id', $account->id)
+            ->where('festival_edition_id', $edition->id)
+            ->where('show_in_media_report', true);
     }
 }

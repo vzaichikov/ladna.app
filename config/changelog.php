@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.158.0',
+                'date' => '2026-08-30',
+                'title' => 'AI music duplicate review for Festivals',
+                'items' => ['Festival teams can now check the Media report for likely duplicate music selections with one AI-assisted action. The review compares the marked text from every eligible application and recognizes likely matches despite spelling mistakes, formatting, language, or transliteration differences.', 'Each result links back to the relevant applications and fields for human review. The check is advisory and never changes application data.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.157.1',
                 'date' => '2026-08-29',
                 'title' => 'Compact Festival category changes',
@@ -1402,6 +1409,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.158.0',
+                'date' => '2026-08-30',
+                'title' => 'ШІ-перевірка дублікатів музики для фестивалів',
+                'items' => ['Команда фестивалю тепер може однією дією перевірити медіазвіт на ймовірні дублікати музики за допомогою ШІ. Перевірка порівнює позначений текст усіх відповідних заявок і розпізнає можливі збіги попри друкарські помилки, форматування, мову чи різну транслітерацію.', 'Кожен результат містить переходи до відповідних заявок і полів для перевірки людиною. Перевірка має рекомендаційний характер і ніколи не змінює дані заявок.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.157.1',
                 'date' => '2026-08-29',

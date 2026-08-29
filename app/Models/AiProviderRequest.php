@@ -49,6 +49,8 @@ class AiProviderRequest extends Model
 
     public const TypeEnvelopeRepair = 'envelope_repair';
 
+    public const TypeFestivalMediaDuplicates = 'festival_media_duplicates';
+
     /**
      * @return array<string, string>
      */
