@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\BuildFestivalResults;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
 use App\Enums\AccountRole;
 use App\Enums\FestivalScoreSheetStatus;
@@ -11,14 +12,19 @@ use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
+use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
+use App\Models\FestivalStage;
+use App\Models\FestivalTimeline;
+use App\Models\FestivalTimelineItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FestivalJudgingManagementTest extends TestCase
@@ -271,10 +277,12 @@ class FestivalJudgingManagementTest extends TestCase
             'submit' => true,
         ], $judge);
 
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $category]))
-            ->assertRedirect(route('dashboard.accounts.festivals.judging.results.index', [$account, $edition]))
-            ->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('festival_results', ['festival_entry_id' => $entry->id]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $category]))
+            ->assertOk()
+            ->assertSee('Lifecycle Performance')
+            ->assertSee('data-result-total>9</p>', false);
+        $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $entry->id]);
 
         $updatedRubricPayload = $rubricPayload;
         $updatedRubricPayload['name'] = 'Updated Lifecycle Criteria';
@@ -512,12 +520,12 @@ class FestivalJudgingManagementTest extends TestCase
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.judges.edit', [$account, $edition, $otherAssignment]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.criteria.edit', [$account, $edition, $otherRubric]))->assertNotFound();
         $this->actingAs($owner)->delete(route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $otherRubric]))->assertNotFound();
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $otherCategory]))->assertNotFound();
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $otherCategory]))->assertNotFound();
 
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.judges.edit', [$account, $edition, $sameAccountAssignment]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.criteria.edit', [$account, $edition, $sameAccountRubric]))->assertNotFound();
         $this->actingAs($owner)->delete(route('dashboard.accounts.festivals.judging.criteria.destroy', [$account, $edition, $sameAccountRubric]))->assertNotFound();
-        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $sameAccountCategory]))->assertNotFound();
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $sameAccountCategory]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $sameAccountSheet]))->assertNotFound();
         $this->actingAs($owner)->get(route('dashboard.accounts.festivals.score-sheets.edit', [$account, $edition, $sameAccountSheet]))->assertNotFound();
     }
@@ -535,32 +543,231 @@ class FestivalJudgingManagementTest extends TestCase
         ]);
         $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
         [$sheet, $criterion] = $this->sheet($account, $edition, $category, $assignment, 'GUEST PRIVATE PERFORMANCE');
+        $secondCriterion = $criterion->section()->firstOrFail()->criteria()->create([
+            'account_id' => $account->id,
+            'name' => 'Musicality',
+            'max_score' => 10,
+            'weight' => 1,
+            'sort_order' => 20,
+        ]);
+        $sheet->entry->update([
+            'act_title' => 'Midnight Flight',
+            'act_description' => 'A suspended duet about finding the way home.',
+        ]);
+        $sheet->update(['total_score' => 1.5]);
+        $indexUrl = route('festival.portal.judging.index', [$account->slug, $edition]);
+        $editUrl = route('festival.portal.judging.edit', [$account->slug, $sheet]);
+        $this->assertStringNotContainsString($edition->slug, $indexUrl);
+        $this->assertStringNotContainsString($edition->slug, $editUrl);
 
         $this->actingAs($portalJudge, 'festival')
-            ->get(route('festival.portal.judging.index', [$account->slug, $edition->slug]))
+            ->get($indexUrl)
             ->assertOk()
             ->assertSee('max-w-6xl', false)
-            ->assertSee('GUEST PRIVATE PERFORMANCE');
+            ->assertSee('GUEST PRIVATE PERFORMANCE')
+            ->assertSee('data-festival-judge-list', false)
+            ->assertSee('data-refresh-seconds="5"', false);
+        $fragment = $this->actingAs($portalJudge, 'festival')->get($indexUrl.'?fragment=1');
+        $fragment->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertSee('data-festival-judge-list', false)
+            ->assertDontSee('<html', false);
         $this->actingAs($portalJudge, 'festival')
-            ->get(route('festival.portal.judging.edit', [$account->slug, $edition->slug, $sheet]))
+            ->get($editUrl)
             ->assertOk()
             ->assertSee('max-w-6xl', false)
-            ->assertSee('GUEST PRIVATE PERFORMANCE');
+            ->assertSee('GUEST PRIVATE PERFORMANCE')
+            ->assertSee('Midnight Flight')
+            ->assertSee('A suspended duet about finding the way home.')
+            ->assertSee('data-score-total>1,5</p>', false)
+            ->assertSee('data-score-save-feedback', false)
+            ->assertSee('step="0.5"', false)
+            ->assertSee('data-score-stepper', false)
+            ->assertSee('data-score-adjust="-1"', false)
+            ->assertSee('data-score-adjust="1"', false)
+            ->assertSee('grid-cols-[3rem_minmax(0,1fr)_3rem]', false)
+            ->assertSee('data-score-field-status', false)
+            ->assertSee('data-score-autosave-control', false)
+            ->assertSee('focus-within:border-emerald-300', false)
+            ->assertSee(__('app.festival_score_autosave_copy'))
+            ->assertSee('data-score-save-button', false)
+            ->assertDontSee(__('app.save_draft'))
+            ->assertDontSee(__('app.festival_submit_scores'));
+        $updateUrl = route('festival.portal.judging.update', [$account->slug, $sheet]);
         $this->actingAs($portalJudge, 'festival')
-            ->put(route('festival.portal.judging.update', [$account->slug, $edition->slug, $sheet]), [
+            ->putJson($updateUrl, [
+                'scores' => [[
+                    'criterion_id' => (string) $criterion->id,
+                    'comment' => 'Comment now, score later.',
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('progress.ready', false)
+            ->assertJsonPath('progress.missing', 2);
+        $this->assertDatabaseHas('festival_criterion_scores', [
+            'festival_score_sheet_id' => $sheet->id,
+            'festival_rubric_criterion_id' => $criterion->id,
+            'score' => null,
+            'comment' => 'Comment now, score later.',
+        ]);
+        $this->actingAs($portalJudge, 'festival')
+            ->putJson($updateUrl, ['comments' => 'The sheet itself saves independently.'])
+            ->assertOk()
+            ->assertJsonPath('progress.missing', 2);
+        $this->assertSame('The sheet itself saves independently.', $sheet->refresh()->comments);
+        $partialResults = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame(2, $partialResults['missing']);
+        $this->assertSame('0.0000', $partialResults['rows']->sole()['total']);
+        $this->assertFalse($partialResults['ready']);
+        $this->actingAs($portalJudge, 'festival')
+            ->from($editUrl)
+            ->put($updateUrl, [
+                'comments' => 'Still incomplete, saved through the HTML fallback.',
+                'scores' => [[
+                    'criterion_id' => $criterion->id,
+                    'score' => null,
+                    'comment' => 'Comment now, score later.',
+                ]],
+            ])
+            ->assertRedirect($editUrl)
+            ->assertSessionHasNoErrors();
+        $this->actingAs($portalJudge, 'festival')
+            ->putJson($updateUrl, [
+                'scores' => [[
+                    'criterion_id' => $criterion->id,
+                    'score' => 99,
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('scores');
+        $this->actingAs($portalJudge, 'festival')
+            ->putJson($updateUrl, [
+                'scores' => [[
+                    'criterion_id' => (string) ($secondCriterion->id + 1000000),
+                    'score' => '1',
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('scores');
+        $this->actingAs($portalJudge, 'festival')
+            ->putJson($updateUrl, [
                 'scores' => [[
                     'criterion_id' => $criterion->id,
                     'score' => 8,
-                    'comment' => 'Guest private note',
                 ]],
             ])
-            ->assertRedirect()
-            ->assertSessionHasNoErrors();
+            ->assertOk()
+            ->assertJsonPath('progress.ready', false)
+            ->assertJsonPath('progress.missing', 1)
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private');
         $this->assertDatabaseHas('festival_criterion_scores', [
             'festival_score_sheet_id' => $sheet->id,
             'festival_rubric_criterion_id' => $criterion->id,
             'score' => 8,
+            'comment' => 'Comment now, score later.',
         ]);
+        $this->assertSame('Still incomplete, saved through the HTML fallback.', $sheet->refresh()->comments);
+        $this->actingAs($portalJudge, 'festival')
+            ->putJson($updateUrl, [
+                'scores' => [[
+                    'criterion_id' => (string) $secondCriterion->id,
+                    'score' => '7.5',
+                ]],
+            ])
+            ->assertOk()
+            ->assertJsonPath('progress.ready', true)
+            ->assertJsonPath('progress.missing', 0)
+            ->assertJsonPath('total_score', '15.5000');
+        $this->assertDatabaseHas('festival_criterion_scores', [
+            'festival_score_sheet_id' => $sheet->id,
+            'festival_rubric_criterion_id' => $secondCriterion->id,
+            'score' => 7.5,
+        ]);
+    }
+
+    public function test_staff_judge_list_groups_categories_tracks_timeline_and_serves_only_owned_performance_photos(): void
+    {
+        Storage::fake('local');
+        [$account, $edition, $category] = $this->festival();
+        $category->update(['name' => 'Aerial Hoop', 'sort_order' => 10]);
+        $nextCategory = FestivalCategory::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Aerial Silks',
+            'sort_order' => 20,
+        ]);
+        $judge = $this->staffJudge($account);
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->for($judge)->create(['account_id' => $account->id]);
+        $assignment->categories()->attach([$category->id, $nextCategory->id], ['account_id' => $account->id]);
+        [$activeSheet] = $this->sheet($account, $edition, $category, $assignment, 'CURRENT DANCE');
+        [$nextSheet] = $this->sheet($account, $edition, $nextCategory, $assignment, 'NEXT DANCE');
+
+        Storage::disk('local')->put('festival/participants/current.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+        $participant = FestivalParticipant::factory()->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $activeSheet->entry->festival_portal_user_id,
+            'photo_path' => 'festival/participants/current.png',
+            'is_profile_owner' => false,
+        ]);
+        $activeSheet->entry->participants()->attach($participant->id, ['account_id' => $account->id, 'sort_order' => 0]);
+        $otherParticipant = FestivalParticipant::factory()->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $nextSheet->entry->festival_portal_user_id,
+            'is_profile_owner' => false,
+        ]);
+        $nextSheet->entry->participants()->attach($otherParticipant->id, ['account_id' => $account->id, 'sort_order' => 0]);
+
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Main scene']);
+        $timeline = FestivalTimeline::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_stage_id' => $stage->id,
+            'started_at' => now(),
+            'next_transition_at' => now()->addMinutes(2),
+        ]);
+        $activeItem = FestivalTimelineItem::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_timeline_id' => $timeline->id,
+            'festival_entry_id' => $activeSheet->festival_entry_id,
+            'label' => 'CURRENT DANCE',
+            'type' => 'performance',
+            'sort_order' => 10,
+        ]);
+        FestivalTimelineItem::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_timeline_id' => $timeline->id,
+            'festival_entry_id' => $nextSheet->festival_entry_id,
+            'label' => 'NEXT DANCE',
+            'type' => 'performance',
+            'sort_order' => 20,
+        ]);
+        $timeline->update(['active_item_id' => $activeItem->id]);
+
+        $photoUrl = route('dashboard.accounts.festivals.judging.score-sheets.participants.photo', [$account, $edition, $activeSheet, $participant]);
+        $response = $this->actingAs($judge)
+            ->get(route('dashboard.accounts.festivals.judging.score-sheets.index', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('data-festival-judge-list', false)
+            ->assertSee('data-refresh-seconds="5"', false)
+            ->assertSee('Main scene')
+            ->assertSee('CURRENT DANCE')
+            ->assertSee('NEXT DANCE')
+            ->assertSee('Aerial Hoop')
+            ->assertSee('Aerial Silks')
+            ->assertSee(__('app.festival_current_performance'))
+            ->assertSee(__('app.festival_active_category'))
+            ->assertSee(__('app.festival_timeline_status_active'))
+            ->assertSee(__('app.festival_timeline_status_next'))
+            ->assertSee('data-current-performance-link', false)
+            ->assertSee(route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $activeSheet]), false)
+            ->assertSee($photoUrl, false);
+        $this->assertCount(2, $response->viewData('judgeGroups'));
+
+        $this->actingAs($judge)->get($photoUrl)->assertOk()->assertHeader('Cache-Control', 'no-store, private');
+        $this->actingAs($judge)
+            ->get(route('dashboard.accounts.festivals.judging.score-sheets.participants.photo', [$account, $edition, $activeSheet, $otherParticipant]))
+            ->assertNotFound();
     }
 
     public function test_judging_sidebar_uses_the_exact_localized_group_and_four_destinations(): void

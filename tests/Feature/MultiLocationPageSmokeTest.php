@@ -27,6 +27,7 @@ use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalMedia;
+use App\Models\FestivalNomination;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRequirementDefinition;
@@ -74,7 +75,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(205, $classifiedRouteNames);
+        $this->assertCount(211, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -236,6 +237,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'external_url' => 'https://example.test/festival-smoke.jpg',
             'caption' => 'Smoke media',
         ]);
+        $festivalNomination = FestivalNomination::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalPortalUser = FestivalPortalUser::factory()->for($account)->create();
         $festivalParticipant = FestivalParticipant::factory()->create([
             'account_id' => $account->id,
@@ -290,6 +292,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'festival_purchase' => $festivalPurchase,
             'festival_fee' => $festivalFee,
             'festival_media' => $festivalMedia,
+            'festival_nomination' => $festivalNomination,
             'festival_participant' => $festivalParticipant,
             'festival_portal_user' => $festivalPortalUser,
             'festival_requirement' => $festivalRequirement,
@@ -529,6 +532,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.score-sheets.edit' => 'festival_score_sheet',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.results.nominations.index' => 'festival_edition',
+            'dashboard.accounts.festivals.judging.results.show' => 'festival_category',
+            'dashboard.accounts.festivals.judging.results.table' => 'festival_category',
             'dashboard.accounts.festivals.online-stream.edit' => 'festival_edition',
             'dashboard.accounts.festivals.program' => 'festival_edition',
             'dashboard.accounts.festivals.performances' => 'festival_edition',
@@ -563,6 +569,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.media.create' => 'festival_edition',
             'dashboard.accounts.festivals.media.edit' => 'festival_media',
             'dashboard.accounts.festivals.settings.directions' => 'festival_edition',
+            'dashboard.accounts.festivals.settings.nominations' => 'festival_edition',
+            'dashboard.accounts.festivals.nominations.create' => 'festival_edition',
+            'dashboard.accounts.festivals.nominations.edit' => 'festival_nomination',
             'dashboard.accounts.festivals.settings.fees' => 'festival_edition',
             'dashboard.accounts.festivals.settings.requirements' => 'festival_edition',
             'dashboard.accounts.festivals.settings.workflows' => 'festival_edition',
@@ -600,11 +609,11 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.attendance.data',
             'dashboard.accounts.festivals.entrance.poster',
             'dashboard.accounts.festivals.entrance.search',
+            'dashboard.accounts.festivals.judging.score-sheets.participants.photo',
             'dashboard.accounts.festivals.users.participants.photo',
             'dashboard.accounts.festivals.users.photo',
             'dashboard.accounts.festivals.submissions.download',
             'dashboard.accounts.festivals.submissions.view',
-            'dashboard.accounts.festivals.judging.results.preview',
             'dashboard.accounts.festivals.online-stream.preview',
             'dashboard.accounts.festivals.online-stream.status',
             'dashboard.accounts.festivals.timeline.fragment',

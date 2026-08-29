@@ -622,7 +622,7 @@ final class AppBreadcrumbs
             return [...$base, $this->item(__('app.festival_results'))];
         }
 
-        if ($routeName === 'dashboard.accounts.festivals.judging.results.preview') {
+        if ($routeName === 'dashboard.accounts.festivals.judging.results.show') {
             $category = $this->modelParameter($request, 'festivalCategory');
 
             return [
@@ -630,6 +630,21 @@ final class AppBreadcrumbs
                 $this->item(__('app.festival_results'), route('dashboard.accounts.festivals.judging.results.index', [$account, $edition])),
                 $this->item($this->modelLabel($category, __('app.festival_category'))),
             ];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.judging.results.table') {
+            $category = $this->modelParameter($request, 'festivalCategory');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_results'), route('dashboard.accounts.festivals.judging.results.index', [$account, $edition])),
+                $this->item($this->modelLabel($category, __('app.festival_category')), route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $category])),
+                $this->item(__('app.festival_result_table')),
+            ];
+        }
+
+        if ($routeName === 'dashboard.accounts.festivals.judging.results.nominations.index') {
+            return [...$base, $this->item(__('app.festival_nomination_assignments'))];
         }
 
         if ($routeName === 'dashboard.accounts.festivals.judging.battles.index') {
@@ -672,6 +687,14 @@ final class AppBreadcrumbs
                 'create' => 'dashboard.accounts.festivals.directions.create',
                 'edit' => 'dashboard.accounts.festivals.directions.edit',
                 'parameter' => 'festivalDirection',
+            ],
+            'nominations' => [
+                'index' => 'dashboard.accounts.festivals.settings.nominations',
+                'label' => 'app.festival_nominations',
+                'item' => 'app.festival_nomination',
+                'create' => 'dashboard.accounts.festivals.nominations.create',
+                'edit' => 'dashboard.accounts.festivals.nominations.edit',
+                'parameter' => 'festivalNomination',
             ],
             'categories' => [
                 'index' => 'dashboard.accounts.festivals.settings.categories',

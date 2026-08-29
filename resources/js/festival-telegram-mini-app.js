@@ -297,6 +297,24 @@ export function initFestivalTelegramMiniApp() {
         container.append(details);
     };
 
+    const appendNominations = (container, edition) => {
+        const nominations = edition.nominations || [];
+        if (!nominations.length) return;
+
+        const details = disclosure(labels.nominations, nominations.length);
+        const list = element('div', 'mt-4 space-y-3');
+        nominations.forEach((nomination) => {
+            const card = element('article', 'rounded-xl border border-white/10 bg-slate-950/35 p-4');
+            card.append(element('h3', 'font-semibold text-white', nomination.name));
+            if (nomination.description) card.append(element('p', 'mt-2 whitespace-pre-line text-sm leading-6 text-slate-300', nomination.description));
+            if (nomination.presented_by) card.append(element('p', 'mt-3 text-xs font-semibold text-fuchsia-100', `${labels.nomination_presented_by}: ${nomination.presented_by}`));
+            if (nomination.prize) card.append(element('p', 'mt-1 whitespace-pre-line text-xs text-slate-300', `${labels.nomination_prize}: ${nomination.prize}`));
+            list.append(card);
+        });
+        details.append(list);
+        container.append(details);
+    };
+
     const liveTimeline = (edition) => {
         const scenes = edition.timeline || [];
         if (!scenes.length) return null;
@@ -363,6 +381,7 @@ export function initFestivalTelegramMiniApp() {
         appendCategories(container, edition);
         appendRubrics(container, edition);
         appendProgram(container, edition);
+        appendNominations(container, edition);
 
         [['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
             if (!items?.length) return;

@@ -195,6 +195,16 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalResult::class);
     }
 
+    public function nominations(): HasMany
+    {
+        return $this->hasMany(FestivalNomination::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function festivalNominations(): HasMany
+    {
+        return $this->nominations();
+    }
+
     public function scheduleSlots(): HasMany
     {
         return $this->hasMany(FestivalScheduleSlot::class);

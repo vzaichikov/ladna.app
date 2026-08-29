@@ -29,31 +29,67 @@ class SaveFestivalScoreSheet
             $sheet = FestivalScoreSheet::query()->with(['rubric.sections.criteria', 'entry.edition'])->whereKey($sheet->id)->lockForUpdate()->firstOrFail();
             $assignment = FestivalJudgeAssignment::query()->with('rubricSections')->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
             abort_unless($sheet->festival_judge_assignment_id === $assignment->id && $assignment->is_active, 403);
-            if ($sheet->status === FestivalScoreSheetStatus::Submitted) {
-                throw ValidationException::withMessages(['scores' => __('app.festival_score_sheet_locked')]);
-            }
+            $wasReady = $sheet->status === FestivalScoreSheetStatus::Submitted;
             $sections = $this->judgingCriteria->sectionsFor($assignment, $sheet->rubric);
             $criteria = $sections
                 ->flatMap(fn ($section) => $section->criteria->each(fn ($criterion) => $criterion->setRelation('section', $section)))
                 ->keyBy('id');
-            $submittedIds = collect($input['scores'])->pluck('criterion_id');
-            if ($submittedIds->sort()->values()->all() !== $criteria->keys()->sort()->values()->all()) {
-                throw ValidationException::withMessages(['scores' => __('app.festival_scores_incomplete')]);
+            $submittedRows = collect($input['scores'] ?? []);
+            $submittedIds = $submittedRows->pluck('criterion_id')->map(fn (mixed $criterionId): int => (int) $criterionId);
+            if ($submittedIds->diff($criteria->keys())->isNotEmpty()) {
+                throw ValidationException::withMessages(['scores' => __('app.festival_score_criterion_invalid')]);
             }
 
-            $total = '0.00000000';
-            foreach ($input['scores'] as $row) {
+            foreach ($submittedRows as $row) {
                 /** @var FestivalRubricCriterion $criterion */
                 $criterion = $criteria[(int) $row['criterion_id']];
-                if (bccomp((string) $row['score'], '0', 2) === -1 || bccomp((string) $row['score'], (string) $criterion->max_score, 2) === 1) {
+                $storedScore = $sheet->scores()
+                    ->where('festival_rubric_criterion_id', $criterion->id)
+                    ->lockForUpdate()
+                    ->first();
+                $score = array_key_exists('score', $row) ? $row['score'] : $storedScore?->score;
+                $comment = array_key_exists('comment', $row)
+                    ? (filled($row['comment']) ? (string) $row['comment'] : null)
+                    : $storedScore?->comment;
+
+                if ($score === null || $score === '') {
+                    if ($comment === null) {
+                        $storedScore?->delete();
+                    } else {
+                        $sheet->scores()->updateOrCreate(
+                            ['festival_rubric_criterion_id' => $criterion->id],
+                            ['account_id' => $sheet->account_id, 'score' => null, 'comment' => $comment],
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (bccomp((string) $score, '0', 8) === -1 || bccomp((string) $score, (string) $criterion->max_score, 8) === 1) {
                     throw ValidationException::withMessages(['scores' => __('app.festival_score_above_maximum')]);
                 }
                 $sheet->scores()->updateOrCreate(
                     ['festival_rubric_criterion_id' => $criterion->id],
-                    ['account_id' => $sheet->account_id, 'score' => $row['score'], 'comment' => $row['comment'] ?? null],
+                    ['account_id' => $sheet->account_id, 'score' => $score, 'comment' => $comment],
                 );
+            }
+
+            $storedScores = $sheet->scores()
+                ->whereIn('festival_rubric_criterion_id', $criteria->keys())
+                ->get()
+                ->keyBy('festival_rubric_criterion_id');
+            $total = '0.00000000';
+            $completed = 0;
+            foreach ($criteria as $criterion) {
+                $score = $storedScores->get($criterion->id)?->score;
+
+                if ($score === null || $score === '') {
+                    continue;
+                }
+
+                $completed++;
                 $weightedScore = bcmul(
-                    bcmul((string) $row['score'], (string) $criterion->weight, 8),
+                    bcmul((string) $score, (string) $criterion->weight, 8),
                     (string) $criterion->section->weight,
                     8,
                 );
@@ -62,20 +98,23 @@ class SaveFestivalScoreSheet
                     : bcadd($total, $weightedScore, 8);
             }
 
-            $submitted = (bool) ($input['submit'] ?? false);
-            $sheet->forceFill([
-                'comments' => $input['comments'] ?? null,
+            $ready = $criteria->isNotEmpty() && $completed === $criteria->count();
+            $sheetAttributes = [
                 'total_score' => $this->round($total),
-                'status' => $submitted ? FestivalScoreSheetStatus::Submitted : FestivalScoreSheetStatus::Draft,
-                'submitted_at' => $submitted ? now() : null,
-            ])->save();
+                'status' => $ready ? FestivalScoreSheetStatus::Submitted : FestivalScoreSheetStatus::Draft,
+                'submitted_at' => $ready ? ($sheet->submitted_at ?? now()) : null,
+            ];
+            if (array_key_exists('comments', $input)) {
+                $sheetAttributes['comments'] = $input['comments'];
+            }
+            $sheet->forceFill($sheetAttributes)->save();
             FestivalResult::query()
                 ->whereIn('festival_entry_id', FestivalEntry::query()
                     ->select('id')
                     ->where('festival_edition_id', $sheet->entry->festival_edition_id)
                     ->where('festival_category_id', $sheet->entry->festival_category_id))
                 ->delete();
-            $this->activity->record($sheet, $submitted ? 'score_sheet.submitted' : 'score_sheet.saved', $sheet->entry->edition, $actor, ['total' => $sheet->total_score]);
+            $this->activity->record($sheet, $ready && ! $wasReady ? 'score_sheet.ready' : 'score_sheet.saved', $sheet->entry->edition, $actor, ['total' => $sheet->total_score]);
 
             return $sheet->refresh()->load('scores');
         }, 3);

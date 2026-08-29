@@ -14,12 +14,11 @@ class FestivalScoreSheetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'comments' => ['nullable', 'string', 'max:5000'],
-            'scores' => ['required', 'array'],
+            'comments' => ['sometimes', 'nullable', 'string', 'max:5000'],
+            'scores' => ['sometimes', 'array'],
             'scores.*.criterion_id' => ['required', 'integer', 'distinct'],
-            'scores.*.score' => ['required', 'numeric', 'min:0'],
-            'scores.*.comment' => ['nullable', 'string', 'max:3000'],
-            'submit' => ['sometimes', 'boolean'],
+            'scores.*.score' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'scores.*.comment' => ['sometimes', 'nullable', 'string', 'max:3000'],
         ];
     }
 }

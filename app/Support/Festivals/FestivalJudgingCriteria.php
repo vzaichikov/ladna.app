@@ -7,6 +7,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricSection;
+use App\Models\FestivalScoreSheet;
 use Illuminate\Support\Collection;
 
 class FestivalJudgingCriteria
@@ -50,6 +51,28 @@ class FestivalJudgingCriteria
         return $rubric->sections
             ->whereIn('id', $assignedSectionIds)
             ->values();
+    }
+
+    /** @return array{required: int, completed: int, missing: int, ready: bool} */
+    public function scoreProgress(FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment): array
+    {
+        $sheet->loadMissing(['rubric.sections.criteria', 'scores']);
+        $criterionIds = $this->sectionsFor($assignment, $sheet->rubric)
+            ->flatMap(fn (FestivalRubricSection $section): Collection => $section->criteria)
+            ->pluck('id')
+            ->all();
+        $required = count($criterionIds);
+        $completed = $sheet->scores
+            ->whereIn('festival_rubric_criterion_id', $criterionIds)
+            ->whereNotNull('score')
+            ->count();
+
+        return [
+            'required' => $required,
+            'completed' => $completed,
+            'missing' => max(0, $required - $completed),
+            'ready' => $required > 0 && $completed === $required,
+        ];
     }
 
     /**

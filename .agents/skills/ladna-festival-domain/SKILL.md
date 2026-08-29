@@ -43,6 +43,8 @@ Follow the repository's established simplification pattern: direct foreign keys 
 - Store entry submissions and payment proofs privately and serve them only through account- and role-authorized controllers.
 - Keep participation charges separate from spectator admission orders and tickets.
 - Reuse existing score submission and locking behavior where it exists. Do not add a separate unlock ledger or audit subsystem.
+- Keep spreadsheet-style result administration source-based: score and comment cells write through the existing score-sheet action, penalty rows remain the only editable deductions, and totals, readiness, ties, and ranks stay derived rather than becoming a second result source of truth. Festival managers may inspect the full table, but only the account owner or an active category-scoped head judge may edit it.
+- Model special nominations as edition-scoped definitions assigned directly to reusable `FestivalParticipant` performers. Preserve assigned definitions and participants, allow multiple performers per nomination, and expose only explicitly enabled nomination metadata in the public Mini App; never expose assigned performer names there.
 - Keep public totals, ranks, and medals separate from private per-judge scores and comments.
 - Preserve immutable transaction, audit, and security facts already required by existing flows: charged or paid amounts, currency, provider identifiers and callbacks, fiscal records, notification payloads, activity logs, private-file review state, QR scans, and published result totals and ranks. These are operational evidence, not configuration snapshots. Do not add generalized history infrastructure around them.
 

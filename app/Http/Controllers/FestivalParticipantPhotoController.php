@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Enums\FestivalPortalRole;
 use App\Models\Account;
 use App\Models\FestivalEdition;
+use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalScoreSheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -48,6 +50,35 @@ class FestivalParticipantPhotoController extends Controller
         return $this->image($festivalParticipant->resolvedPhotoPath());
     }
 
+    public function judgeGuest(
+        Request $request,
+        string $accountSlug,
+        FestivalScoreSheet $festivalScoreSheet,
+        FestivalParticipant $festivalParticipant,
+    ): StreamedResponse {
+        $account = $request->attributes->get('festivalAccount');
+        $portalUser = $request->user('festival');
+        abort_unless(
+            $account instanceof Account
+            && $account->slug === $accountSlug
+            && $portalUser instanceof FestivalPortalUser
+            && $portalUser->account_id === $account->id
+            && $portalUser->role === FestivalPortalRole::Judge
+            && $portalUser->is_active
+            && $festivalScoreSheet->account_id === $account->id,
+            404,
+        );
+        $assignment = FestivalJudgeAssignment::query()
+            ->whereKey($festivalScoreSheet->festival_judge_assignment_id)
+            ->where('festival_portal_user_id', $portalUser->id)
+            ->where('is_active', true)
+            ->firstOrFail();
+        $this->assertJudgeParticipant($festivalScoreSheet, $festivalParticipant, $assignment);
+        $festivalParticipant->loadMissing('portalUser');
+
+        return $this->image($festivalParticipant->resolvedPhotoPath());
+    }
+
     public function staffProfile(
         Request $request,
         Account $account,
@@ -77,6 +108,27 @@ class FestivalParticipantPhotoController extends Controller
         return $this->image($festivalParticipant->resolvedPhotoPath());
     }
 
+    public function judgeStaff(
+        Request $request,
+        Account $account,
+        FestivalEdition $festivalEdition,
+        FestivalScoreSheet $festivalScoreSheet,
+        FestivalParticipant $festivalParticipant,
+    ): StreamedResponse {
+        abort_unless($festivalEdition->account_id === $account->id && $festivalScoreSheet->account_id === $account->id, 404);
+        abort_unless((bool) $request->user()?->can('judgeFestivals', $account), 403);
+        $assignment = FestivalJudgeAssignment::query()
+            ->whereKey($festivalScoreSheet->festival_judge_assignment_id)
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->where('user_id', $request->user()->id)
+            ->where('is_active', true)
+            ->firstOrFail();
+        $this->assertJudgeParticipant($festivalScoreSheet, $festivalParticipant, $assignment, $festivalEdition);
+        $festivalParticipant->loadMissing('portalUser');
+
+        return $this->image($festivalParticipant->resolvedPhotoPath());
+    }
+
     private function assertStaffAccess(
         Request $request,
         Account $account,
@@ -90,6 +142,23 @@ class FestivalParticipantPhotoController extends Controller
             404,
         );
         abort_unless((bool) $request->user()?->can('manageFestivalRegistrations', $account), 403);
+    }
+
+    private function assertJudgeParticipant(
+        FestivalScoreSheet $sheet,
+        FestivalParticipant $participant,
+        FestivalJudgeAssignment $assignment,
+        ?FestivalEdition $edition = null,
+    ): void {
+        abort_unless(
+            $sheet->festival_judge_assignment_id === $assignment->id
+            && $participant->account_id === $sheet->account_id
+            && $sheet->entry()
+                ->where('festival_edition_id', $edition?->id ?? $assignment->festival_edition_id)
+                ->whereHas('participants', fn ($query) => $query->whereKey($participant->id))
+                ->exists(),
+            404,
+        );
     }
 
     private function image(?string $path): StreamedResponse

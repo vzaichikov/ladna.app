@@ -7,12 +7,14 @@ use App\Http\Controllers\FestivalEntryController;
 use App\Http\Controllers\FestivalEntryStepController;
 use App\Http\Controllers\FestivalFileController;
 use App\Http\Controllers\FestivalJudgingController;
+use App\Http\Controllers\FestivalNominationAssignmentController;
 use App\Http\Controllers\FestivalParticipantController;
 use App\Http\Controllers\FestivalParticipantPhotoController;
 use App\Http\Controllers\FestivalPortalAuthController;
 use App\Http\Controllers\FestivalPortalController;
 use App\Http\Controllers\FestivalPortalTicketController;
 use App\Http\Controllers\FestivalPublicController;
+use App\Http\Controllers\FestivalResultTableController;
 use App\Http\Controllers\FestivalStreamAccessController;
 use App\Http\Controllers\FestivalSubmissionController;
 use App\Http\Controllers\FestivalTelegramLoginController;
@@ -123,9 +125,17 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
         });
 
         Route::middleware([EnsureFestivalPortalRole::class.':judge', EnsureFestivalProfileComplete::class])->group(function (): void {
-            Route::get('editions/{editionSlug}/judging', [FestivalJudgingController::class, 'guestIndex'])->name('judging.index');
-            Route::get('editions/{editionSlug}/judging/{festivalScoreSheet}', [FestivalJudgingController::class, 'editGuest'])->name('judging.edit');
-            Route::put('editions/{editionSlug}/judging/{festivalScoreSheet}', [FestivalJudgingController::class, 'updateGuest'])->middleware(PreventReadOnlyDemoMutations::class)->name('judging.update');
+            Route::get('judging/editions/{festivalEdition:id}', [FestivalJudgingController::class, 'guestIndex'])->whereNumber('festivalEdition')->name('judging.index');
+            Route::get('judging/editions/{festivalEdition:id}/results/nominations', [FestivalNominationAssignmentController::class, 'indexPortal'])->whereNumber('festivalEdition')->name('judging.results.nominations.index');
+            Route::put('judging/editions/{festivalEdition:id}/results/nominations/{festivalNomination}', [FestivalNominationAssignmentController::class, 'updatePortal'])->whereNumber('festivalEdition')->whereNumber('festivalNomination')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.results.nominations.update');
+            Route::get('judging/editions/{festivalEdition:id}/results/{festivalCategory}/table', [FestivalResultTableController::class, 'showPortal'])->whereNumber('festivalEdition')->whereNumber('festivalCategory')->name('judging.results.table');
+            Route::put('judging/editions/{festivalEdition:id}/results/{festivalCategory}/table/score-sheets/{festivalScoreSheet}', [FestivalResultTableController::class, 'updateScorePortal'])->whereNumber('festivalEdition')->whereNumber('festivalCategory')->whereNumber('festivalScoreSheet')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.results.table.score-sheets.update');
+            Route::post('judging/editions/{festivalEdition:id}/results/{festivalCategory}/table/penalties', [FestivalResultTableController::class, 'storePenaltyPortal'])->whereNumber('festivalEdition')->whereNumber('festivalCategory')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.results.table.penalties.store');
+            Route::put('judging/editions/{festivalEdition:id}/results/{festivalCategory}/table/penalties/{festivalPenalty}', [FestivalResultTableController::class, 'updatePenaltyPortal'])->whereNumber('festivalEdition')->whereNumber('festivalCategory')->whereNumber('festivalPenalty')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.results.table.penalties.update');
+            Route::delete('judging/editions/{festivalEdition:id}/results/{festivalCategory}/table/penalties/{festivalPenalty}', [FestivalResultTableController::class, 'destroyPenaltyPortal'])->whereNumber('festivalEdition')->whereNumber('festivalCategory')->whereNumber('festivalPenalty')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.results.table.penalties.destroy');
+            Route::get('judging/{festivalScoreSheet}/participants/{festivalParticipant}/photo', [FestivalParticipantPhotoController::class, 'judgeGuest'])->whereNumber('festivalScoreSheet')->whereNumber('festivalParticipant')->withoutScopedBindings()->name('judging.participants.photo');
+            Route::get('judging/{festivalScoreSheet}', [FestivalJudgingController::class, 'editGuest'])->whereNumber('festivalScoreSheet')->name('judging.edit');
+            Route::put('judging/{festivalScoreSheet}', [FestivalJudgingController::class, 'updateGuest'])->whereNumber('festivalScoreSheet')->middleware(PreventReadOnlyDemoMutations::class)->name('judging.update');
             Route::get('editions/{editionSlug}/battle-votes', [FestivalBattleVoteController::class, 'indexGuest'])->name('battle-votes.index');
             Route::put('editions/{editionSlug}/battle-votes/{festivalBattleMatch}', [FestivalBattleVoteController::class, 'storeGuest'])->middleware(PreventReadOnlyDemoMutations::class)->name('battle-votes.update');
         });

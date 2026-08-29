@@ -9544,6 +9544,589 @@ function initEventTicketPdfSharing(root = document) {
     });
 }
 
+function initFestivalJudgeList(root = document.querySelector('[data-festival-judge-list]')) {
+    if (!root || root.dataset.judgeListReady === 'true') {
+        return;
+    }
+
+    root.dataset.judgeListReady = 'true';
+    const refreshSeconds = Number(root.dataset.refreshSeconds || 5);
+    const error = root.querySelector('[data-judge-list-error]');
+    let polling = false;
+    let nextRefreshAt = Date.now() + (refreshSeconds * 1000);
+
+    const updateTimers = () => {
+        if (!root.isConnected) {
+            return;
+        }
+
+        const remainingRefreshSeconds = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
+        root.querySelectorAll('[data-judge-refresh-countdown]').forEach((countdown) => {
+            countdown.textContent = String(remainingRefreshSeconds);
+        });
+        root.querySelectorAll('[data-judge-timeline-countdown]').forEach((countdown) => {
+            const boundary = Date.parse(countdown.dataset.boundary ?? '');
+
+            if (Number.isNaN(boundary)) {
+                countdown.textContent = '--:--:--';
+
+                return;
+            }
+
+            const remainingSeconds = Math.max(0, Math.ceil((boundary - Date.now()) / 1000));
+            const hours = Math.floor(remainingSeconds / 3600);
+            const minutes = Math.floor((remainingSeconds % 3600) / 60);
+            const seconds = remainingSeconds % 60;
+            countdown.textContent = [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
+        });
+    };
+
+    const timer = window.setInterval(updateTimers, 1000);
+    const refresh = window.setInterval(async () => {
+        nextRefreshAt = Date.now() + (refreshSeconds * 1000);
+
+        if (document.hidden || polling || !root.isConnected) {
+            return;
+        }
+
+        polling = true;
+        const focusedSheetId = document.activeElement?.closest('[data-judge-sheet-card]')?.dataset.sheetId ?? null;
+
+        try {
+            const response = await fetch(root.dataset.fragmentUrl, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    Accept: 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(root.dataset.refreshError);
+            }
+
+            const template = document.createElement('template');
+            template.innerHTML = (await response.text()).trim();
+            const replacement = template.content.firstElementChild;
+
+            if (!replacement) {
+                throw new Error(root.dataset.refreshError);
+            }
+
+            window.clearInterval(timer);
+            window.clearInterval(refresh);
+            root.replaceWith(replacement);
+            createIcons({ icons });
+            initFestivalJudgeList(replacement);
+
+            if (focusedSheetId) {
+                replacement.querySelector(`[data-judge-sheet-card][data-sheet-id="${focusedSheetId}"]`)?.focus();
+            }
+        } catch (exception) {
+            if (error) {
+                error.textContent = exception instanceof Error ? exception.message : root.dataset.refreshError;
+                error.classList.remove('hidden');
+            }
+        } finally {
+            polling = false;
+        }
+    }, refreshSeconds * 1000);
+
+    updateTimers();
+}
+
+function initFestivalScoreSheets() {
+    document.querySelectorAll('[data-festival-score-sheet]').forEach((form) => {
+        if (form.dataset.scoreSheetReady === 'true') {
+            return;
+        }
+
+        form.dataset.scoreSheetReady = 'true';
+        const scoreInputs = [...form.querySelectorAll('[data-score-input]')];
+        const editableInputs = [...form.querySelectorAll('[data-score-input], [data-score-comment]')];
+        const total = form.querySelector('[data-score-total]');
+        const progress = form.querySelector('[data-score-progress]');
+        const readiness = form.querySelector('[data-score-readiness]');
+        const status = form.querySelector('[data-score-save-status]');
+        const saveButton = form.querySelector('[data-score-save-button]');
+        const savedFeedback = form.querySelector('[data-score-save-feedback]');
+        const fieldContainers = [...form.querySelectorAll('[data-score-autosave-field]')];
+        const scoreFormatter = new Intl.NumberFormat(document.documentElement.lang || undefined, { maximumFractionDigits: 4 });
+        const fieldRevisions = new WeakMap(fieldContainers.map((field) => [field, 0]));
+        const fieldFeedbackTimeouts = new WeakMap();
+        const dirtyFields = new Set();
+        let debounce = null;
+        let savedFeedbackTimeout = null;
+        let saving = false;
+        let pending = false;
+        let pendingSaveAll = false;
+
+        const setGlobalStatus = (label, tone = 'neutral') => {
+            if (!status) {
+                return;
+            }
+
+            status.textContent = label;
+            status.classList.toggle('text-amber-700', tone === 'changed');
+            status.classList.toggle('text-emerald-700', tone === 'saved');
+            status.classList.toggle('text-rose-700', tone === 'error');
+            status.classList.toggle('text-slate-500', tone === 'neutral');
+        };
+
+        const setFieldStatus = (field, label, tone = 'neutral') => {
+            const fieldStatus = field?.querySelector('[data-score-field-status]');
+
+            if (!fieldStatus) {
+                return;
+            }
+
+            fieldStatus.classList.remove('hidden');
+            fieldStatus.textContent = label;
+            fieldStatus.classList.toggle('text-amber-700', tone === 'changed');
+            fieldStatus.classList.toggle('text-emerald-700', tone === 'saved');
+            fieldStatus.classList.toggle('text-rose-700', tone === 'error');
+            fieldStatus.classList.toggle('text-slate-400', tone === 'neutral');
+            ['inline-flex', 'w-fit', 'rounded-full', 'bg-emerald-50', 'px-2', 'py-0.5', 'ring-1', 'ring-emerald-200'].forEach((className) => {
+                fieldStatus.classList.toggle(className, tone === 'saved');
+            });
+        };
+
+        const flashSavedField = (field) => {
+            if (!field) {
+                return;
+            }
+
+            window.clearTimeout(fieldFeedbackTimeouts.get(field));
+            const control = field.querySelector('[data-score-autosave-control]') ?? field;
+            control.classList.remove('border-emerald-300', 'ring-2', 'ring-emerald-200', 'bg-emerald-50/50');
+            void control.offsetWidth;
+            control.classList.add('border-emerald-300', 'ring-2', 'ring-emerald-200', 'bg-emerald-50/50');
+            fieldFeedbackTimeouts.set(field, window.setTimeout(() => {
+                control.classList.remove('border-emerald-300', 'ring-2', 'ring-emerald-200', 'bg-emerald-50/50');
+            }, 1600));
+        };
+
+        const partialFormData = (savingFields) => {
+            const formData = new FormData();
+            const appendControl = (control) => {
+                if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) || !control.name || control.disabled) {
+                    return;
+                }
+
+                if (control instanceof HTMLInputElement && ['checkbox', 'radio'].includes(control.type) && !control.checked) {
+                    return;
+                }
+
+                formData.append(control.name, control.value);
+            };
+
+            form.querySelectorAll('input[name="_token"], input[name="_method"]').forEach(appendControl);
+            savingFields.forEach((field) => {
+                field.querySelectorAll('input[name], textarea[name], select[name]').forEach(appendControl);
+                const criterionId = field.closest('[data-score-criterion-row]')?.querySelector('input[name$="[criterion_id]"]');
+
+                if (criterionId && !field.contains(criterionId)) {
+                    appendControl(criterionId);
+                }
+            });
+
+            return formData;
+        };
+
+        const flashSavedBorder = () => {
+            if (!savedFeedback) {
+                return;
+            }
+
+            window.clearTimeout(savedFeedbackTimeout);
+            savedFeedback.classList.remove('border-emerald-400', 'ring-4', 'ring-emerald-300/60');
+            void savedFeedback.offsetWidth;
+            savedFeedback.classList.add('border-emerald-400', 'ring-4', 'ring-emerald-300/60');
+            savedFeedbackTimeout = window.setTimeout(() => {
+                savedFeedback.classList.remove('border-emerald-400', 'ring-4', 'ring-emerald-300/60');
+            }, 1250);
+        };
+
+        const recalculate = () => {
+            let calculatedTotal = 0;
+            let completed = 0;
+
+            scoreInputs.forEach((input) => {
+                if (input.value.trim() === '') {
+                    return;
+                }
+
+                const score = Number(input.value);
+
+                if (!Number.isFinite(score)) {
+                    return;
+                }
+
+                completed++;
+                const weightedScore = score * Number(input.dataset.criterionWeight || 1) * Number(input.dataset.sectionWeight || 1);
+                calculatedTotal += input.dataset.contribution === 'deduction' ? -weightedScore : weightedScore;
+            });
+
+            const missing = Math.max(0, scoreInputs.length - completed);
+            const ready = scoreInputs.length > 0 && missing === 0;
+
+            if (total) {
+                total.textContent = scoreFormatter.format(calculatedTotal);
+            }
+
+            if (progress) {
+                progress.textContent = form.dataset.progressTemplate
+                    .replace('__completed__', String(completed))
+                    .replace('__required__', String(scoreInputs.length));
+            }
+
+            if (readiness) {
+                readiness.textContent = ready
+                    ? form.dataset.readyLabel
+                    : (missing === 1 ? form.dataset.missingOne : form.dataset.missingMany.replace('__missing__', String(missing)));
+                readiness.classList.toggle('bg-emerald-400', ready);
+                readiness.classList.toggle('text-emerald-950', ready);
+                readiness.classList.toggle('bg-rose-400', !ready);
+                readiness.classList.toggle('text-rose-950', !ready);
+            }
+        };
+
+        const save = async (saveAll = false) => {
+            window.clearTimeout(debounce);
+
+            if (saving) {
+                pending = true;
+                pendingSaveAll = pendingSaveAll || saveAll;
+
+                return;
+            }
+
+            if (!saveAll && dirtyFields.size === 0) {
+                return;
+            }
+
+            saving = true;
+            pending = false;
+            pendingSaveAll = false;
+            saveButton?.toggleAttribute('disabled', true);
+            const savingFields = saveAll ? fieldContainers : [...dirtyFields];
+            const savingRevisions = new Map(savingFields.map((field) => [field, fieldRevisions.get(field) ?? 0]));
+
+            setGlobalStatus(form.dataset.savingLabel);
+            savingFields.forEach((field) => setFieldStatus(field, form.dataset.savingLabel));
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: saveAll ? new FormData(form) : partialFormData(savingFields),
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const validationMessage = Object.values(payload.errors ?? {}).flat().find((message) => typeof message === 'string');
+                    throw new Error(validationMessage || payload.message || form.dataset.saveError);
+                }
+
+                savingFields.forEach((field) => {
+                    if ((fieldRevisions.get(field) ?? 0) !== savingRevisions.get(field)) {
+                        setFieldStatus(field, form.dataset.changedLabel, 'changed');
+
+                        return;
+                    }
+
+                    dirtyFields.delete(field);
+                    setFieldStatus(field, payload.message || form.dataset.savedLabel, 'saved');
+                    flashSavedField(field);
+                });
+
+                if (dirtyFields.size > 0) {
+                    recalculate();
+                    setGlobalStatus(form.dataset.changedLabel, 'changed');
+                } else {
+                    if (total && payload.total_score !== undefined) {
+                        total.textContent = scoreFormatter.format(Number(payload.total_score));
+                    }
+
+                    setGlobalStatus(payload.message || form.dataset.savedLabel, 'saved');
+                }
+
+                flashSavedBorder();
+            } catch (exception) {
+                const errorMessage = exception instanceof Error ? exception.message : form.dataset.saveError;
+                setGlobalStatus(errorMessage, 'error');
+                savingFields.forEach((field) => {
+                    const unchangedSinceRequest = (fieldRevisions.get(field) ?? 0) === savingRevisions.get(field);
+                    setFieldStatus(field, unchangedSinceRequest ? errorMessage : form.dataset.changedLabel, unchangedSinceRequest ? 'error' : 'changed');
+                });
+            } finally {
+                saving = false;
+                saveButton?.removeAttribute('disabled');
+
+                if (pending) {
+                    const saveAllPending = pendingSaveAll;
+                    pending = false;
+                    pendingSaveAll = false;
+                    save(saveAllPending);
+                }
+            }
+        };
+
+        editableInputs.forEach((input) => {
+            input.addEventListener('input', () => {
+                const field = input.closest('[data-score-autosave-field]');
+
+                if (field) {
+                    fieldRevisions.set(field, (fieldRevisions.get(field) ?? 0) + 1);
+                    dirtyFields.add(field);
+                    setFieldStatus(field, form.dataset.changedLabel, 'changed');
+                }
+
+                setGlobalStatus(form.dataset.changedLabel, 'changed');
+                recalculate();
+                window.clearTimeout(debounce);
+                debounce = window.setTimeout(save, 650);
+            });
+        });
+        form.querySelectorAll('[data-score-adjust]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const input = button.closest('[data-score-stepper]')?.querySelector('[data-score-input]');
+
+                if (!(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                const direction = Number(button.dataset.scoreAdjust);
+                const step = Number(input.step) || 0.5;
+                const minimum = Number(input.min) || 0;
+                const maximum = Number(input.max);
+                const current = input.value.trim() === '' ? null : Number(input.value);
+                const unclamped = current === null
+                    ? (direction > 0 ? minimum + step : minimum)
+                    : current + (direction * step);
+                const next = Math.min(Number.isFinite(maximum) ? maximum : unclamped, Math.max(minimum, unclamped));
+
+                input.value = String(Math.round(next * 100) / 100);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.focus();
+            });
+        });
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            save(true);
+        });
+        recalculate();
+    });
+}
+
+function initFestivalRealtimeResults(root = document.querySelector('[data-festival-realtime-results]')) {
+    if (!root || root.dataset.realtimeResultsReady === 'true') {
+        return;
+    }
+
+    root.dataset.realtimeResultsReady = 'true';
+    const refreshSeconds = Math.max(1, Number(root.dataset.refreshSeconds) || 5);
+    const error = root.querySelector('[data-results-refresh-error]');
+    let nextRefreshAt = Date.now() + (refreshSeconds * 1000);
+    let polling = false;
+
+    const updateCountdown = () => {
+        const remainingSeconds = Math.max(0, Math.ceil((nextRefreshAt - Date.now()) / 1000));
+        root.querySelectorAll('[data-results-refresh-countdown]').forEach((countdown) => {
+            countdown.textContent = String(remainingSeconds);
+        });
+    };
+
+    const timer = window.setInterval(updateCountdown, 1000);
+    const refresh = window.setInterval(async () => {
+        nextRefreshAt = Date.now() + (refreshSeconds * 1000);
+
+        if (document.hidden || polling || !root.isConnected) {
+            return;
+        }
+
+        polling = true;
+
+        try {
+            const response = await fetch(root.dataset.fragmentUrl, {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    Accept: 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(root.dataset.refreshError);
+            }
+
+            const template = document.createElement('template');
+            template.innerHTML = (await response.text()).trim();
+            const replacement = template.content.firstElementChild;
+
+            if (!replacement) {
+                throw new Error(root.dataset.refreshError);
+            }
+
+            window.clearInterval(timer);
+            window.clearInterval(refresh);
+            root.replaceWith(replacement);
+            createIcons({ icons });
+            initFestivalRealtimeResults(replacement);
+        } catch (exception) {
+            if (error) {
+                error.textContent = exception instanceof Error ? exception.message : root.dataset.refreshError;
+                error.classList.remove('hidden');
+            }
+        } finally {
+            polling = false;
+        }
+    }, refreshSeconds * 1000);
+
+    updateCountdown();
+}
+
+function initFestivalResultTable(root = document.querySelector('[data-festival-result-table]')) {
+    if (!root || root.dataset.resultTableReady === 'true') {
+        return;
+    }
+
+    root.dataset.resultTableReady = 'true';
+    const errorBox = root.querySelector('[data-result-table-error]');
+
+    const save = async (form) => {
+        if (form.dataset.saving === 'true') {
+            form.dataset.saveQueued = 'true';
+            return;
+        }
+
+        form.dataset.saving = 'true';
+        form.dataset.saveQueued = 'false';
+        const controls = [...form.querySelectorAll('[data-result-table-control]')];
+        controls.forEach((control) => control.classList.add('ring-2', 'ring-amber-300'));
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || root.dataset.saveError);
+            }
+
+            const total = root.querySelector(`[data-sheet-total="${payload.sheet_id}"]`);
+            if (total) {
+                total.textContent = payload.sheet_total;
+            }
+            const summaryRows = root.querySelector('[data-result-summary-rows]');
+            if (summaryRows && payload.summary_html) {
+                summaryRows.innerHTML = payload.summary_html;
+            }
+            controls.forEach((control) => {
+                control.dataset.savedValue = control.value;
+                control.classList.remove('ring-amber-300');
+                control.classList.add('ring-emerald-300');
+                window.setTimeout(() => control.classList.remove('ring-2', 'ring-emerald-300'), 900);
+            });
+            errorBox?.classList.add('hidden');
+        } catch (error) {
+            controls.forEach((control) => {
+                control.classList.remove('ring-amber-300');
+                control.classList.add('ring-rose-400');
+            });
+            if (errorBox) {
+                errorBox.textContent = error instanceof Error ? error.message : root.dataset.saveError;
+                errorBox.classList.remove('hidden');
+            }
+        } finally {
+            form.dataset.saving = 'false';
+            if (form.dataset.saveQueued === 'true') {
+                save(form);
+            }
+        }
+    };
+
+    root.querySelectorAll('form[data-result-table-form]').forEach((form) => {
+        const control = form.querySelector('[data-result-table-control]');
+        if (!control) {
+            return;
+        }
+        control.dataset.savedValue = control.value;
+        const persist = () => {
+            if (control.value !== control.dataset.savedValue) {
+                save(form);
+            }
+        };
+        control.addEventListener('change', persist);
+        control.addEventListener('blur', persist);
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            persist();
+        });
+    });
+}
+
+function initFestivalNominationAssignments(root = document.querySelector('[data-festival-nomination-assignments]')) {
+    if (!root || root.dataset.nominationAssignmentsReady === 'true') {
+        return;
+    }
+
+    root.dataset.nominationAssignmentsReady = 'true';
+    const closeModal = (modal) => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+    };
+    const filterCandidates = (modal) => {
+        const search = (modal.querySelector('[data-nomination-participant-search]')?.value || '').trim().toLocaleLowerCase();
+        const categoryId = modal.querySelector('[data-nomination-category-filter]')?.value || '';
+        let visible = 0;
+        modal.querySelectorAll('[data-nomination-participant-candidate]').forEach((candidate) => {
+            const categoryIds = (candidate.dataset.categoryIds || '').split(',');
+            const matches = (!search || (candidate.dataset.name || '').includes(search))
+                && (!categoryId || categoryIds.includes(categoryId));
+            candidate.classList.toggle('hidden', !matches);
+            visible += matches ? 1 : 0;
+        });
+        modal.querySelector('[data-nomination-filter-empty]')?.classList.toggle('hidden', visible > 0);
+    };
+
+    root.querySelectorAll('[data-nomination-modal-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = document.getElementById(button.dataset.nominationModalOpen);
+            modal?.classList.remove('hidden');
+            modal?.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+            modal?.querySelector('[data-nomination-participant-search]')?.focus();
+        });
+    });
+    root.querySelectorAll('[data-nomination-modal]').forEach((modal) => {
+        modal.querySelectorAll('[data-nomination-modal-close]').forEach((button) => button.addEventListener('click', () => closeModal(modal)));
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal(modal);
+            }
+        });
+        modal.querySelector('[data-nomination-participant-search]')?.addEventListener('input', () => filterCandidates(modal));
+        modal.querySelector('[data-nomination-category-filter]')?.addEventListener('change', () => filterCandidates(modal));
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeModal(root.querySelector('[data-nomination-modal]:not(.hidden)'));
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initFestivalTelegramMiniApp();
     initEventAttendance();
@@ -9557,6 +10140,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalSceneTabs();
     initFestivalProgram();
     initFestivalTimeline();
+    initFestivalJudgeList();
+    initFestivalScoreSheets();
+    initFestivalRealtimeResults();
+    initFestivalResultTable();
+    initFestivalNominationAssignments();
     initEventScanner();
     initEventForms();
     initEventTicketCheckouts();

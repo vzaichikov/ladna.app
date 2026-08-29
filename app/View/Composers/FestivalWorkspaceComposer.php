@@ -32,6 +32,12 @@ class FestivalWorkspaceComposer
             ->where('user_id', request()->user()?->id)
             ->where('is_active', true)
             ->exists();
+        $hasHeadJudgeAssignment = FestivalJudgeAssignment::query()
+            ->where('festival_edition_id', $edition->id)
+            ->where('user_id', request()->user()?->id)
+            ->where('is_head_judge', true)
+            ->where('is_active', true)
+            ->exists();
         $active = $this->activeItem();
 
         if ($permissions['event_festival_staff']) {
@@ -90,7 +96,8 @@ class FestivalWorkspaceComposer
                     $this->item('judging-score-sheets', 'dashboard.accounts.festivals.judging.score-sheets.index', 'festival_score_sheets', 'clipboard-check', $permissions['judging'], $active, $account, $edition),
                     $this->item('judging-battle-votes', 'dashboard.accounts.festivals.judging.battle-votes.index', 'festival_battle_voting', 'check-circle', $hasJudgeAssignment, $active, $account, $edition),
                     $this->item('judging-battles', 'dashboard.accounts.festivals.judging.battles.index', 'festival_battles', 'git-branch', $permissions['manage'], $active, $account, $edition),
-                    $this->item('judging-results', 'dashboard.accounts.festivals.judging.results.index', 'festival_results', 'trophy', $permissions['manage'], $active, $account, $edition),
+                    $this->item('judging-results', 'dashboard.accounts.festivals.judging.results.index', 'festival_results', 'trophy', $permissions['manage'] || $hasHeadJudgeAssignment, $active, $account, $edition),
+                    $this->item('judging-nominations', 'dashboard.accounts.festivals.judging.results.nominations.index', 'festival_nomination_assignments', 'award', $permissions['manage'] || $hasHeadJudgeAssignment, $active, $account, $edition),
                 ],
             ],
             [
@@ -99,6 +106,7 @@ class FestivalWorkspaceComposer
                     $this->item('settings', 'dashboard.accounts.festivals.settings', 'festival_settings_overview', 'settings', $permissions['manage'] || $permissions['schedule'] || $permissions['finance'], $active, $account, $edition),
                     $this->item('settings-stages', 'dashboard.accounts.festivals.settings.stages', 'festival_scenes', 'settings', $permissions['schedule'], $active, $account, $edition),
                     $this->item('settings-directions', 'dashboard.accounts.festivals.settings.directions', 'festival_taxonomy_directions', 'settings', $permissions['manage'], $active, $account, $edition),
+                    $this->item('settings-nominations', 'dashboard.accounts.festivals.settings.nominations', 'festival_nominations', 'award', $permissions['manage'], $active, $account, $edition),
                     $this->item('settings-categories', 'dashboard.accounts.festivals.settings.categories', 'festival_categories', 'settings', $permissions['manage'], $active, $account, $edition),
                     $this->item('settings-workflows', 'dashboard.accounts.festivals.settings.workflows', 'festival_registration_workflows', 'settings', $permissions['manage'], $active, $account, $edition),
                     $this->item('settings-requirements', 'dashboard.accounts.festivals.settings.requirements', 'festival_registration_fields', 'settings', $permissions['manage'], $active, $account, $edition),
@@ -154,6 +162,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.score-sheets.*', 'dashboard.accounts.festivals.score-sheets.*') => 'judging-score-sheets',
             request()->routeIs('dashboard.accounts.festivals.judging.battle-votes.*') => 'judging-battle-votes',
             request()->routeIs('dashboard.accounts.festivals.judging.battles.*') => 'judging-battles',
+            request()->routeIs('dashboard.accounts.festivals.judging.results.nominations.*') => 'judging-nominations',
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
             request()->routeIs('dashboard.accounts.festivals.scanner*') => ($permissions['event_festival_staff'] ?? false) ? 'scanner' : 'tickets',
             request()->routeIs('dashboard.accounts.festivals.attendance*', 'dashboard.accounts.festivals.entrance.*') => 'entrance',
@@ -162,6 +171,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',
             request()->routeIs('dashboard.accounts.festivals.settings.stages', 'dashboard.accounts.festivals.stages.*') => 'settings-stages',
             request()->routeIs('dashboard.accounts.festivals.settings.directions', 'dashboard.accounts.festivals.directions.*') => 'settings-directions',
+            request()->routeIs('dashboard.accounts.festivals.settings.nominations', 'dashboard.accounts.festivals.nominations.*') => 'settings-nominations',
             request()->routeIs('dashboard.accounts.festivals.settings.categories', 'dashboard.accounts.festivals.categories.*') => 'settings-categories',
             request()->routeIs('dashboard.accounts.festivals.settings.workflows', 'dashboard.accounts.festivals.workflows.*', 'dashboard.accounts.festivals.workflow-steps.*') => 'settings-workflows',
             request()->routeIs('dashboard.accounts.festivals.settings.requirements', 'dashboard.accounts.festivals.requirements.*') => 'settings-requirements',

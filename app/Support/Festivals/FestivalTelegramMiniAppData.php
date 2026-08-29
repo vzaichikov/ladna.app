@@ -43,6 +43,7 @@ class FestivalTelegramMiniAppData
                 'mobileCoverMedia',
                 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
                 'documents' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
+                'nominations' => fn ($query) => $query->where('is_active', true)->where('show_in_mini_app', true),
                 'results' => fn ($query) => $query->whereNotNull('published_at')->with('entry.category'),
                 'categories' => fn ($query) => $query
                     ->where('is_active', true)
@@ -196,6 +197,13 @@ class FestivalTelegramMiniAppData
             ])->filter(fn (array $section): bool => filled($section['body_html']))->values()->all(),
             'category_groups' => $this->categoryGroups($edition),
             'rubrics' => $this->rubrics($edition),
+            'nominations' => $edition->nominations->map(fn ($nomination): array => [
+                'id' => $nomination->id,
+                'name' => $nomination->name,
+                'description' => $nomination->description,
+                'presented_by' => $nomination->presented_by,
+                'prize' => $nomination->prize,
+            ])->all(),
             'documents' => $edition->documents->map(fn ($document): array => [
                 'id' => $document->id,
                 'title' => $document->title,

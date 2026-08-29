@@ -2,11 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\BuildFestivalResults;
 use App\Actions\Festivals\FestivalNotificationOutbox;
-use App\Actions\Festivals\PublishFestivalResults;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
-use App\Actions\Festivals\UnlockFestivalScoreSheet;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalScoreSheetStatus;
 use App\Models\Account;
@@ -17,6 +16,7 @@ use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalNotification;
 use App\Models\FestivalPenalty;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalResult;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalScoreSheet;
@@ -89,14 +89,14 @@ class FestivalOperationsAndJudgingTest extends TestCase
             'comments' => 'Private judge note',
             'scores' => [['criterion_id' => $criterion->id, 'score' => 8.5, 'comment' => 'Private criterion note']],
         ], $judge);
-        $this->assertSame(FestivalScoreSheetStatus::Draft, $saved->status);
+        $this->assertSame(FestivalScoreSheetStatus::Submitted, $saved->status);
         $this->assertSame('8.5000', $saved->total_score);
 
         $resaved = app(SaveFestivalScoreSheet::class)->execute($saved, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]]], $judge);
         $this->assertSame('9.0000', $resaved->total_score);
     }
 
-    public function test_submitted_score_sheet_requires_audited_staff_unlock_before_correction(): void
+    public function test_ready_score_sheet_remains_editable_and_becomes_incomplete_when_a_score_is_cleared(): void
     {
         Queue::fake();
         [$account, $edition, $portalUser, $category] = $this->festival();
@@ -112,35 +112,35 @@ class FestivalOperationsAndJudgingTest extends TestCase
         app(SaveFestivalScoreSheet::class)->execute($secondSheet, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
         FestivalPenalty::query()->create(['account_id' => $account->id, 'festival_entry_id' => $secondEntry->id, 'kind' => 'deduction', 'points' => 1, 'reason' => 'Time limit', 'created_by' => $judge->id]);
 
-        app(PublishFestivalResults::class)->execute($edition, $category, $judge);
-        $this->assertSame(1, $firstEntry->result()->firstOrFail()->rank);
-        $this->assertSame(2, $secondEntry->result()->firstOrFail()->rank);
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame($firstEntry->id, $results['rows'][0]['entry']->id);
+        $this->assertSame(1, $results['rows'][0]['rank']);
+        $this->assertSame($secondEntry->id, $results['rows'][1]['entry']->id);
+        $this->assertSame(2, $results['rows'][1]['rank']);
 
-        $this->get(route('public.festivals.show', [$account->slug, $edition->slug]))->assertOk()->assertSee($firstEntry->entry_name)->assertDontSee('SECRET-JUDGE-COMMENT')->assertDontSee('SECRET-CRITERION-COMMENT');
-        $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.show', [$account->slug, $firstEntry]))->assertOk()->assertSee('SECRET-CRITERION-COMMENT');
-
-        try {
-            app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
-            $this->fail('Submitted score sheet was changed without a staff unlock.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('scores', $exception->errors());
-        }
-
-        $manager = User::factory()->create();
-        $reopened = app(UnlockFestivalScoreSheet::class)->execute($firstSheet->refresh(), $manager, 'Penalty judge corrected a protocol deduction.');
-        $this->assertSame(FestivalScoreSheetStatus::Draft, $reopened->status);
-        $this->assertNull($reopened->submitted_at);
+        $corrected = app(SaveFestivalScoreSheet::class)->execute($firstSheet->refresh(), $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]]], $judge);
+        $this->assertSame('10.0000', $corrected->total_score);
+        $this->assertSame(FestivalScoreSheetStatus::Submitted, $corrected->status);
+        $recalculated = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame('10.0000', $recalculated['rows'][0]['total']);
         $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $firstEntry->id]);
         $this->assertDatabaseMissing('festival_results', ['festival_entry_id' => $secondEntry->id]);
         $this->assertDatabaseHas('festival_activity_logs', [
             'subject_type' => FestivalScoreSheet::class,
             'subject_id' => $firstSheet->id,
-            'action' => 'score_sheet.unlocked',
+            'action' => 'score_sheet.saved',
         ]);
 
-        $corrected = app(SaveFestivalScoreSheet::class)->execute($reopened, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 10]], 'submit' => true], $judge);
-        $this->assertSame('10.0000', $corrected->total_score);
-        $this->assertSame(FestivalScoreSheetStatus::Submitted, $corrected->status);
+        $incomplete = app(SaveFestivalScoreSheet::class)->execute($corrected, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => null]]], $judge);
+        $this->assertSame('0.0000', $incomplete->total_score);
+        $this->assertSame(FestivalScoreSheetStatus::Draft, $incomplete->status);
+        $this->assertNull($incomplete->submitted_at);
+        $this->assertDatabaseHas('festival_criterion_scores', [
+            'festival_score_sheet_id' => $firstSheet->id,
+            'festival_rubric_criterion_id' => $criterion->id,
+            'score' => null,
+            'comment' => 'SECRET-CRITERION-COMMENT',
+        ]);
     }
 
     public function test_rubric_update_resets_affected_score_sheets_and_results(): void
@@ -154,7 +154,14 @@ class FestivalOperationsAndJudgingTest extends TestCase
         $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
         [$entry, $sheet, $criterion] = $this->sheet($account, $edition, $portalUser, $category, $assignment);
         app(SaveFestivalScoreSheet::class)->execute($sheet, $assignment, ['scores' => [['criterion_id' => $criterion->id, 'score' => 9]], 'submit' => true], $judge);
-        app(PublishFestivalResults::class)->execute($edition, $category, $owner);
+        FestivalResult::query()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_entry_id' => $entry->id,
+            'total_score' => 9,
+            'rank' => 1,
+            'published_at' => now(),
+        ]);
 
         $this->actingAs($owner)->put(route('dashboard.accounts.festivals.judging.criteria.update', [$account, $edition, $sheet->rubric]), [
             'festival_category_id' => $category->id,

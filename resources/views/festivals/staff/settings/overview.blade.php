@@ -18,6 +18,7 @@
         @php($cards = [
             ['stages', 'festival_scenes', 'festival_scenes_card_copy', $permissions['schedule']],
             ['directions', 'festival_taxonomy_directions', 'festival_directions_card_copy', $permissions['manage']],
+            ['nominations', 'festival_nominations', 'festival_nominations_card_copy', $permissions['manage']],
             ['categories', 'festival_categories', 'festival_categories_card_copy', $permissions['manage']],
             ['workflows', 'festival_registration_workflows', 'festival_workflows_card_copy', $permissions['manage']],
             ['requirements', 'festival_registration_fields', 'festival_registration_fields_card_copy', $permissions['manage']],

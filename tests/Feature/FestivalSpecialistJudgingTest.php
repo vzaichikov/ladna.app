@@ -2,8 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Actions\Festivals\BuildFestivalResultPreview;
-use App\Actions\Festivals\PublishFestivalResults;
+use App\Actions\Festivals\BuildFestivalResults;
 use App\Actions\Festivals\SaveFestivalScoreSheet;
 use App\Enums\AccountRole;
 use App\Enums\StudioPermission;
@@ -20,8 +19,7 @@ use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
-use Illuminate\Support\Facades\Queue;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class FestivalSpecialistJudgingTest extends TestCase
@@ -30,7 +28,6 @@ class FestivalSpecialistJudgingTest extends TestCase
 
     public function test_specialists_score_only_assigned_sections_and_results_combine_awards_and_deductions(): void
     {
-        Queue::fake();
         [$account, $edition, $category, $owner] = $this->festival();
         [$rubric, $technique, $artistry, $deductions] = $this->rubric($account, $edition, $category);
         [$technicalJudge, $technicalAssignment] = $this->judge($account, $edition, $category, [$technique]);
@@ -59,6 +56,12 @@ class FestivalSpecialistJudgingTest extends TestCase
             'scores' => [['criterion_id' => $techniqueCriterion->id, 'score' => '8.00']],
             'submit' => true,
         ], $technicalJudge);
+        $partial = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame('8.0000', $partial['rows']->sole()['total']);
+        $this->assertSame(1, $partial['completed']);
+        $this->assertSame(2, $partial['missing']);
+        $this->assertFalse($partial['ready']);
+
         app(SaveFestivalScoreSheet::class)->execute($artisticSheet, $artisticAssignment, [
             'scores' => [
                 ['criterion_id' => $artistryCriterion->id, 'score' => '6.00'],
@@ -74,28 +77,22 @@ class FestivalSpecialistJudgingTest extends TestCase
             'created_by' => $owner->id,
         ]);
 
-        $preview = app(BuildFestivalResultPreview::class)->execute($edition, $category);
-        $this->assertSame('11.0000', $preview['rows']->sole()['total']);
-        $this->assertSame('14.0000', $preview['rows']->sole()['award_total']);
-        $this->assertSame('2.0000', $preview['rows']->sole()['deduction_total']);
-        $this->assertSame('1.0000', $preview['rows']->sole()['ad_hoc_penalties']);
-
-        app(PublishFestivalResults::class)->execute($edition, $category, $owner);
-        $result = $entry->result()->firstOrFail();
-        $this->assertSame('11.0000', $result->total_score);
-        $this->assertSame('14.0000', $result->publication_details['award_total']);
-        $this->assertSame('2.0000', $result->publication_details['rubric_deductions']);
-        $this->assertSame('1.0000', $result->publication_details['ad_hoc_penalties']);
-        $this->assertNull($result->publication_details['tie_break']);
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame('11.0000', $results['rows']->sole()['total']);
+        $this->assertSame('14.0000', $results['rows']->sole()['award_total']);
+        $this->assertSame('2.0000', $results['rows']->sole()['deduction_total']);
+        $this->assertSame('1.0000', $results['rows']->sole()['ad_hoc_penalties']);
+        $this->assertTrue($results['ready']);
+        $this->assertDatabaseCount('festival_results', 0);
         $this->assertSame('8.0000', $technicalSheet->refresh()->total_score);
         $this->assertSame('4.0000', $artisticSheet->refresh()->total_score);
         $this->assertSame($rubric->id, $technicalSheet->festival_rubric_id);
     }
 
-    public function test_preparation_and_publication_reject_uncovered_sections(): void
+    public function test_preparation_rejects_uncovered_sections_and_results_show_the_setup_issue(): void
     {
         [$account, $edition, $category, $owner] = $this->festival();
-        [, $technique, $artistry] = $this->rubric($account, $edition, $category);
+        [, $technique, $artistry, $deductions] = $this->rubric($account, $edition, $category);
         $this->judge($account, $edition, $category, [$technique]);
         $this->judge($account, $edition, $category, [$artistry]);
         $this->entry($account, $edition, $category, 'Uncovered deductions');
@@ -106,15 +103,12 @@ class FestivalSpecialistJudgingTest extends TestCase
             ->assertSessionHasErrors('category');
         $this->assertDatabaseCount('festival_score_sheets', 0);
 
-        try {
-            app(BuildFestivalResultPreview::class)->execute($edition, $category);
-            $this->fail('An uncovered rubric was accepted for result preview.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('category', $exception->errors());
-        }
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertFalse($results['ready']);
+        $this->assertTrue($results['issues']->contains(fn (string $issue): bool => str_contains($issue, $deductions->name)));
     }
 
-    public function test_judging_preparation_and_preview_enforce_the_category_minimum(): void
+    public function test_judging_preparation_and_results_enforce_the_category_minimum(): void
     {
         [$account, $edition, $category, $owner] = $this->festival();
         $category->update(['minimum_entries_to_run' => 5]);
@@ -129,12 +123,9 @@ class FestivalSpecialistJudgingTest extends TestCase
             ->assertSessionHasErrors('category');
         $this->assertDatabaseCount('festival_score_sheets', 0);
 
-        try {
-            app(BuildFestivalResultPreview::class)->execute($edition, $category);
-            $this->fail('Result preview ignored the category minimum.');
-        } catch (ValidationException $exception) {
-            $this->assertArrayHasKey('category', $exception->errors());
-        }
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertFalse($results['ready']);
+        $this->assertTrue($results['issues']->contains(__('app.festival_category_minimum_entries_required', ['minimum' => 5])));
     }
 
     public function test_multiple_judges_on_one_criterion_are_averaged_before_weighting(): void
@@ -169,14 +160,13 @@ class FestivalSpecialistJudgingTest extends TestCase
             ], $judge);
         }
 
-        $row = app(BuildFestivalResultPreview::class)->execute($edition, $category)['rows']->sole();
+        $row = app(BuildFestivalResults::class)->execute($edition, $category)['rows']->sole();
         $this->assertSame('8.0150', $row['award_total']);
         $this->assertSame('8.0150', $row['total']);
     }
 
-    public function test_exact_ties_require_a_reasoned_jury_order_without_changing_scores(): void
+    public function test_exact_realtime_ties_share_the_same_rank_without_publication(): void
     {
-        Queue::fake();
         [$account, $edition, $category, $owner] = $this->festival();
         [, $technique, $artistry] = $this->rubric($account, $edition, $category, false);
         [$judge, $assignment] = $this->judge($account, $edition, $category, [$technique, $artistry]);
@@ -197,37 +187,31 @@ class FestivalSpecialistJudgingTest extends TestCase
             ], $judge);
         }
 
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertSame([1, 1], $results['rows']->pluck('rank')->all());
+        $this->assertTrue($results['rows']->every(fn (array $row): bool => $row['tied']));
+
+        $showUrl = route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $category]);
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.judging.results.preview', [$account, $edition, $category]))
+            ->get($showUrl)
             ->assertOk()
             ->assertSee('First tied performance')
-            ->assertSee('Second tied performance');
+            ->assertSee('Second tied performance')
+            ->assertSee('data-festival-realtime-results', false)
+            ->assertSee('data-refresh-seconds="5"', false)
+            ->assertDontSee('tie_breaks[', false);
         $this->actingAs($owner)
-            ->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $category]))
-            ->assertSessionHasErrors('tie_breaks');
+            ->get($showUrl.'?fragment=1')
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertSee('data-festival-realtime-results', false)
+            ->assertDontSee('<html', false);
 
-        $this->actingAs($owner)
-            ->post(route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $category]), [
-                'tie_breaks' => [[
-                    'total' => '8.0000',
-                    'orders' => [$firstEntry->id => 2, $secondEntry->id => 1],
-                    'reason' => 'The jury preferred the second performance overall.',
-                ]],
-            ])
-            ->assertRedirect(route('dashboard.accounts.festivals.judging.results.index', [$account, $edition]))
-            ->assertSessionHasNoErrors();
-
-        $this->assertSame(2, $firstEntry->result()->firstOrFail()->rank);
-        $secondResult = $secondEntry->result()->firstOrFail();
-        $this->assertSame(1, $secondResult->rank);
-        $this->assertSame('8.0000', $secondResult->total_score);
-        $this->assertSame(
-            [$secondEntry->id, $firstEntry->id],
-            $secondResult->publication_details['tie_break']['ordered_entry_ids'],
-        );
-        $this->assertSame('The jury preferred the second performance overall.', $secondResult->publication_details['tie_break']['reason']);
+        $this->assertFalse(Route::has('dashboard.accounts.festivals.judging.results.preview'));
+        $this->assertFalse(Route::has('dashboard.accounts.festivals.judging.results.publish'));
+        $this->assertDatabaseCount('festival_results', 0);
         $this->assertDatabaseHas('festival_criterion_scores', ['festival_rubric_criterion_id' => $criterion->id, 'score' => 8]);
-        $this->assertDatabaseHas('festival_activity_logs', ['subject_id' => $category->id, 'action' => 'results.published']);
+        $this->assertDatabaseMissing('festival_activity_logs', ['subject_id' => $category->id, 'action' => 'results.published']);
     }
 
     public function test_rubric_updates_preserve_ids_and_block_deleting_assigned_sections(): void

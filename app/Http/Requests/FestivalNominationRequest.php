@@ -6,7 +6,7 @@ use App\Models\Account;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UnlockFestivalScoreSheetRequest extends FormRequest
+class FestivalNominationRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -26,7 +26,12 @@ class UnlockFestivalScoreSheetRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'reason' => ['required', 'string', 'min:3', 'max:2000'],
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'presented_by' => ['nullable', 'string', 'max:255'],
+            'prize' => ['nullable', 'string', 'max:1000'],
+            'is_active' => ['sometimes', 'boolean'],
+            'show_in_mini_app' => ['sometimes', 'boolean'],
         ];
     }
 }

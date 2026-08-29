@@ -104,10 +104,10 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
             ->assertOk()
             ->assertSee($edition->title)
             ->assertDontSee('Hidden inactive assignment')
-            ->assertSee(route('festival.portal.judging.index', [$account->slug, $edition->slug]), false)
+            ->assertSee(route('festival.portal.judging.index', [$account->slug, $edition]), false)
             ->assertSee(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]), false);
 
-        $this->get(route('festival.portal.judging.index', [$account->slug, $edition->slug]))
+        $this->get(route('festival.portal.judging.index', [$account->slug, $edition]))
             ->assertOk()
             ->assertSee('max-w-6xl', false);
         $this->get(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]))
@@ -121,7 +121,7 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
         $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
 
         $this->actingAs($judge, 'festival')
-            ->get(route('festival.portal.judging.index', [$account->slug, $edition->slug]))
+            ->get(route('festival.portal.judging.index', [$account->slug, $edition]))
             ->assertNotFound();
 
         FestivalJudgeAssignment::query()->create([
@@ -153,7 +153,7 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
             'is_active' => true,
         ]);
         $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
-        $destination = route('festival.portal.judging.index', [$account->slug, $edition->slug]);
+        $destination = route('festival.portal.judging.index', [$account->slug, $edition]);
 
         $this->get($destination)
             ->assertRedirect(route('festival.judge.login', $account->slug));

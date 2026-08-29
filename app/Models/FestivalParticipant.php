@@ -71,7 +71,8 @@ class FestivalParticipant extends Model
     {
         return $this->entries()->exists()
             || $this->helperRequirements()->exists()
-            || $this->entrancePasses()->exists();
+            || $this->entrancePasses()->exists()
+            || $this->nominations()->exists();
     }
 
     public function account(): BelongsTo
@@ -92,6 +93,13 @@ class FestivalParticipant extends Model
     public function entries(): BelongsToMany
     {
         return $this->belongsToMany(FestivalEntry::class, 'festival_entry_participant')->withPivot(['account_id', 'sort_order']);
+    }
+
+    public function nominations(): BelongsToMany
+    {
+        return $this->belongsToMany(FestivalNomination::class, 'festival_nomination_participant')
+            ->withPivot('account_id')
+            ->withTimestamps();
     }
 
     public function helperRequirements(): BelongsToMany

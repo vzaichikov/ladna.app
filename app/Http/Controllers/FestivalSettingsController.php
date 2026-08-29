@@ -21,6 +21,7 @@ class FestivalSettingsController extends Controller
 
         $counts = [
             'directions' => $permissions['manage'] ? $festivalEdition->directions()->count() : null,
+            'nominations' => $permissions['manage'] ? $festivalEdition->nominations()->count() : null,
             'stages' => $permissions['schedule'] ? $festivalEdition->stages()->count() : null,
             'categories' => $permissions['manage'] ? $festivalEdition->categories()->count() : null,
             'workflows' => $permissions['manage'] ? $festivalEdition->workflows()->count() : null,

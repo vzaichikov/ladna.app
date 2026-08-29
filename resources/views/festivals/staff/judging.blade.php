@@ -51,16 +51,10 @@
 
         <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
             <h2 class="text-xl font-semibold">{{ __('app.festival_results') }}</h2>
-            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_results_publish_copy') }}</p>
-            <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                @foreach ($edition->categories as $category)
-                    <form method="POST" action="{{ route('dashboard.accounts.festivals.judging.results.publish', [$account, $edition, $category]) }}" class="flex items-center justify-between gap-3 rounded-xl border border-stone-200 p-4">
-                        @csrf
-                        <strong>{{ $category->name }}</strong>
-                        <x-ui.button type="submit" size="sm" variant="secondary">{{ __('app.publish') }}</x-ui.button>
-                    </form>
-                @endforeach
-            </div>
+            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_results_realtime_copy') }}</p>
+            <x-ui.button :href="route('dashboard.accounts.festivals.judging.results.index', [$account, $edition])" class="mt-4" variant="secondary">
+                {{ __('app.festival_view_results') }}
+            </x-ui.button>
         </section>
     @endcan
 
