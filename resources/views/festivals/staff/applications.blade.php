@@ -169,27 +169,6 @@
                             </div>
                             <h3 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $entry->entry_name }}</h3>
                             <p class="text-sm text-slate-500">{{ $entry->category->direction->name }} · {{ $entry->category->name }}</p>
-                            @if($entry->steps->isNotEmpty())
-                                <ol class="mt-3 flex flex-wrap gap-2" aria-label="{{ __('app.festival_application_steps') }}" data-application-step-strip>
-                                    @foreach($entry->steps as $step)
-                                        @php($isCurrentStep = $currentStep?->is($step) ?? false)
-                                        <li
-                                            class="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 sm:w-auto sm:min-w-44 sm:flex-1 {{ $isCurrentStep ? 'border-brand-400 ring-2 ring-brand-100' : 'border-stone-200' }}"
-                                            data-application-step-status="{{ $step->status->value }}"
-                                            @if($isCurrentStep) aria-current="step" @endif
-                                        >
-                                            <div class="min-w-0">
-                                                <span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ __('app.festival_step_number', ['number' => $loop->iteration]) }}</span>
-                                                <span class="block truncate text-sm font-semibold text-slate-800" title="{{ $step->workflowStep->title }}">{{ $step->workflowStep->title }}</span>
-                                                @if(! $step->workflowStep->is_active)
-                                                    <span class="block text-[11px] text-slate-500">{{ __('app.inactive') }}</span>
-                                                @endif
-                                            </div>
-                                            <span class="{{ $step->status->badgeClass() }} shrink-0">{{ __('app.festival_step_status_'.$step->status->value) }}</span>
-                                        </li>
-                                    @endforeach
-                                </ol>
-                            @endif
                             @if ($workspacePermissions['registrations'])
                                 <p class="mt-1 text-sm text-slate-600">{{ $entry->portalUser->displayName() }} · {{ $entry->portalUser->email }}</p>
                             @endif
@@ -205,6 +184,27 @@
                             </x-ui.button>
                         </div>
                     </div>
+                    @if($entry->steps->isNotEmpty())
+                        <ol class="mt-4 flex flex-wrap gap-2 border-t border-stone-200 pt-4" aria-label="{{ __('app.festival_application_steps') }}" data-application-step-strip>
+                            @foreach($entry->steps as $step)
+                                @php($isCurrentStep = $currentStep?->is($step) ?? false)
+                                <li
+                                    class="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 sm:w-auto sm:min-w-44 sm:flex-1 {{ $isCurrentStep ? 'border-brand-400 ring-2 ring-brand-100' : 'border-stone-200' }}"
+                                    data-application-step-status="{{ $step->status->value }}"
+                                    @if($isCurrentStep) aria-current="step" @endif
+                                >
+                                    <div class="min-w-0">
+                                        <span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ __('app.festival_step_number', ['number' => $loop->iteration]) }}</span>
+                                        <span class="block truncate text-sm font-semibold text-slate-800" title="{{ $step->workflowStep->title }}">{{ $step->workflowStep->title }}</span>
+                                        @if(! $step->workflowStep->is_active)
+                                            <span class="block text-[11px] text-slate-500">{{ __('app.inactive') }}</span>
+                                        @endif
+                                    </div>
+                                    <span class="{{ $step->status->badgeClass() }} shrink-0">{{ __('app.festival_step_status_'.$step->status->value) }}</span>
+                                </li>
+                            @endforeach
+                        </ol>
+                    @endif
                 </article>
             @empty
                 <x-ui.empty-state :title="$hasFilters ? __('app.no_data') : __('app.festival_applications_empty')" icon="accounts">
