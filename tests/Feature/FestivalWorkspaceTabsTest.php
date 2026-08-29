@@ -64,7 +64,9 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.judging.results.index' => 'festival_results',
             'dashboard.accounts.festivals.tickets' => 'festival_tab_tickets_entrance',
             'dashboard.accounts.festivals.admission-types.create' => 'festival_tab_tickets_entrance',
-            'dashboard.accounts.festivals.communication' => 'festival_tab_communication',
+            'dashboard.accounts.festivals.communication.history' => 'festival_tab_communication',
+            'dashboard.accounts.festivals.communication.announcements' => 'festival_tab_communication',
+            'dashboard.accounts.festivals.communication.settings' => 'festival_tab_communication',
             'dashboard.accounts.festivals.settings' => 'festival_settings_overview',
             'dashboard.accounts.festivals.settings.stages' => 'festival_scenes',
             'dashboard.accounts.festivals.stages.create' => 'festival_scenes',
@@ -102,9 +104,11 @@ class FestivalWorkspaceTabsTest extends TestCase
                 ->assertDontSee(__('app.my_studio'));
             $expectedCurrentItems = in_array($route, [
                 'dashboard.accounts.festivals.applications',
+                'dashboard.accounts.festivals.communication.history',
+                'dashboard.accounts.festivals.communication.announcements',
+                'dashboard.accounts.festivals.communication.settings',
                 'dashboard.accounts.festivals.edit',
                 'dashboard.accounts.festivals.tickets',
-                'dashboard.accounts.festivals.communication',
             ], true) ? 3 : 2;
             $this->assertSame($expectedCurrentItems, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
@@ -298,7 +302,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($checkInStaff)->get(route('dashboard.accounts.festivals.scanner', [$account, $edition]))->assertOk();
     }
 
-    public function test_ticket_and_communication_tabs_support_safe_defaults_deep_links_and_active_only_data(): void
+    public function test_ticket_tabs_and_separate_communication_pages_support_safe_deep_links(): void
     {
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
@@ -315,21 +319,42 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertViewHas('tab', 'sold')
             ->assertViewHas('admissionTypes', null);
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'invalid']))
-            ->assertOk()
-            ->assertViewHas('tab', 'history')
-            ->assertViewHas('announcements', null);
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition]))
+            ->assertRedirectToRoute('dashboard.accounts.festivals.communication.settings', [$account, $edition]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'invalid', 'q' => 'saved filter']))
+            ->assertRedirect(route('dashboard.accounts.festivals.communication.settings', [$account, $edition, 'q' => 'saved filter']));
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']))
-            ->assertOk()
-            ->assertViewHas('tab', 'announcements')
-            ->assertViewHas('notifications', null);
+            ->assertRedirectToRoute('dashboard.accounts.festivals.communication.announcements', [$account, $edition]);
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'settings']))
-            ->assertOk()
-            ->assertViewHas('tab', 'settings')
-            ->assertViewHas('notifications', null)
-            ->assertViewHas('announcements', null);
+            ->assertRedirectToRoute('dashboard.accounts.festivals.communication.settings', [$account, $edition]);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'history', 'q' => 'saved filter']))
+            ->assertRedirect(route('dashboard.accounts.festivals.communication.history', [$account, $edition, 'q' => 'saved filter']));
+
+        $communicationPages = [
+            'dashboard.accounts.festivals.communication.history' => ['festivals.staff.communication-history', 'notifications', ['announcements', 'notificationSettings']],
+            'dashboard.accounts.festivals.communication.announcements' => ['festivals.staff.communication-announcements', 'announcements', ['notifications', 'notificationSettings']],
+            'dashboard.accounts.festivals.communication.settings' => ['festivals.staff.communication-settings', 'notificationSettings', ['notifications', 'announcements']],
+        ];
+
+        foreach ($communicationPages as $routeName => [$view, $ownDataset, $missingDatasets]) {
+            $response = $this->actingAs($owner)->get(route($routeName, [$account, $edition]));
+            $response->assertOk()
+                ->assertViewIs($view)
+                ->assertViewHas($ownDataset)
+                ->assertViewMissing($missingDatasets[0])
+                ->assertViewMissing($missingDatasets[1])
+                ->assertSee('data-communication-navigation', false)
+                ->assertSee(__('app.festival_communication_pages'))
+                ->assertSee(route('dashboard.accounts.festivals.communication.history', [$account, $edition]), false)
+                ->assertSee(route('dashboard.accounts.festivals.communication.announcements', [$account, $edition]), false)
+                ->assertSee(route('dashboard.accounts.festivals.communication.settings', [$account, $edition]), false);
+            $this->assertSame(1, substr_count($response->getContent(), 'data-communication-navigation'));
+            $this->assertSame(3, substr_count($response->getContent(), 'aria-current="page"'));
+        }
     }
 
     public function test_application_history_is_paginated_scoped_and_permission_safe(): void
@@ -382,56 +407,119 @@ class FestivalWorkspaceTabsTest extends TestCase
             'payload' => ['provider' => 'private-provider', 'status' => 'pending'],
             'occurred_at' => now()->addSecond(),
         ]);
+        foreach (['entry.submitted', 'schedule.created', 'future.action'] as $offset => $action) {
+            FestivalActivityLog::query()->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $edition->id,
+                'festival_entry_id' => $entry->id,
+                'actor_user_id' => $owner->id,
+                'action' => $action,
+                'subject_type' => $entry->getMorphClass(),
+                'subject_id' => $entry->id,
+                'payload' => [],
+                'occurred_at' => now()->addSeconds($offset + 2),
+            ]);
+        }
 
         $defaultPage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]));
         $defaultPage->assertOk()
-            ->assertViewHas('tab', 'details')
-            ->assertSee(__('app.festival_application_tab_details'))
-            ->assertSee(__('app.festival_application_tab_history'));
+            ->assertViewIs('festivals.staff.application')
+            ->assertSee(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry]), false)
+            ->assertDontSee('aria-label="'.__('app.festival_application_tabs').'"', false);
 
-        $historyPage = $this->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']));
-        $historyPage->assertOk()
-            ->assertViewHas('tab', 'history')
-            ->assertSeeInOrder([
-                __('app.festival_activity_action_payment_started'),
-                __('app.festival_activity_action_entry_reviewed'),
-                'Newest review detail',
-            ])
-            ->assertSee('History Owner')
-            ->assertSee('private-provider')
-            ->assertSee(__('app.festival_payment_status_pending'))
-            ->assertDontSee('RAW-PAYLOAD-MUST-NOT-RENDER');
-        $this->assertSame(20, $historyPage->viewData('activityHistory')->count());
-        $this->assertSame(23, $historyPage->viewData('activityHistory')->total());
-
-        $secondPage = $this->get(route('dashboard.accounts.festivals.applications.show', [
+        $legacyHistoryUrl = route('dashboard.accounts.festivals.applications.show', [
             $account,
             $edition,
             $entry,
             'tab' => 'history',
+            'type' => 'payments',
+            'history_page' => 2,
+        ]);
+        $this->get($legacyHistoryUrl)->assertRedirect(route('dashboard.accounts.festivals.applications.history', [
+            $account,
+            $edition,
+            $entry,
+            'type' => 'payments',
             'history_page' => 2,
         ]));
-        $secondPage->assertOk();
-        $this->assertSame(3, $secondPage->viewData('activityHistory')->count());
+        $this->get(route('dashboard.accounts.festivals.applications.show', [
+            $account,
+            $edition,
+            $entry,
+            'tab' => 'details',
+            'type' => 'fields',
+        ]))->assertRedirect(route('dashboard.accounts.festivals.applications.show', [
+            $account,
+            $edition,
+            $entry,
+            'type' => 'fields',
+        ]));
+
+        $historyPage = $this->get(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry]));
+        $historyPage->assertOk()
+            ->assertViewIs('festivals.staff.application-history')
+            ->assertViewHas('historyType', null)
+            ->assertSee(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]), false)
+            ->assertSee('data-history-type="other"', false)
+            ->assertSee('data-history-type="program_results"', false)
+            ->assertSee('data-history-type="lifecycle"', false)
+            ->assertSee('History Owner')
+            ->assertDontSee('RAW-PAYLOAD-MUST-NOT-RENDER');
+        $this->assertSame(20, $historyPage->viewData('activityHistory')->count());
+        $this->assertSame(26, $historyPage->viewData('activityHistory')->total());
+
+        $fieldHistory = $this->get(route('dashboard.accounts.festivals.applications.history', [
+            $account,
+            $edition,
+            $entry,
+            'type' => 'fields',
+        ]));
+        $fieldHistory->assertOk()
+            ->assertViewHas('historyType', 'fields')
+            ->assertSee('data-history-type="fields"', false)
+            ->assertDontSee('data-history-type="payments"', false);
+        $this->assertSame(21, $fieldHistory->viewData('activityHistory')->total());
+        parse_str((string) parse_url((string) $fieldHistory->viewData('activityHistory')->nextPageUrl(), PHP_URL_QUERY), $nextHistoryQuery);
+        $this->assertSame('fields', $nextHistoryQuery['type']);
+        $this->assertSame('2', (string) $nextHistoryQuery['history_page']);
+
+        $paymentHistory = $this->get(route('dashboard.accounts.festivals.applications.history', [
+            $account,
+            $edition,
+            $entry,
+            'type' => 'payments',
+        ]));
+        $paymentHistory->assertOk()
+            ->assertSee(__('app.festival_activity_action_payment_started'))
+            ->assertSee('private-provider')
+            ->assertSee(__('app.festival_payment_status_pending'))
+            ->assertSee('data-history-type="payments"', false)
+            ->assertDontSee('data-history-type="fields"', false);
 
         $this->actingAs($registrationStaff)
-            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']))
+            ->get(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry, 'type' => 'payments']))
             ->assertOk()
-            ->assertViewHas('tab', 'history')
             ->assertSee(__('app.festival_activity_action_payment_started'))
             ->assertDontSee('private-provider')
             ->assertDontSee(__('app.festival_payment_status_pending'));
 
         $this->actingAs($financeStaff)
-            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'history']))
-            ->assertOk()
-            ->assertViewHas('tab', 'details')
-            ->assertDontSee(__('app.festival_application_tab_history'));
+            ->get(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry]))
+            ->assertForbidden();
 
-        $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry, 'tab' => 'invalid']))
+        $invalidFilter = $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry, 'type' => 'invalid']));
+        $invalidFilter
             ->assertOk()
-            ->assertViewHas('tab', 'details');
+            ->assertViewHas('historyType', null);
+        $this->assertSame(26, $invalidFilter->viewData('activityHistory')->total());
+
+        [$otherAccount, $otherEdition] = $this->festival();
+        $otherOwner = User::factory()->create();
+        $otherAccount->addOwner($otherOwner);
+        $this->actingAs($otherOwner)
+            ->get(route('dashboard.accounts.festivals.applications.history', [$otherAccount, $otherEdition, $entry]))
+            ->assertNotFound();
     }
 
     public function test_ticket_revenue_keeps_mixed_historical_currencies_separate(): void
@@ -512,16 +600,15 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->assertSame(20, $response->viewData('tickets')->perPage());
     }
 
-    public function test_festival_notification_settings_group_scenarios_and_toggle_participant_and_owner_channels(): void
+    public function test_festival_notification_settings_group_scenarios_and_toggle_email_participant_and_owner_channels(): void
     {
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $url = route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'settings']);
+        $url = route('dashboard.accounts.festivals.communication.settings', [$account, $edition]);
 
-        $this->actingAs($owner)
-            ->get($url)
-            ->assertOk()
+        $response = $this->actingAs($owner)->get($url);
+        $response->assertOk()
             ->assertSeeInOrder([
                 __('app.festival_notification_group_registration'),
                 __('app.festival_notification_group_payments'),
@@ -529,13 +616,19 @@ class FestivalWorkspaceTabsTest extends TestCase
                 __('app.festival_notification_group_tickets'),
                 __('app.festival_notification_group_announcements'),
             ])
+            ->assertSee('email['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee('telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee('owner_telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee(trans_choice('app.festival_owner_telegram_connections', 0, ['count' => 0]));
 
+        foreach (FestivalNotificationType::cases() as $type) {
+            $response->assertSee(__('app.festival_notification_type_'.$type->value.'_copy'));
+        }
+
         $this->actingAs($owner)
             ->from($url)
             ->put(route('dashboard.accounts.festivals.notification-settings.update', $account), [
+                'email' => [FestivalNotificationType::EntryReviewed->value => '1'],
                 'sms' => [FestivalNotificationType::Announcement->value => '1'],
                 'telegram' => [FestivalNotificationType::EntryReviewed->value => '1'],
                 'owner_telegram' => [FestivalNotificationType::EntrySubmitted->value => '1'],
@@ -547,6 +640,16 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->where('type', FestivalNotificationType::Announcement->value)
             ->firstOrFail()
             ->send_sms);
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntryReviewed->value)
+            ->firstOrFail()
+            ->send_email);
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::EntrySubmitted->value)
+            ->firstOrFail()
+            ->send_email);
         $this->assertTrue(FestivalNotificationSetting::query()
             ->whereBelongsTo($account)
             ->where('type', FestivalNotificationType::EntrySubmitted->value)
@@ -1314,6 +1417,9 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.tickets',
             'dashboard.accounts.festivals.admission-types.create',
             'dashboard.accounts.festivals.communication',
+            'dashboard.accounts.festivals.communication.history',
+            'dashboard.accounts.festivals.communication.announcements',
+            'dashboard.accounts.festivals.communication.settings',
             'dashboard.accounts.festivals.settings',
             'dashboard.accounts.festivals.settings.stages',
             'dashboard.accounts.festivals.stages.create',
@@ -1375,7 +1481,7 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.announcements.store', [$account, $edition]), [
             'subject' => 'Workflow update',
             'body' => 'The schedule is ready.',
-        ])->assertRedirect(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']));
+        ])->assertRedirect(route('dashboard.accounts.festivals.communication.announcements', [$account, $edition]));
 
         $this->assertSame($edition->id, $category->festival_edition_id);
     }

@@ -2,11 +2,9 @@
 
 namespace App\Actions\Festivals;
 
-use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalNotificationType;
-use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowStepType;
 use App\Models\FestivalCategory;
@@ -15,15 +13,14 @@ use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalEntryStep;
 use App\Models\User;
-use App\Support\Festivals\FestivalEntryStepCompletion;
+use App\Support\Festivals\FestivalEntryFinalConfirmation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class FullyConfirmFestivalEntry
 {
     public function __construct(
-        private readonly FestivalEntryStepCompletion $completion,
+        private readonly FestivalEntryFinalConfirmation $finalConfirmation,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
         private readonly ReserveFestivalEntryTrack $reserveTrack,
@@ -73,41 +70,10 @@ class FullyConfirmFestivalEntry
             $entry->setRelation('steps', $steps);
             $entry->setRelation('charges', $charges);
 
-            $summarySteps = $steps->filter(fn (FestivalEntryStep $step): bool => $step->workflowStep->type === FestivalWorkflowStepType::Summary);
-            if ($summarySteps->count() !== 1) {
-                throw ValidationException::withMessages(['festival_application' => __('app.festival_full_confirm_summary_invalid')]);
-            }
-
-            $summary = $summarySteps->first();
-            $registrationSteps = $steps->reject(fn (FestivalEntryStep $step): bool => $step->is($summary));
-            $changedSteps = collect();
-
-            if ($entry->status === FestivalEntryStatus::ChangesPending) {
-                $invalidStep = $registrationSteps->first(fn (FestivalEntryStep $step): bool => ! in_array($step->status, [FestivalEntryStepStatus::Approved, FestivalEntryStepStatus::Submitted], true));
-                if ($invalidStep) {
-                    throw ValidationException::withMessages(['festival_application' => __('app.festival_full_confirm_steps_incomplete')]);
-                }
-
-                $changedSteps = $registrationSteps->where('status', FestivalEntryStepStatus::Submitted);
-                foreach ($changedSteps as $step) {
-                    $this->completion->assertRequirementsComplete($step, 'festival_application');
-                    $this->completion->assertChargesComplete($step, 'festival_application');
-                }
-            } elseif ($registrationSteps->contains(fn (FestivalEntryStep $step): bool => $step->status !== FestivalEntryStepStatus::Approved)) {
-                throw ValidationException::withMessages(['festival_application' => __('app.festival_full_confirm_steps_incomplete')]);
-            }
-
-            if (! in_array($entry->qualification_status, [FestivalQualificationStatus::Passed, FestivalQualificationStatus::NotRequired], true)) {
-                throw ValidationException::withMessages(['festival_application' => __('app.festival_full_confirm_qualification_incomplete')]);
-            }
-
-            if ($charges->contains(fn (FestivalCharge $charge): bool => ! in_array($charge->status, [FestivalChargeStatus::Paid, FestivalChargeStatus::Cancelled], true))) {
-                throw ValidationException::withMessages(['festival_application' => __('app.festival_full_confirm_payments_incomplete')]);
-            }
-
-            if ($category->applicationCapacityReached(excludingEntry: $entry)) {
-                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_full')]);
-            }
+            $changedSteps = $this->finalConfirmation->assertReady($entry, $category);
+            $summary = $steps->first(
+                fn (FestivalEntryStep $step): bool => $step->workflowStep->type === FestivalWorkflowStepType::Summary,
+            );
 
             $reviewedAt = now();
             foreach ($changedSteps as $step) {

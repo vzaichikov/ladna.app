@@ -9,10 +9,13 @@ use Throwable;
 
 class FestivalActivityLogPresenter
 {
-    /** @return array{title: string, actor: string, details: array<int, string>, occurred_at: mixed} */
+    public function __construct(private readonly FestivalApplicationHistoryTypes $historyTypes) {}
+
+    /** @return array{title: string, actor: string, details: array<int, string>, occurred_at: mixed, type: string, type_label: string} */
     public function present(FestivalActivityLog $activity, string $timezone, bool $canViewFinance): array
     {
         $titleKey = 'app.festival_activity_action_'.str_replace('.', '_', $activity->action);
+        $type = $this->historyTypes->classify($activity->action);
 
         return [
             'title' => Lang::has($titleKey) ? __($titleKey) : __('app.festival_activity_action_updated'),
@@ -21,6 +24,8 @@ class FestivalActivityLogPresenter
                 ?? __('app.festival_activity_actor_system'),
             'details' => $this->details($activity, $timezone, $canViewFinance),
             'occurred_at' => $activity->occurred_at,
+            'type' => $type,
+            'type_label' => $this->historyTypes->label($type),
         ];
     }
 

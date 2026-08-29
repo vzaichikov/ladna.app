@@ -168,7 +168,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.attendance*', 'dashboard.accounts.festivals.entrance.*') => 'entrance',
             request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.online-stream.*') => 'online-stream',
-            request()->routeIs('dashboard.accounts.festivals.communication') => 'communication',
+            request()->routeIs('dashboard.accounts.festivals.communication*') => 'communication',
             request()->routeIs('dashboard.accounts.festivals.settings.stages', 'dashboard.accounts.festivals.stages.*') => 'settings-stages',
             request()->routeIs('dashboard.accounts.festivals.settings.directions', 'dashboard.accounts.festivals.directions.*') => 'settings-directions',
             request()->routeIs('dashboard.accounts.festivals.settings.nominations', 'dashboard.accounts.festivals.nominations.*') => 'settings-nominations',

@@ -75,7 +75,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(211, $classifiedRouteNames);
+        $this->assertCount(215, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -516,10 +516,13 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.applications' => 'festival_edition',
             'dashboard.accounts.festivals.applications.media-report' => 'festival_edition',
             'dashboard.accounts.festivals.applications.show' => 'festival_entry',
+            'dashboard.accounts.festivals.applications.history' => 'festival_entry',
             'dashboard.accounts.festivals.attendance' => 'festival_edition',
             'dashboard.accounts.festivals.admission-types.create' => 'festival_edition',
             'dashboard.accounts.festivals.admission-types.edit' => 'festival_admission_type',
-            'dashboard.accounts.festivals.communication' => 'festival_edition',
+            'dashboard.accounts.festivals.communication.history' => 'festival_edition',
+            'dashboard.accounts.festivals.communication.announcements' => 'festival_edition',
+            'dashboard.accounts.festivals.communication.settings' => 'festival_edition',
             'dashboard.accounts.festivals.edit' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.create' => 'festival_edition',
@@ -639,6 +642,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.class-types.index',
             'dashboard.accounts.edit',
             'dashboard.accounts.festivals.judging.index',
+            'dashboard.accounts.festivals.communication',
             'dashboard.accounts.festivals.score-sheets.edit',
             'dashboard.accounts.festivals.timeline.index',
             'dashboard.accounts.connections.index',

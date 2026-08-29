@@ -62,7 +62,7 @@ class FestivalNotificationDeliveryTest extends TestCase
         Mail::fake();
     }
 
-    public function test_email_is_always_queued_and_sent_while_sms_is_an_explicit_per_scenario_channel(): void
+    public function test_email_and_sms_are_independent_per_scenario_channels(): void
     {
         [$account, $edition, $portalUser] = $this->festival(locale: 'en');
         config(['mail.default' => 'log']);
@@ -89,6 +89,7 @@ class FestivalNotificationDeliveryTest extends TestCase
             'type' => FestivalNotificationType::EntrySubmitted->value,
             'is_enabled' => false,
             'is_optional' => true,
+            'send_email' => true,
             'send_sms' => true,
         ]);
 
@@ -119,6 +120,89 @@ class FestivalNotificationDeliveryTest extends TestCase
                 'name' => 'Ladna Festival',
                 'address' => 'festival@ladna.test',
             ]]);
+    }
+
+    public function test_disabled_email_scenario_is_applied_when_queueing_and_again_before_delivery(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        $setting = FestivalNotificationSetting::query()->create([
+            'account_id' => $account->id,
+            'type' => FestivalNotificationType::EntrySubmitted,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'send_email' => true,
+            'send_sms' => true,
+        ]);
+
+        app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'EMAIL-DELIVERY-GATE'],
+            dedupeSuffix: 'email-delivery-gate',
+        );
+        $queuedEmail = FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->sole();
+
+        $setting->update(['send_email' => false]);
+        app()->call([new SendFestivalNotification($queuedEmail->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $queuedEmail->refresh()->status);
+        $this->assertSame('festival_email_scenario_disabled', $queuedEmail->failure_reason);
+        Mail::assertNothingSent();
+
+        app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::EntrySubmitted,
+            ['entry_code' => 'EMAIL-QUEUE-GATE'],
+            dedupeSuffix: 'email-queue-gate',
+        );
+
+        $this->assertSame(1, FestivalNotification::query()
+            ->whereBelongsTo($account)
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->count());
+        $this->assertSame(2, FestivalNotification::query()
+            ->whereBelongsTo($account)
+            ->where('channel', FestivalNotificationChannel::Sms->value)
+            ->count());
+    }
+
+    public function test_disabled_email_scenarios_skip_ticket_order_and_entrance_pass_messages(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        foreach ([FestivalNotificationType::TicketsIssued, FestivalNotificationType::EntrancePassesIssued] as $type) {
+            FestivalNotificationSetting::query()->create([
+                'account_id' => $account->id,
+                'type' => $type,
+                'is_enabled' => true,
+                'is_optional' => false,
+                'send_email' => false,
+            ]);
+        }
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'buyer_name' => $portalUser->displayName(),
+            'buyer_email' => $portalUser->email,
+            'locale' => 'en',
+        ]);
+
+        $this->assertNull(app(FestivalNotificationOutbox::class)->queueForTicketOrder($order, [
+            'tickets_count' => 1,
+        ]));
+        $this->assertNull(app(FestivalNotificationOutbox::class)->queueForEntrancePasses(
+            $portalUser,
+            $edition,
+            1,
+            'email-disabled',
+        ));
+        $this->assertSame(0, FestivalNotification::query()->whereBelongsTo($account)->count());
     }
 
     public function test_read_only_demo_neither_queues_nor_delivers_festival_notifications(): void
@@ -336,7 +420,7 @@ class FestivalNotificationDeliveryTest extends TestCase
         $owner = User::factory()->create();
         $account->addOwner($owner);
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'history']))
+            ->get(route('dashboard.accounts.festivals.communication.history', [$account, $edition]))
             ->assertOk()
             ->assertDontSee($accessToken, false);
 
@@ -566,7 +650,7 @@ class FestivalNotificationDeliveryTest extends TestCase
         [$account, $edition, $portalUser] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $url = route('dashboard.accounts.festivals.communication', [$account, $edition, 'tab' => 'announcements']);
+        $url = route('dashboard.accounts.festivals.communication.announcements', [$account, $edition]);
 
         $this->actingAs($owner)
             ->from($url)

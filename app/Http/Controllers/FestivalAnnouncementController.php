@@ -26,6 +26,7 @@ class FestivalAnnouncementController extends Controller
                 [
                     'is_optional' => $type->isOptional(),
                     'is_enabled' => true,
+                    'send_email' => $request->boolean('email.'.$type->value),
                     'send_sms' => $request->boolean('sms.'.$type->value),
                     'send_telegram' => $request->boolean('telegram.'.$type->value),
                     'notify_owner_telegram' => $request->boolean('owner_telegram.'.$type->value),
@@ -69,7 +70,7 @@ class FestivalAnnouncementController extends Controller
             $this->dispatch($announcement, $outbox);
         }
 
-        return redirect()->route('dashboard.accounts.festivals.communication', [$account, $festivalEdition, 'tab' => 'announcements'])->with('status', __('app.festival_announcement_saved'));
+        return redirect()->route('dashboard.accounts.festivals.communication.announcements', [$account, $festivalEdition])->with('status', __('app.festival_announcement_saved'));
     }
 
     public function dispatch(FestivalAnnouncement $announcement, FestivalNotificationOutbox $outbox): int

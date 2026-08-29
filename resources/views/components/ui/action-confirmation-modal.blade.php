@@ -59,7 +59,7 @@
         </div>
 
         <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <x-ui.button type="button" variant="secondary" data-confirm-cancel>
+            <x-ui.button type="button" variant="secondary" data-confirm-cancel data-default-text="{{ __('app.cancel') }}">
                 {{ __('app.cancel') }}
             </x-ui.button>
             <x-ui.button type="button" variant="danger" data-confirm-accept data-default-text="{{ __('app.delete') }}">

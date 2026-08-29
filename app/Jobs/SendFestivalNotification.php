@@ -91,6 +91,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($notification->channel === FestivalNotificationChannel::Email && ! $this->emailStillEnabled($notification)) {
+            $this->cancel($notification, 'festival_email_scenario_disabled');
+
+            return;
+        }
+
         if ($notification->channel === FestivalNotificationChannel::Sms && ! $this->smsStillEnabled($notification)) {
             $this->cancel($notification, 'festival_sms_scenario_disabled');
 
@@ -303,6 +309,14 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             ->where('type', $notification->type->value)
             ->where('send_sms', true)
             ->exists();
+    }
+
+    private function emailStillEnabled(FestivalNotification $notification): bool
+    {
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $notification->account_id)
+            ->where('type', $notification->type->value)
+            ->value('send_email') ?? true;
     }
 
     private function telegramStillEnabled(FestivalNotification $notification): bool

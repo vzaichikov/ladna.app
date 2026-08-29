@@ -242,6 +242,55 @@ class FestivalApplicationIndexTest extends TestCase
             ->count());
     }
 
+    public function test_application_cards_show_every_ordered_runtime_step_with_semantic_statuses_and_current_step(): void
+    {
+        $fixture = $this->festivalFixture();
+        $fifthWorkflowStep = FestivalWorkflowStep::factory()->for($fixture['workflow'], 'workflow')->create([
+            'account_id' => $fixture['account']->id,
+            'code' => 'archived-step-'.Str::lower(Str::random(6)),
+            'title' => 'Archived documents',
+            'sort_order' => 50,
+            'is_active' => false,
+        ]);
+        $fixture['workflow_steps'][] = $fifthWorkflowStep;
+        [$entry] = $this->createEntry($fixture, 'Every step visible', FestivalEntryStatus::UnderReview, [
+            FestivalEntryStepStatus::Draft,
+            FestivalEntryStepStatus::Submitted,
+            FestivalEntryStepStatus::ChangesRequested,
+            FestivalEntryStepStatus::Approved,
+            FestivalEntryStepStatus::Rejected,
+        ]);
+
+        $response = $this->actingAs($fixture['owner'])->get(route('dashboard.accounts.festivals.applications', [
+            $fixture['account'],
+            $fixture['edition'],
+            'q' => $entry->entry_name,
+        ]));
+
+        $response->assertOk()
+            ->assertSee('data-application-step-strip', false)
+            ->assertSeeInOrder([
+                'Application',
+                'Payment',
+                'Technical form',
+                'Summary',
+                'Archived documents',
+            ])
+            ->assertSee('data-application-step-status="draft"', false)
+            ->assertSee('data-application-step-status="submitted"', false)
+            ->assertSee('data-application-step-status="changes_requested"', false)
+            ->assertSee('data-application-step-status="approved"', false)
+            ->assertSee('data-application-step-status="rejected"', false)
+            ->assertSee('crm-status-muted', false)
+            ->assertSee('crm-status-scheduled', false)
+            ->assertSee('crm-status-warning', false)
+            ->assertSee('crm-status-active', false)
+            ->assertSee('crm-status-danger', false)
+            ->assertSee('aria-current="step"', false)
+            ->assertSee(__('app.inactive'));
+        $this->assertSame(5, substr_count($response->getContent(), 'data-application-step-status='));
+    }
+
     public function test_rendered_filters_are_faceted_query_preserving_permission_safe_and_query_stable(): void
     {
         $fixture = $this->festivalFixture();

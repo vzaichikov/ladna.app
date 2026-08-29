@@ -73,7 +73,8 @@ class FestivalNotificationOutbox
         $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload);
 
         $notification = null;
-        if (filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)) {
+        if (filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
+            && $this->emailIsEnabled($edition->account_id, $type)) {
             $notification = $this->createChannel(
                 channel: FestivalNotificationChannel::Email,
                 dedupeBase: $dedupeBase,
@@ -192,7 +193,8 @@ class FestivalNotificationOutbox
             'available_at' => now(),
         ];
         $notification = null;
-        if (filter_var($order->buyer_email, FILTER_VALIDATE_EMAIL)) {
+        if (filter_var($order->buyer_email, FILTER_VALIDATE_EMAIL)
+            && $this->emailIsEnabled($order->account_id, $type)) {
             $notification = $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
                 ...$attributes,
                 'text' => $message->emailText(),
@@ -238,7 +240,9 @@ class FestivalNotificationOutbox
         abort_unless($portalUser->account_id === $edition->account_id, 404);
         $edition->loadMissing('account');
 
-        if ($edition->account->isReadOnlyDemo() || ! filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)) {
+        if ($edition->account->isReadOnlyDemo()
+            || ! filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
+            || ! $this->emailIsEnabled($edition->account_id, FestivalNotificationType::EntrancePassesIssued)) {
             return null;
         }
 
@@ -290,6 +294,14 @@ class FestivalNotificationOutbox
             ->where('type', $type->value)
             ->where('send_sms', true)
             ->exists();
+    }
+
+    private function emailIsEnabled(int $accountId, FestivalNotificationType $type): bool
+    {
+        return FestivalNotificationSetting::query()
+            ->where('account_id', $accountId)
+            ->where('type', $type->value)
+            ->value('send_email') ?? true;
     }
 
     private function telegramIsEnabled(int $accountId, FestivalNotificationType $type): bool

@@ -12,6 +12,7 @@ let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
 let pendingConfirmationPhrase = null;
 let pendingConfirmationReasonRequired = false;
+let pendingConfirmationBlocked = false;
 let publicScheduleAbortController = null;
 let publicCalendarSwipeStart = null;
 let publicBookingModalOpener = null;
@@ -25,11 +26,13 @@ let activeFieldHelp = null;
 const confirmationButtonVariants = {
     danger: 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100',
     success: 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20 hover:bg-emerald-700',
+    warning: 'border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100',
     primary: 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700',
 };
 const confirmationIconVariants = {
     danger: 'bg-rose-50 text-rose-700',
     success: 'bg-emerald-50 text-emerald-700',
+    warning: 'bg-amber-50 text-amber-800',
     primary: 'bg-brand-50 text-brand-700',
 };
 const confirmationButtonVariantClassList = Object.values(confirmationButtonVariants).flatMap((classes) => classes.split(' '));
@@ -84,6 +87,7 @@ function closeDeleteConfirmation(modal) {
     const phraseInput = modal.querySelector('[data-confirm-phrase-input]');
     const reasonContainer = modal.querySelector('[data-confirm-reason-container]');
     const reasonInput = modal.querySelector('[data-confirm-reason-input]');
+    const cancelButton = modal.querySelector('[data-confirm-cancel]');
     const acceptButton = modal.querySelector('[data-confirm-accept]');
 
     phraseContainer?.classList.add('hidden');
@@ -99,12 +103,18 @@ function closeDeleteConfirmation(modal) {
 
     if (acceptButton) {
         acceptButton.disabled = false;
+        acceptButton.classList.remove('hidden');
+    }
+
+    if (cancelButton) {
+        cancelButton.textContent = cancelButton.dataset.defaultText || cancelButton.textContent;
     }
 
     pendingDeleteForm = null;
     pendingConfirmationSubmitter = null;
     pendingConfirmationPhrase = null;
     pendingConfirmationReasonRequired = false;
+    pendingConfirmationBlocked = false;
     confirmationModalOpener?.focus();
     confirmationModalOpener = null;
 }
@@ -202,6 +212,115 @@ function applyConfirmationDetails(container, encodedDetails) {
     container.classList.remove('hidden');
 
     return true;
+}
+
+function parseFestivalDecisionData(encodedData, fallback = {}) {
+    if (!encodedData) {
+        return fallback;
+    }
+
+    try {
+        const parsedData = JSON.parse(encodedData);
+
+        return parsedData && typeof parsedData === 'object' ? parsedData : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function syncFestivalDecisionForm(form) {
+    if (!form?.matches('[data-festival-decision-form]')) {
+        return;
+    }
+
+    const decision = form.querySelector('[data-festival-decision]')?.value;
+    const configuration = parseFestivalDecisionData(form.dataset.decisionConfig);
+    const selected = configuration[decision];
+
+    if (!selected || typeof selected !== 'object') {
+        return;
+    }
+
+    const submitButton = form.querySelector('[data-festival-decision-submit]');
+    const submitLabel = submitButton?.querySelector('[data-festival-decision-submit-label]');
+    const comment = form.querySelector('[data-festival-decision-comment]');
+    const deadline = form.querySelector('[data-festival-decision-deadline]');
+    const notes = form.querySelector('[data-festival-decision-notes]');
+
+    if (submitLabel) {
+        submitLabel.textContent = selected.button_label || submitLabel.textContent;
+    }
+
+    applyClassVariant(
+        submitButton,
+        confirmationButtonVariantClassList,
+        confirmationButtonVariants[selected.button_variant] ?? confirmationButtonVariants.primary,
+    );
+
+    form.dataset.confirmTitle = selected.confirm_title || '';
+    form.dataset.confirmBody = selected.confirm_body || '';
+    form.dataset.confirmAccept = selected.confirm_accept || selected.button_label || '';
+    form.dataset.confirmIcon = selected.confirm_icon || 'circle-check';
+    form.dataset.confirmVariant = selected.confirm_variant || selected.button_variant || 'primary';
+
+    if (comment) {
+        comment.required = selected.comment_required === true;
+    }
+
+    if (deadline) {
+        deadline.required = selected.deadline_required === true;
+    }
+
+    const baseDetails = parseFestivalDecisionData(form.dataset.decisionBaseDetails, []);
+    const details = Array.isArray(baseDetails) ? [...baseDetails] : [];
+    const emptyValue = form.dataset.decisionEmptyValue || '—';
+
+    if (comment) {
+        details.push({
+            label: form.dataset.decisionCommentLabel || '',
+            value: comment.value.trim() || emptyValue,
+        });
+    }
+
+    if (deadline && selected.deadline_required === true) {
+        details.push({
+            label: form.dataset.decisionDeadlineLabel || '',
+            value: deadline.value || emptyValue,
+        });
+    }
+
+    if (notes) {
+        details.push({
+            label: form.dataset.decisionNotesLabel || '',
+            value: notes.value.trim() || emptyValue,
+        });
+    }
+
+    form.dataset.confirmDetails = JSON.stringify(details.filter((detail) => detail.label));
+}
+
+function initFestivalDecisionForms() {
+    document.querySelectorAll('[data-festival-decision-form]').forEach(syncFestivalDecisionForm);
+
+    if (document.documentElement.dataset.festivalDecisionFormsReady === 'true') {
+        return;
+    }
+
+    document.documentElement.dataset.festivalDecisionFormsReady = 'true';
+    document.addEventListener('change', (event) => {
+        const decision = event.target.closest('[data-festival-decision]');
+
+        if (decision) {
+            syncFestivalDecisionForm(decision.closest('[data-festival-decision-form]'));
+        }
+    });
+    document.addEventListener('async-form:success', (event) => {
+        const replacement = event.detail?.replacement;
+
+        if (replacement instanceof HTMLElement) {
+            replacement.querySelectorAll('[data-festival-decision-form]').forEach(syncFestivalDecisionForm);
+        }
+    });
 }
 
 function updateAnyTimeAddon(container) {
@@ -10206,6 +10325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFieldHelp();
     initFestivalRequirementConstructors();
     initFestivalHelperSelections();
+    initFestivalDecisionForms();
     initAsyncFormChangeSubmission();
     syncPublicLegalReturnUrls();
 
@@ -10402,7 +10522,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reasonInvalid = pendingConfirmationReasonRequired
             && !confirmationReasonInput?.value.trim();
 
-        acceptButton.disabled = phraseInvalid || reasonInvalid;
+        acceptButton.disabled = pendingConfirmationBlocked || phraseInvalid || reasonInvalid;
     };
     const applyConfirmationCopy = (form, submitter = null) => {
         const source = submitter?.dataset ? submitter : form;
@@ -10441,6 +10561,12 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmationIconVariants[variant] ?? confirmationIconVariants.danger,
         );
         applyConfirmationIcon(confirmIcon, source.dataset.confirmIcon || form.dataset.confirmIcon || confirmIcon?.dataset.defaultIcon || 'trash-2');
+
+        pendingConfirmationBlocked = (source.dataset.confirmBlocked || form.dataset.confirmBlocked) === 'true';
+        acceptButton.classList.toggle('hidden', pendingConfirmationBlocked);
+        cancelButton.textContent = pendingConfirmationBlocked
+            ? source.dataset.confirmClose || form.dataset.confirmClose || cancelButton.dataset.defaultText || cancelButton.textContent
+            : cancelButton.dataset.defaultText || cancelButton.textContent;
 
         pendingConfirmationPhrase = source.dataset.confirmPhrase || form.dataset.confirmPhrase || null;
 
@@ -10540,12 +10666,15 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingDeleteForm = form;
         pendingConfirmationSubmitter = submitter?.form === form ? submitter : null;
         confirmationModalOpener = submitter ?? document.activeElement;
+        syncFestivalDecisionForm(form);
         applyConfirmationCopy(form, pendingConfirmationSubmitter);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         document.body.classList.add('overflow-hidden');
 
-        if (pendingConfirmationPhrase && confirmationPhraseInput) {
+        if (pendingConfirmationBlocked) {
+            cancelButton.focus();
+        } else if (pendingConfirmationPhrase && confirmationPhraseInput) {
             confirmationPhraseInput.focus();
         } else if (pendingConfirmationReasonRequired && confirmationReasonInput) {
             confirmationReasonInput.focus();
@@ -10637,7 +10766,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     acceptButton.addEventListener('click', () => {
-        if (!pendingDeleteForm) {
+        if (!pendingDeleteForm || pendingConfirmationBlocked) {
             return;
         }
 

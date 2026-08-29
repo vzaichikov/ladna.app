@@ -434,6 +434,20 @@ final class AppBreadcrumbs
             ];
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.applications.history') {
+            $entry = $this->modelParameter($request, 'festivalEntry');
+
+            return [
+                ...$base,
+                $this->item(__('app.festival_tab_applications'), route('dashboard.accounts.festivals.applications', [$account, $edition])),
+                $this->item(
+                    $this->modelLabel($entry, __('app.festival_application')),
+                    route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]),
+                ),
+                $this->item(__('app.festival_application_history')),
+            ];
+        }
+
         if ($routeName === 'dashboard.accounts.festivals.performances.show') {
             $entry = $this->modelParameter($request, 'festivalEntry');
 
@@ -459,6 +473,20 @@ final class AppBreadcrumbs
                 ...$base,
                 $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition])),
                 $this->item(__('app.festival_issue_tickets')),
+            ];
+        }
+
+        $communicationLabels = [
+            'dashboard.accounts.festivals.communication.history' => 'app.festival_communication_tab_history',
+            'dashboard.accounts.festivals.communication.announcements' => 'app.festival_communication_tab_announcements',
+            'dashboard.accounts.festivals.communication.settings' => 'app.festival_communication_tab_settings',
+        ];
+
+        if (isset($communicationLabels[$routeName])) {
+            return [
+                ...$base,
+                $this->item(__('app.festival_tab_communication'), route('dashboard.accounts.festivals.communication', [$account, $edition])),
+                $this->item(__($communicationLabels[$routeName])),
             ];
         }
 

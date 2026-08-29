@@ -181,6 +181,41 @@ class AuthenticatedBreadcrumbsTest extends TestCase
             array_column($this->breadcrumbItems($timeline), 'label'),
         );
 
+        $applicationHistory = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications.history', [$account, $edition, $entry]));
+        $applicationHistory->assertOk();
+        $applicationHistoryItems = $this->breadcrumbItems($applicationHistory);
+        $this->assertSame([
+            'Festivals',
+            $edition->title,
+            'Applications',
+            'Silk act',
+            'Application history',
+        ], array_column($applicationHistoryItems, 'label'));
+        $this->assertSame(
+            route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]),
+            $applicationHistoryItems[3]['href'],
+        );
+        $this->assertTrue($applicationHistoryItems[4]['current']);
+
+        $communicationHistory = $this->withSession(['locale' => 'en'])
+            ->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.communication.history', [$account, $edition]));
+        $communicationHistory->assertOk();
+        $communicationHistoryItems = $this->breadcrumbItems($communicationHistory);
+        $this->assertSame([
+            'Festivals',
+            $edition->title,
+            'Communication',
+            'Notification history',
+        ], array_column($communicationHistoryItems, 'label'));
+        $this->assertSame(
+            route('dashboard.accounts.festivals.communication', [$account, $edition]),
+            $communicationHistoryItems[2]['href'],
+        );
+        $this->assertTrue($communicationHistoryItems[3]['current']);
+
         foreach ([
             'dashboard.accounts.festivals.judging.judges.create' => ['Festivals', $edition->title, 'Judges', 'Add: Judge'],
             'dashboard.accounts.festivals.judging.judges.edit' => ['Festivals', $edition->title, 'Judges', 'Edit: Judge One'],

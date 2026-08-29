@@ -29,32 +29,88 @@
             @endif
         </div>
         @if($currentStep->status === \App\Enums\FestivalEntryStepStatus::Submitted)
+            @php
+                $stepDecisionConfig = [
+                    'approve' => [
+                        'button_label' => __('app.festival_review_approve'),
+                        'button_variant' => 'success',
+                        'confirm_title' => __('app.festival_review_approve_confirm_title'),
+                        'confirm_body' => __('app.festival_review_approve_confirm_copy'),
+                        'confirm_accept' => __('app.festival_review_approve'),
+                        'confirm_icon' => 'circle-check',
+                        'confirm_variant' => 'success',
+                        'comment_required' => false,
+                        'deadline_required' => false,
+                    ],
+                    'request_changes' => [
+                        'button_label' => __('app.festival_review_return_for_correction'),
+                        'button_variant' => 'warning',
+                        'confirm_title' => __('app.festival_review_return_confirm_title'),
+                        'confirm_body' => __('app.festival_review_return_confirm_copy'),
+                        'confirm_accept' => __('app.festival_review_return_for_correction'),
+                        'confirm_icon' => 'undo-2',
+                        'confirm_variant' => 'warning',
+                        'comment_required' => true,
+                        'deadline_required' => true,
+                    ],
+                    'reject_entry' => [
+                        'button_label' => __('app.festival_review_reject_entry'),
+                        'button_variant' => 'danger',
+                        'confirm_title' => __('app.festival_review_reject_confirm_title'),
+                        'confirm_body' => __('app.festival_review_reject_confirm_copy'),
+                        'confirm_accept' => __('app.festival_review_reject_entry'),
+                        'confirm_icon' => 'circle-x',
+                        'confirm_variant' => 'danger',
+                        'comment_required' => true,
+                        'deadline_required' => false,
+                    ],
+                ];
+                $stepConfirmationDetails = [[
+                    'label' => __('app.festival_activity_step_label'),
+                    'value' => $currentStep->workflowStep->title,
+                ]];
+            @endphp
             <form
                 method="POST"
                 action="{{ route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $currentStep]) }}"
                 class="mt-3 grid gap-3 sm:grid-cols-2"
                 data-async-form
+                data-confirm-action
+                data-festival-decision-form
+                data-decision-config='@json($stepDecisionConfig)'
+                data-decision-base-details='@json($stepConfirmationDetails)'
+                data-decision-comment-label="{{ __('app.festival_review_comment') }}"
+                data-decision-deadline-label="{{ __('app.festival_correction_due_at') }}"
+                data-decision-empty-value="—"
+                data-confirm-title="{{ __('app.festival_review_approve_confirm_title') }}"
+                data-confirm-body="{{ __('app.festival_review_approve_confirm_copy') }}"
+                data-confirm-accept="{{ __('app.festival_review_approve') }}"
+                data-confirm-icon="circle-check"
+                data-confirm-variant="success"
+                data-confirm-details='@json($stepConfirmationDetails)'
             >
                 @csrf
                 @method('PATCH')
                 <label>
                     <span class="crm-label">{{ __('app.status') }}</span>
-                    <select name="decision" class="crm-field">
+                    <select name="decision" class="crm-field" data-festival-decision>
                         <option value="approve">{{ __('app.festival_review_approve') }}</option>
-                        <option value="request_changes">{{ __('app.festival_review_request_changes') }}</option>
+                        <option value="request_changes">{{ __('app.festival_review_return_for_correction') }}</option>
                         <option value="reject_entry">{{ __('app.festival_review_reject_entry') }}</option>
                     </select>
                 </label>
                 <label>
                     <span class="crm-label">{{ __('app.festival_correction_due_at') }}</span>
-                    <input type="datetime-local" name="correction_due_at" class="crm-field">
+                    <input type="datetime-local" name="correction_due_at" class="crm-field" data-festival-decision-deadline>
                 </label>
                 <label class="sm:col-span-2">
                     <span class="crm-label">{{ __('app.festival_review_comment') }}</span>
-                    <textarea name="comment" rows="3" class="crm-field"></textarea>
+                    <textarea name="comment" rows="3" class="crm-field" data-festival-decision-comment></textarea>
                 </label>
                 <div class="sm:col-span-2">
-                    <x-ui.button type="submit">{{ __('app.save') }}</x-ui.button>
+                    <x-ui.button type="submit" variant="success" data-festival-decision-submit>
+                        <span data-festival-decision-submit-label>{{ __('app.festival_review_approve') }}</span>
+                    </x-ui.button>
                 </div>
             </form>
         @endif

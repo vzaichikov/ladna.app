@@ -330,9 +330,9 @@ class HelpPagesTest extends TestCase
                 'assets/help/screenshots/festival-online-stream.png',
             ],
             'festival-communication-history' => [
-                'Email учаснику завжди залишається увімкненим',
+                'Email, SMS, Telegram учасника й Telegram власника вмикаються окремо',
                 'повідомлення власникам студії через загального бота Ladna',
-                'вкладки Історія, Оголошення й Налаштування',
+                'відкриваються як окремі сторінки фестивалю',
                 'вкладка Сповіщення',
                 'assets/help/screenshots/festival-communication.png',
             ],

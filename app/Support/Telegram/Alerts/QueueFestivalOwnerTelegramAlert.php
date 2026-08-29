@@ -130,6 +130,6 @@ class QueueFestivalOwnerTelegramAlert
             return route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']);
         }
 
-        return route('dashboard.accounts.festivals.communication', [$account, $edition]);
+        return route('dashboard.accounts.festivals.communication.history', [$account, $edition]);
     }
 }

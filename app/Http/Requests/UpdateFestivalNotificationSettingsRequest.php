@@ -29,6 +29,8 @@ class UpdateFestivalNotificationSettingsRequest extends FormRequest
             ->implode(',');
 
         return [
+            'email' => ['sometimes', 'array:'.$notificationTypes],
+            'email.*' => ['boolean'],
             'sms' => ['sometimes', 'array:'.$notificationTypes],
             'sms.*' => ['boolean'],
             'telegram' => ['sometimes', 'array:'.$notificationTypes],

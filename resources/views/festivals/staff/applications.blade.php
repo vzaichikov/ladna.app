@@ -169,27 +169,38 @@
                             </div>
                             <h3 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $entry->entry_name }}</h3>
                             <p class="text-sm text-slate-500">{{ $entry->category->direction->name }} · {{ $entry->category->name }}</p>
-                            <p class="mt-1 text-sm text-slate-600">
-                                <span class="font-semibold text-slate-700">{{ __('app.festival_current_step') }}:</span>
-                                @if($currentStep)
-                                    {{ $currentStep->workflowStep->title }} · {{ __('app.festival_step_status_'.$currentStep->status->value) }}
-                                @elseif($entry->steps->isNotEmpty())
-                                    {{ __('app.festival_registration_complete') }}
-                                @else
-                                    —
-                                @endif
-                            </p>
+                            @if($entry->steps->isNotEmpty())
+                                <ol class="mt-3 flex flex-wrap gap-2" aria-label="{{ __('app.festival_application_steps') }}" data-application-step-strip>
+                                    @foreach($entry->steps as $step)
+                                        @php($isCurrentStep = $currentStep?->is($step) ?? false)
+                                        <li
+                                            class="flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 sm:w-auto sm:min-w-44 sm:flex-1 {{ $isCurrentStep ? 'border-brand-400 ring-2 ring-brand-100' : 'border-stone-200' }}"
+                                            data-application-step-status="{{ $step->status->value }}"
+                                            @if($isCurrentStep) aria-current="step" @endif
+                                        >
+                                            <div class="min-w-0">
+                                                <span class="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ __('app.festival_step_number', ['number' => $loop->iteration]) }}</span>
+                                                <span class="block truncate text-sm font-semibold text-slate-800" title="{{ $step->workflowStep->title }}">{{ $step->workflowStep->title }}</span>
+                                                @if(! $step->workflowStep->is_active)
+                                                    <span class="block text-[11px] text-slate-500">{{ __('app.inactive') }}</span>
+                                                @endif
+                                            </div>
+                                            <span class="{{ $step->status->badgeClass() }} shrink-0">{{ __('app.festival_step_status_'.$step->status->value) }}</span>
+                                        </li>
+                                    @endforeach
+                                </ol>
+                            @endif
                             @if ($workspacePermissions['registrations'])
                                 <p class="mt-1 text-sm text-slate-600">{{ $entry->portalUser->displayName() }} · {{ $entry->portalUser->email }}</p>
                             @endif
                         </div>
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <div class="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-72">
+                        <div class="grid gap-2 sm:min-w-72">
+                            <div class="grid grid-cols-3 gap-2 text-center text-xs">
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->current_checklist_open_count }}</strong>{{ __('app.festival_requirements_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->blocking_charges_count }}</strong>{{ __('app.festival_charges_open') }}</div>
                                 <div class="rounded-lg bg-white px-3 py-2"><strong class="block text-base">{{ $entry->performance_slots_count }}</strong>{{ __('app.festival_program_slots') }}</div>
                             </div>
-                            <x-ui.button :href="route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry])">
+                            <x-ui.button :href="route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry])" class="w-full">
                                 <x-ui.icon name="edit" class="h-4 w-4" />{{ __('app.festival_open_application') }}
                             </x-ui.button>
                         </div>

@@ -34,7 +34,9 @@ use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\User;
 use App\Support\Festivals\FestivalActivityLogPresenter;
+use App\Support\Festivals\FestivalApplicationHistoryTypes;
 use App\Support\Festivals\FestivalApplicationIndex;
+use App\Support\Festivals\FestivalEntryFinalConfirmation;
 use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
@@ -52,6 +54,8 @@ class FestivalWorkspaceController extends Controller
         private FestivalWorkspaceAccess $workspaceAccess,
         private FestivalProgramOrder $programOrder,
         private FestivalApplicationIndex $applicationIndex,
+        private FestivalApplicationHistoryTypes $applicationHistoryTypes,
+        private FestivalEntryFinalConfirmation $finalConfirmation,
     ) {}
 
     public function applications(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -94,55 +98,91 @@ class FestivalWorkspaceController extends Controller
         ]);
     }
 
-    public function application(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry, FestivalActivityLogPresenter $activityPresenter): View
+    public function application(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, DeleteFestivalEntry $deleteEntry): View|RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['registrations'] || $permissions['finance'], 403);
         abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id, 404);
 
         $requestedTab = $request->query('tab');
-        $tab = $permissions['registrations'] && $requestedTab === 'history' ? 'history' : 'details';
-        $activityHistory = null;
+        if (in_array($requestedTab, ['details', 'history'], true)) {
+            $query = $request->query();
+            unset($query['tab']);
 
-        if ($tab === 'history') {
-            $activityHistory = FestivalActivityLog::query()
-                ->where('account_id', $account->id)
-                ->where('festival_edition_id', $festivalEdition->id)
-                ->where('festival_entry_id', $festivalEntry->id)
-                ->with(['actorUser:id,name', 'actorPortalUser:id,first_name,last_name,email,phone'])
-                ->orderByDesc('occurred_at')
-                ->orderByDesc('id')
-                ->paginate(20, ['*'], 'history_page')
-                ->withQueryString();
-            $activityHistory->setCollection($activityHistory->getCollection()->map(
-                fn (FestivalActivityLog $activity): array => $activityPresenter->present(
-                    $activity,
-                    $festivalEdition->timezone,
-                    $permissions['finance'],
-                ),
-            ));
-        } else {
-            $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+            return redirect()->route(
+                $requestedTab === 'history'
+                    ? 'dashboard.accounts.festivals.applications.history'
+                    : 'dashboard.accounts.festivals.applications.show',
+                array_merge([$account, $festivalEdition, $festivalEntry], $query),
+            );
         }
+
+        $this->loadApplication($festivalEntry, $festivalEdition, $permissions);
+        $canFullyConfirm = $permissions['registrations'] && in_array(
+            $festivalEntry->status,
+            [FestivalEntryStatus::Submitted, FestivalEntryStatus::UnderReview, FestivalEntryStatus::ChangesPending],
+            true,
+        );
 
         return view('festivals.staff.application', [
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
             'entry' => $festivalEntry,
-            'tab' => $tab,
-            'activityHistory' => $activityHistory,
-            'canDeleteApplication' => $tab === 'details' && $permissions['manage'],
-            'deleteApplicationRequiresPaymentConfirmation' => $tab === 'details'
-                && $permissions['manage']
+            'finalConfirmationBlockers' => $canFullyConfirm
+                ? $this->finalConfirmation->blockers($festivalEntry)
+                : [],
+            'canDeleteApplication' => $permissions['manage'],
+            'deleteApplicationRequiresPaymentConfirmation' => $permissions['manage']
                 && $deleteEntry->requiresPaymentConfirmation($festivalEntry),
             'deleteApplicationConfirmationPhrase' => DeleteFestivalEntry::CONFIRMATION_PHRASE,
-            'categories' => $tab === 'details'
-                ? $festivalEdition->categories()->with('direction')->orderBy('name')->get()
-                : collect(),
-            'currentStep' => $tab === 'details' && $permissions['registrations']
+            'categories' => $festivalEdition->categories()->with('direction')->orderBy('name')->get(),
+            'currentStep' => $permissions['registrations']
                 ? $festivalEntry->steps->first(fn ($step): bool => $step->status !== FestivalEntryStepStatus::Approved)
                 : null,
+        ]);
+    }
+
+    public function applicationHistory(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, FestivalActivityLogPresenter $activityPresenter): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['registrations'], 403);
+        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_edition_id === $festivalEdition->id, 404);
+
+        $historyType = $this->applicationHistoryTypes->normalize($request->query('type'));
+        $activityQuery = FestivalActivityLog::query()
+            ->where('account_id', $account->id)
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->where('festival_entry_id', $festivalEntry->id)
+            ->with(['actorUser:id,name', 'actorPortalUser:id,first_name,last_name,email,phone']);
+
+        if ($historyType !== null) {
+            $this->applicationHistoryTypes->apply($activityQuery, $historyType);
+        }
+
+        $activityHistory = $activityQuery
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->paginate(20, ['*'], 'history_page')
+            ->withQueryString();
+        $activityHistory->setCollection($activityHistory->getCollection()->map(
+            fn (FestivalActivityLog $activity): array => $activityPresenter->present(
+                $activity,
+                $festivalEdition->timezone,
+                $permissions['finance'],
+            ),
+        ));
+
+        return view('festivals.staff.application-history', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'entry' => $festivalEntry,
+            'activityHistory' => $activityHistory,
+            'historyType' => $historyType,
+            'historyTypeOptions' => collect($this->applicationHistoryTypes->values())
+                ->mapWithKeys(fn (string $type): array => [$type => $this->applicationHistoryTypes->label($type)])
+                ->all(),
         ]);
     }
 
@@ -454,73 +494,105 @@ class FestivalWorkspaceController extends Controller
         return back()->with('status', __('app.festival_ticket_voided'));
     }
 
-    public function communication(Request $request, Account $account, FestivalEdition $festivalEdition, QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts): View
+    public function communication(Request $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
         abort_unless($permissions['manage'], 403);
+
+        $legacyRoutes = [
+            'history' => 'dashboard.accounts.festivals.communication.history',
+            'announcements' => 'dashboard.accounts.festivals.communication.announcements',
+            'settings' => 'dashboard.accounts.festivals.communication.settings',
+        ];
         $requestedTab = $request->query('tab');
-        $tab = in_array($requestedTab, ['history', 'announcements', 'settings'], true) ? (string) $requestedTab : 'history';
-        $settings = collect();
-        $notificationStatistics = collect();
-        $announcements = null;
-        $notifications = null;
-        $notificationTypes = FestivalNotificationType::cases();
-        $filters = ['q' => '', 'type' => '', 'channel' => '', 'status' => ''];
+        $routeName = is_string($requestedTab) && isset($legacyRoutes[$requestedTab])
+            ? $legacyRoutes[$requestedTab]
+            : 'dashboard.accounts.festivals.communication.settings';
+        $query = $request->query();
+        unset($query['tab']);
 
-        if ($tab === 'history') {
-            $types = collect(FestivalNotificationType::cases())->pluck('value')->all();
-            $channels = collect(FestivalNotificationChannel::cases())->pluck('value')->all();
-            $statuses = collect(FestivalNotificationStatus::cases())->pluck('value')->all();
-            $filters = [
-                'q' => $request->string('q')->trim()->toString(),
-                'type' => in_array($request->query('type'), $types, true) ? (string) $request->query('type') : '',
-                'channel' => in_array($request->query('channel'), $channels, true) ? (string) $request->query('channel') : '',
-                'status' => in_array($request->query('status'), $statuses, true) ? (string) $request->query('status') : '',
-            ];
-            $notificationStatistics = FestivalNotification::query()
-                ->where('festival_edition_id', $festivalEdition->id)
-                ->selectRaw('status, count(*) as aggregate')
-                ->groupBy('status')
-                ->pluck('aggregate', 'status');
-            $notifications = FestivalNotification::query()
-                ->where('festival_edition_id', $festivalEdition->id)
-                ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
-                    ->where('recipient_name', 'like', '%'.$filters['q'].'%')
-                    ->orWhere('recipient_email', 'like', '%'.$filters['q'].'%')
-                    ->orWhere('recipient_phone', 'like', '%'.$filters['q'].'%')
-                    ->orWhere('subject', 'like', '%'.$filters['q'].'%')
-                    ->orWhere('text', 'like', '%'.$filters['q'].'%')))
-                ->when($filters['type'] !== '', fn ($query) => $query->where('type', $filters['type']))
-                ->when($filters['channel'] !== '', fn ($query) => $query->where('channel', $filters['channel']))
-                ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
-                ->latest('id')
-                ->paginate(20)
-                ->withQueryString();
-        } elseif ($tab === 'announcements') {
-            $announcements = FestivalAnnouncement::query()
-                ->where('festival_edition_id', $festivalEdition->id)
-                ->latest('id')
-                ->paginate(20)
-                ->withQueryString();
-        } else {
-            $settings = FestivalNotificationSetting::query()
-                ->whereBelongsTo($account)
-                ->get()
-                ->keyBy(fn (FestivalNotificationSetting $setting): string => $setting->type->value);
-        }
+        return redirect()->route($routeName, array_merge([$account, $festivalEdition], $query));
+    }
 
-        return view('festivals.staff.communication', [
+    public function communicationHistory(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['manage'], 403);
+
+        $types = collect(FestivalNotificationType::cases())->pluck('value')->all();
+        $channels = collect(FestivalNotificationChannel::cases())->pluck('value')->all();
+        $statuses = collect(FestivalNotificationStatus::cases())->pluck('value')->all();
+        $filters = [
+            'q' => $request->string('q')->trim()->toString(),
+            'type' => in_array($request->query('type'), $types, true) ? (string) $request->query('type') : '',
+            'channel' => in_array($request->query('channel'), $channels, true) ? (string) $request->query('channel') : '',
+            'status' => in_array($request->query('status'), $statuses, true) ? (string) $request->query('status') : '',
+        ];
+        $notificationStatistics = FestivalNotification::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+        $notifications = FestivalNotification::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
+                ->where('recipient_name', 'like', '%'.$filters['q'].'%')
+                ->orWhere('recipient_email', 'like', '%'.$filters['q'].'%')
+                ->orWhere('recipient_phone', 'like', '%'.$filters['q'].'%')
+                ->orWhere('subject', 'like', '%'.$filters['q'].'%')
+                ->orWhere('text', 'like', '%'.$filters['q'].'%')))
+            ->when($filters['type'] !== '', fn ($query) => $query->where('type', $filters['type']))
+            ->when($filters['channel'] !== '', fn ($query) => $query->where('channel', $filters['channel']))
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.communication-history', [
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
-            'tab' => $tab,
-            'notificationTypes' => $notificationTypes,
-            'notificationSettings' => $settings,
-            'connectedFestivalOwnerCount' => $tab === 'settings' ? $ownerTelegramAlerts->connectedOwnerCount($account) : 0,
+            'notificationTypes' => FestivalNotificationType::cases(),
             'notificationStatistics' => $notificationStatistics,
-            'announcements' => $announcements,
             'notifications' => $notifications,
             'filters' => $filters,
+        ]);
+    }
+
+    public function communicationAnnouncements(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['manage'], 403);
+        $announcements = FestivalAnnouncement::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view('festivals.staff.communication-announcements', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'announcements' => $announcements,
+        ]);
+    }
+
+    public function communicationSettings(Request $request, Account $account, FestivalEdition $festivalEdition, QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['manage'], 403);
+        $notificationSettings = FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->get()
+            ->keyBy(fn (FestivalNotificationSetting $setting): string => $setting->type->value);
+
+        return view('festivals.staff.communication-settings', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'notificationTypes' => FestivalNotificationType::cases(),
+            'notificationSettings' => $notificationSettings,
+            'connectedFestivalOwnerCount' => $ownerTelegramAlerts->connectedOwnerCount($account),
         ]);
     }
 

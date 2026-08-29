@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.157.0',
+                'date' => '2026-08-29',
+                'title' => 'Clearer Festival application review and communication',
+                'items' => ['Festival application lists now show every registration step and status. Application history has its own filterable page, grouping lifecycle, reviews, fields, payments, program and results, and other activity.', 'Application decisions now use action-specific confirmations, require correction details where needed, and show every blocker before final confirmation instead of failing only after the action.', 'Festival Communication now opens Notification scenarios by default and repeats the same three buttons across separate History, Announcements, and Scenarios pages. Email can be enabled or disabled independently for every scenario, and each scenario explains what triggers it.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.156.0',
                 'date' => '2026-08-29',
                 'title' => 'Festival participant entrance passes and friend tickets',
@@ -1388,6 +1395,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.157.0',
+                'date' => '2026-08-29',
+                'title' => 'Зрозуміліша перевірка заявок і комунікація фестивалю',
+                'items' => ['Список заявок фестивалю тепер показує кожен крок реєстрації та його стан. Історія заявки має окрему сторінку з фільтрами за життєвим циклом, перевірками, полями, оплатами, програмою й результатами та іншими діями.', 'Рішення щодо заявки тепер мають окремі підтвердження для кожної дії, вимагають дані про виправлення там, де це потрібно, і показують усі перешкоди до остаточного підтвердження ще до виконання дії.', 'Комунікація фестивалю тепер одразу відкриває «Сценарії сповіщень» і повторює ті самі три кнопки на окремих сторінках історії, оголошень і сценаріїв. Email можна незалежно вмикати або вимикати для кожного сценарію, а кожен сценарій пояснює, коли він спрацьовує.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.156.0',
                 'date' => '2026-08-29',

@@ -1538,6 +1538,78 @@ class FestivalRegistrationStepperTest extends TestCase
         ]);
     }
 
+    public function test_staff_application_uses_readiness_and_decision_aware_confirmation_modals(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category] = $this->festival();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Confirmation safeguards'),
+        );
+        $applicationStep = $this->step($entry, 'application');
+        $applicationStep->forceFill(['status' => FestivalEntryStepStatus::Submitted])->save();
+        $entry->forceFill([
+            'status' => FestivalEntryStatus::Submitted,
+            'submitted_at' => now(),
+        ])->save();
+        $charge = $entry->charges()->create([
+            'account_id' => $account->id,
+            'festival_entry_step_id' => $applicationStep->id,
+            'code' => 'FCH-CONFIRM-SAFEGUARD',
+            'kind' => 'participation',
+            'name' => 'Manual confirmation fee',
+            'status' => FestivalChargeStatus::Pending,
+            'amount_cents' => 12500,
+            'currency' => 'UAH',
+        ]);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $applicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]);
+
+        $blocked = $this->actingAs($owner, 'web')->get($applicationUrl);
+        $blocked->assertOk()
+            ->assertSee('data-confirm-blocked="true"', false)
+            ->assertSee(__('app.festival_full_confirm_blocked_title'))
+            ->assertSee($applicationStep->workflowStep->title)
+            ->assertSee(__('app.festival_step_status_submitted'))
+            ->assertSee('data-festival-decision-form', false)
+            ->assertSee('data-confirm-action', false)
+            ->assertSee(__('app.festival_review_approve'))
+            ->assertSee(__('app.festival_review_return_for_correction'))
+            ->assertSee(__('app.festival_review_reject_entry'))
+            ->assertSee(__('app.festival_review_approve_confirm_title'))
+            ->assertSee('"comment_required":true', false)
+            ->assertSee('"deadline_required":true', false)
+            ->assertSee(__('app.festival_manual_payment_confirm'))
+            ->assertSee(__('app.festival_manual_payment_reject'))
+            ->assertSee(__('app.festival_manual_payment_confirm_title'))
+            ->assertSee($charge->name)
+            ->assertSee('125 ₴');
+        $this->assertSame(2, substr_count($blocked->getContent(), 'data-festival-decision-form'));
+
+        $this->actingAs($owner, 'web')
+            ->from($applicationUrl)
+            ->patch(route('dashboard.accounts.festivals.applications.fully-confirm', [$account, $edition, $entry]))
+            ->assertRedirect($applicationUrl)
+            ->assertSessionHasErrors('festival_application');
+        $this->assertSame(FestivalEntryStatus::Submitted, $entry->refresh()->status);
+
+        $entry->steps()
+            ->whereHas('workflowStep', fn ($query) => $query->where('code', '!=', 'summary'))
+            ->update(['status' => FestivalEntryStepStatus::Approved->value, 'reviewed_at' => now()]);
+        $charge->forceFill(['status' => FestivalChargeStatus::Paid, 'paid_at' => now()])->save();
+
+        $ready = $this->actingAs($owner, 'web')->get($applicationUrl);
+        $ready->assertOk()
+            ->assertDontSee('data-confirm-blocked="true"', false)
+            ->assertSee(__('app.festival_full_confirm_title'));
+
+        $this->actingAs($owner, 'web')
+            ->patch(route('dashboard.accounts.festivals.applications.fully-confirm', [$account, $edition, $entry]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+        $this->assertSame(FestivalEntryStatus::Accepted, $entry->refresh()->status);
+    }
+
     public function test_lowering_a_paid_priced_answer_creates_a_non_blocking_refund_adjustment(): void
     {
         Queue::fake();

@@ -81,6 +81,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/applications', [FestivalWorkspaceController::class, 'applications'])->whereNumber('festivalEdition')->name('applications');
     Route::get('{festivalEdition:id}/applications/media-report', FestivalApplicationMediaReportController::class)->whereNumber('festivalEdition')->name('applications.media-report');
     Route::get('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'application'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.show');
+    Route::get('{festivalEdition:id}/applications/{festivalEntry}/history', [FestivalWorkspaceController::class, 'applicationHistory'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.history');
     Route::patch('{festivalEdition:id}/applications/{festivalEntry}/fully-confirm', [FestivalApplicationDecisionController::class, 'confirm'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.fully-confirm');
     Route::patch('{festivalEdition:id}/applications/{festivalEntry}/fully-decline', [FestivalApplicationDecisionController::class, 'decline'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.fully-decline');
     Route::delete('{festivalEdition:id}/applications/{festivalEntry}', [FestivalWorkspaceController::class, 'destroyApplication'])->whereNumber('festivalEdition')->whereNumber('festivalEntry')->name('applications.destroy');
@@ -98,6 +99,9 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/admission-types/create', [FestivalAdmissionTypeController::class, 'create'])->whereNumber('festivalEdition')->name('admission-types.create');
     Route::get('{festivalEdition:id}/admission-types/{festivalAdmissionType}/edit', [FestivalAdmissionTypeController::class, 'edit'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.edit');
     Route::get('{festivalEdition:id}/communication', [FestivalWorkspaceController::class, 'communication'])->whereNumber('festivalEdition')->name('communication');
+    Route::get('{festivalEdition:id}/communication/history', [FestivalWorkspaceController::class, 'communicationHistory'])->whereNumber('festivalEdition')->name('communication.history');
+    Route::get('{festivalEdition:id}/communication/announcements', [FestivalWorkspaceController::class, 'communicationAnnouncements'])->whereNumber('festivalEdition')->name('communication.announcements');
+    Route::get('{festivalEdition:id}/communication/settings', [FestivalWorkspaceController::class, 'communicationSettings'])->whereNumber('festivalEdition')->name('communication.settings');
     Route::get('{festivalEdition:id}/settings', [FestivalSettingsController::class, 'overview'])->whereNumber('festivalEdition')->name('settings');
     Route::get('{festivalEdition:id}/settings/scenes', [FestivalStageController::class, 'index'])->whereNumber('festivalEdition')->name('settings.stages');
     Route::get('{festivalEdition:id}/settings/scenes/create', [FestivalStageController::class, 'create'])->whereNumber('festivalEdition')->name('stages.create');

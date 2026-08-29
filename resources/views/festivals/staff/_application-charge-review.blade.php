@@ -69,19 +69,63 @@
             @endforeach
         </div>
     @endif
+    @php
+        $manualPaymentDecisionConfig = [
+            'approve' => [
+                'button_label' => __('app.festival_manual_payment_confirm'),
+                'button_variant' => 'success',
+                'confirm_title' => __('app.festival_manual_payment_confirm_title'),
+                'confirm_body' => __('app.festival_manual_payment_confirm_copy'),
+                'confirm_accept' => __('app.festival_manual_payment_confirm'),
+                'confirm_icon' => 'circle-check',
+                'confirm_variant' => 'success',
+                'comment_required' => false,
+                'deadline_required' => false,
+            ],
+            'reject' => [
+                'button_label' => __('app.festival_manual_payment_reject'),
+                'button_variant' => 'danger',
+                'confirm_title' => __('app.festival_manual_payment_reject_title'),
+                'confirm_body' => __('app.festival_manual_payment_reject_copy'),
+                'confirm_accept' => __('app.festival_manual_payment_reject'),
+                'confirm_icon' => 'circle-x',
+                'confirm_variant' => 'danger',
+                'comment_required' => false,
+                'deadline_required' => false,
+            ],
+        ];
+        $manualPaymentConfirmationDetails = [
+            ['label' => __('app.festival_charge'), 'value' => $charge->name],
+            ['label' => __('app.amount'), 'value' => \App\Support\MoneyFormatter::format($charge->amount_cents, $charge->currency)],
+        ];
+    @endphp
     <form
         method="POST"
         action="{{ route('dashboard.accounts.festivals.charges.manual-review', [$account, $edition, $charge]) }}"
         class="mt-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
         data-async-form
+        data-confirm-action
+        data-festival-decision-form
+        data-decision-config='@json($manualPaymentDecisionConfig)'
+        data-decision-base-details='@json($manualPaymentConfirmationDetails)'
+        data-decision-notes-label="{{ __('app.notes') }}"
+        data-decision-empty-value="—"
+        data-confirm-title="{{ __('app.festival_manual_payment_confirm_title') }}"
+        data-confirm-body="{{ __('app.festival_manual_payment_confirm_copy') }}"
+        data-confirm-accept="{{ __('app.festival_manual_payment_confirm') }}"
+        data-confirm-icon="circle-check"
+        data-confirm-variant="success"
+        data-confirm-details='@json($manualPaymentConfirmationDetails)'
     >
         @csrf
         @method('PATCH')
-        <select name="decision" class="crm-field mt-0">
-            <option value="approve">{{ __('app.accept') }}</option>
-            <option value="reject">{{ __('app.reject') }}</option>
+        <select name="decision" class="crm-field mt-0" data-festival-decision>
+            <option value="approve">{{ __('app.festival_manual_payment_confirm') }}</option>
+            <option value="reject">{{ __('app.festival_manual_payment_reject') }}</option>
         </select>
-        <input name="notes" value="{{ $charge->notes }}" placeholder="{{ __('app.notes') }}" class="crm-field mt-0">
-        <x-ui.button type="submit" size="sm">{{ __('app.save') }}</x-ui.button>
+        <input name="notes" value="{{ $charge->notes }}" placeholder="{{ __('app.notes') }}" class="crm-field mt-0" data-festival-decision-notes>
+        <x-ui.button type="submit" size="sm" variant="success" data-festival-decision-submit>
+            <span data-festival-decision-submit-label>{{ __('app.festival_manual_payment_confirm') }}</span>
+        </x-ui.button>
     </form>
 </div>
