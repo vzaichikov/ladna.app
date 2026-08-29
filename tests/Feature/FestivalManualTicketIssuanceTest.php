@@ -129,43 +129,14 @@ class FestivalManualTicketIssuanceTest extends TestCase
         app(IssueManualFestivalTickets::class)->execute($edition, $activeGuest, $type, $owner, [['holder_name' => 'Reversed']]);
     }
 
-    public function test_participant_job_groups_shared_contact_deduplicates_entries_and_never_recreates_voided_tickets(): void
+    public function test_participant_ticket_job_is_retired_in_favor_of_dedicated_entrance_passes(): void
     {
-        [$account, $edition, $type, $owner] = $this->festival(maxTickets: 10, inventory: 10);
-        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
-        $registrant = FestivalPortalUser::factory()->for($account)->create([
-            'email' => 'accepted.owner@example.test',
-            'email_normalized' => 'accepted.owner@example.test',
-        ]);
-        $participants = FestivalParticipant::factory()->count(2)->for($registrant)->create(['account_id' => $account->id]);
-        $entries = FestivalEntry::factory()->count(2)->for($category)->create([
-            'account_id' => $account->id,
-            'festival_edition_id' => $edition->id,
-            'festival_portal_user_id' => $registrant->id,
-            'status' => 'accepted',
-        ]);
-        foreach ($entries as $entry) {
-            foreach ($participants as $position => $participant) {
-                $entry->participants()->attach($participant->id, ['account_id' => $account->id, 'sort_order' => $position]);
-            }
-        }
+        $job = new IssueFestivalParticipantTickets(1, 2, 3, 4);
 
-        $job = new IssueFestivalParticipantTickets($edition->id, $registrant->id, $type->id, $owner->id);
-        app()->call([$job, 'handle']);
+        $job->handle();
 
-        $guest = FestivalPortalUser::query()->whereBelongsTo($account)->forRole(FestivalPortalRole::Guest)->where('email_normalized', $registrant->email_normalized)->firstOrFail();
-        $this->assertNull($guest->password);
-        $order = FestivalTicketOrder::query()->where('festival_portal_user_id', $guest->id)->firstOrFail();
-        $this->assertSame(2, $order->tickets()->count());
-        $this->assertEqualsCanonicalizing($participants->modelKeys(), $order->tickets()->pluck('festival_participant_id')->all());
-        $this->assertSame(1, FestivalNotification::query()->where('festival_ticket_order_id', $order->id)->where('channel', 'email')->count());
-
-        $ticket = $order->tickets()->firstOrFail();
-        $ticket->update(['status' => 'voided']);
-        app()->call([$job, 'handle']);
-
-        $this->assertSame(1, FestivalTicketOrder::query()->where('festival_portal_user_id', $guest->id)->count());
-        $this->assertSame(2, FestivalTicket::query()->where('festival_edition_id', $edition->id)->count());
+        $this->assertSame('1:2:3', $job->uniqueId());
+        $this->assertSame(0, FestivalTicketOrder::query()->count());
     }
 
     public function test_judge_job_supports_portal_and_internal_assignments_and_deduplicates_by_contact(): void
@@ -331,15 +302,15 @@ class FestivalManualTicketIssuanceTest extends TestCase
 
         $issuePage = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets.issue', [$account, $edition]));
         $issuePage->assertOk();
-        $this->assertSame(1, $issuePage->viewData('participantStats')['remaining']);
+        $this->assertArrayNotHasKey('participantStats', $issuePage->viewData());
+        $issuePage->assertDontSee('name="audience" value="participants"', false);
         $this->assertSame(1, $issuePage->viewData('judgeStats')['skipped']);
         $this->assertSame(0, $issuePage->viewData('judgeStats')['remaining']);
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.tickets.issue.audience', [$account, $edition]), [
             'audience' => 'participants',
             'festival_admission_type_id' => $type->id,
-        ])->assertRedirect();
-        Queue::assertPushed(IssueFestivalParticipantTickets::class, 1);
+        ])->assertSessionHasErrors('audience');
 
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.tickets.issue.audience', [$account, $edition]), [
             'audience' => 'judges',

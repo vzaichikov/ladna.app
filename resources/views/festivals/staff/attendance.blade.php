@@ -29,6 +29,10 @@
                 :ticket-types="$entranceTools['ticket_types']"
                 :payment-providers="$entranceTools['payment_providers']"
                 :currency="$festivalEdition->currency"
+                :search-label="__('app.festival_entrance_search_people')"
+                :search-hint="__('app.festival_entrance_search_hint')"
+                :search-placeholder="__('app.festival_entrance_search_placeholder')"
+                :no-people-label="__('app.festival_entrance_no_people')"
             />
         @endif
 

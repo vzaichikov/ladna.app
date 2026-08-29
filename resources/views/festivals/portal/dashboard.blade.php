@@ -53,6 +53,9 @@
                                     {{ __('app.festival_my_applications_count', ['count' => $applicationCount]) }}
                                 </x-ui.button>
                                 <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug])" variant="secondary">{{ __('app.more') }}</x-ui.button>
+                                @if ($edition->admission_available)
+                                    <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug, 'friends' => 1]).'#festival-admission'" variant="success">{{ __('app.festival_buy_tickets_for_friends') }}</x-ui.button>
+                                @endif
                             </div>
                         </div>
                     </article>

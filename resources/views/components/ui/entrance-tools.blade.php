@@ -5,11 +5,20 @@
     'ticketTypes' => collect(),
     'paymentProviders' => collect(),
     'currency' => null,
+    'canSell' => true,
+    'searchLabel' => null,
+    'searchHint' => null,
+    'searchPlaceholder' => null,
+    'noPeopleLabel' => null,
 ])
 
 @php
     $ticketTypes = collect($ticketTypes);
     $paymentProviders = collect($paymentProviders);
+    $searchLabel ??= __('app.entrance_search_guests');
+    $searchHint ??= __('app.entrance_guest_search_hint');
+    $searchPlaceholder ??= __('app.entrance_guest_search_placeholder');
+    $noPeopleLabel ??= __('app.entrance_no_guests_found');
 @endphp
 
 <section
@@ -27,10 +36,10 @@
     data-card-ready-label="{{ __('app.entrance_payment_qr_ready') }}"
     data-payment-confirmed-label="{{ __('app.entrance_payment_confirmed') }}"
     data-request-error="{{ __('app.entrance_request_failed') }}"
-    data-search-hint="{{ __('app.entrance_guest_search_hint') }}"
+    data-search-hint="{{ $searchHint }}"
     data-search-minimum-label="{{ __('app.entrance_guest_search_minimum') }}"
     data-searching-label="{{ __('app.entrance_searching') }}"
-    data-no-guests-label="{{ __('app.entrance_no_guests_found') }}"
+    data-no-guests-label="{{ $noPeopleLabel }}"
     data-no-tickets-label="{{ __('app.entrance_guest_has_no_tickets') }}"
     data-guest-fallback="{{ __('app.entrance_guest') }}"
     data-ticket-fallback="{{ __('app.entrance_ticket') }}"
@@ -41,8 +50,9 @@
     <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <x-ui.button type="button" data-entrance-search-toggle aria-expanded="false" aria-controls="entrance-guest-search" variant="secondary" class="min-h-11 w-full sm:w-auto">
             <x-ui.icon name="search" class="h-4 w-4" />
-            {{ __('app.entrance_search_guests') }}
+            {{ $searchLabel }}
         </x-ui.button>
+        @if ($canSell)
         <x-ui.button type="button" data-entrance-sale-open="cash" variant="success" class="min-h-11 w-full sm:w-auto" :disabled="$ticketTypes->isEmpty()">
             <x-ui.icon name="banknote" class="h-4 w-4" />
             {{ __('app.entrance_cash_ticket') }}
@@ -51,12 +61,13 @@
             <x-ui.icon name="credit-card" class="h-4 w-4" />
             {{ __('app.entrance_card_ticket') }}
         </x-ui.button>
+        @endif
     </div>
 
     <div id="entrance-guest-search" class="mt-4 hidden border-t border-stone-100 pt-4" data-entrance-search-panel>
         <div class="flex items-start gap-2">
             <label class="min-w-0 flex-1">
-                <span class="sr-only">{{ __('app.entrance_search_guests') }}</span>
+                <span class="sr-only">{{ $searchLabel }}</span>
                 <span class="relative block">
                     <x-ui.icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
@@ -64,7 +75,7 @@
                         autocomplete="off"
                         inputmode="search"
                         class="crm-field mt-0 min-h-12 pl-10 text-base"
-                        placeholder="{{ __('app.entrance_guest_search_placeholder') }}"
+                        placeholder="{{ $searchPlaceholder }}"
                         data-entrance-search-input
                     >
                 </span>
@@ -73,10 +84,11 @@
                 <x-ui.icon name="x" class="h-5 w-5" />
             </x-ui.button>
         </div>
-        <p class="mt-2 min-h-5 text-xs text-slate-500" aria-live="polite" data-entrance-search-status>{{ __('app.entrance_guest_search_hint') }}</p>
+        <p class="mt-2 min-h-5 text-xs text-slate-500" aria-live="polite" data-entrance-search-status>{{ $searchHint }}</p>
         <div class="mt-2 grid max-h-[min(28rem,55dvh)] gap-2 overflow-y-auto overscroll-contain" data-entrance-search-results></div>
     </div>
 
+    @if ($canSell)
     <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="entrance-sale-title" data-entrance-sale-modal>
         <div class="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6" data-entrance-sale-panel>
             <div class="flex items-start justify-between gap-4">
@@ -149,6 +161,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="entrance-undo-title" data-entrance-undo-modal>
         <div class="w-full max-w-md rounded-2xl border-t-4 border-rose-400 bg-white p-5 shadow-2xl sm:p-6">

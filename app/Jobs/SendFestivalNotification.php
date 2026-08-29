@@ -2,12 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Actions\Festivals\FestivalEntrancePassEligibility;
+use App\Enums\FestivalEditionStatus;
+use App\Enums\FestivalEntrancePassStatus;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
+use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
+use App\Models\FestivalEntrancePass;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
@@ -51,6 +56,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         PhoneNumberNormalizer $phones,
         MailDeliverySettingsResolver $mailSettingsResolver,
         FestivalTelegramNotificationSender $telegramSender,
+        FestivalEntrancePassEligibility $entrancePassEligibility,
     ): void {
         $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
 
@@ -74,6 +80,13 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         $locale = $this->recipientLocale($notification);
         if ($locale === null) {
             $this->cancel($notification, 'recipient_state_changed');
+
+            return;
+        }
+
+        if ($notification->type === FestivalNotificationType::EntrancePassesIssued
+            && ! $this->entrancePassIsStillAvailable($notification, $entrancePassEligibility)) {
+            $this->cancel($notification, 'entrance_pass_eligibility_changed');
 
             return;
         }
@@ -160,6 +173,22 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             $notification->forceFill(['status' => FestivalNotificationStatus::Failed, 'failed_at' => now(), 'failure_reason' => str($exception->getMessage())->limit(1000)])->save();
             throw $exception;
         }
+    }
+
+    private function entrancePassIsStillAvailable(FestivalNotification $notification, FestivalEntrancePassEligibility $eligibility): bool
+    {
+        $passes = FestivalEntrancePass::query()
+            ->where('account_id', $notification->account_id)
+            ->where('festival_edition_id', $notification->festival_edition_id)
+            ->where('status', FestivalEntrancePassStatus::Valid->value)
+            ->whereHas('participant', fn ($query) => $query
+                ->where('festival_portal_user_id', $notification->festival_portal_user_id))
+            ->with(['edition', 'participant'])
+            ->get();
+
+        return $passes->contains(fn (FestivalEntrancePass $pass): bool => ! in_array($pass->edition->status, [FestivalEditionStatus::Cancelled, FestivalEditionStatus::Archived], true)
+            && ! $pass->edition->ends_at?->isPast()
+            && $eligibility->isEligible($pass->edition, $pass->participant));
     }
 
     public function failed(?Throwable $exception): void

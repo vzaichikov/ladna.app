@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.156.0',
+                'date' => '2026-08-29',
+                'title' => 'Festival participant entrance passes and friend tickets',
+                'items' => ['Approved Festival performers and their selected confirmed helpers now receive separate entrance passes. Door teams can scan and search them with dedicated participant and helper counters without consuming guest ticket inventory; lost eligibility disables the pass, while completed Festivals remain untouched.', 'The participant cabinet now keeps entrance passes and tickets bought for friends in separate tabs. Participants can email or print their passes and use a prefilled public checkout to buy ordinary admission tickets for friends while preserving the established private ticket-delivery flow.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.155.0',
                 'date' => '2026-08-28',
                 'title' => 'Direct Festival Telegram access',
@@ -1381,6 +1388,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.156.0',
+                'date' => '2026-08-29',
+                'title' => 'Перепустки учасників фестивалю та квитки для друзів',
+                'items' => ['Схвалені учасники фестивалю та їхні обрані підтверджені помічники тепер отримують окремі перепустки. Команда входу може сканувати й шукати їх та бачити окремі лічильники учасників і помічників без зменшення кількості гостьових квитків; втрата права вимикає перепустку, а завершені фестивалі залишаються без змін.', 'У кабінеті учасника перепустки та придбані для друзів квитки тепер розділені на окремі вкладки. Учасник може надіслати перепустки електронною поштою або надрукувати їх і скористатися попередньо заповненим публічним оформленням звичайних квитків для друзів зі збереженням чинного приватного способу доставки квитків.'],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.155.0',
                 'date' => '2026-08-28',

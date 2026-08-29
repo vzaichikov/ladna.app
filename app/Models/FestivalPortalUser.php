@@ -155,6 +155,21 @@ class FestivalPortalUser extends Authenticatable implements HasLocalePreference
         return $this->hasMany(FestivalTicketOrder::class);
     }
 
+    public function purchasedTicketOrders(): HasMany
+    {
+        return $this->hasMany(FestivalTicketOrder::class, 'purchaser_festival_portal_user_id');
+    }
+
+    public function entrancePasses(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            FestivalEntrancePass::class,
+            FestivalParticipant::class,
+            'festival_portal_user_id',
+            'festival_participant_id',
+        );
+    }
+
     public function tickets(): HasManyThrough
     {
         return $this->hasManyThrough(

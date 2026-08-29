@@ -79,12 +79,12 @@
 
     <section class="space-y-4">
         <div><h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_issue_missing') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_issue_missing_copy') }}</p></div>
-        <div class="grid gap-5 lg:grid-cols-2">
-            @foreach (['participants' => $participantStats, 'judges' => $judgeStats] as $audience => $stats)
+        <div class="grid gap-5">
+            @foreach (['judges' => $judgeStats] as $audience => $stats)
                 <form method="POST" action="{{ route('dashboard.accounts.festivals.tickets.issue.audience', [$account, $edition]) }}" class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
                     @csrf
                     <input type="hidden" name="audience" value="{{ $audience }}">
-                    <h3 class="text-lg font-semibold text-slate-950">{{ $audience === 'participants' ? __('app.festival_participants') : __('app.festival_judges') }}</h3>
+                    <h3 class="text-lg font-semibold text-slate-950">{{ __('app.festival_judges') }}</h3>
                     <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                         @foreach (['eligible', 'already_issued', 'skipped', 'remaining'] as $stat)
                             <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">{{ __('app.festival_ticket_stat_'.$stat) }}</p><p class="mt-1 text-xl font-semibold text-slate-950">{{ $stats[$stat] }}</p></div>

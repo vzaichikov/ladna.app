@@ -29,7 +29,7 @@ class IssueFestivalAudienceTicketsRequest extends FormRequest
         $edition = $this->route('festivalEdition');
 
         return [
-            'audience' => ['required', Rule::in(['participants', 'judges'])],
+            'audience' => ['required', Rule::in(['judges'])],
             'festival_admission_type_id' => [
                 'required',
                 'integer',

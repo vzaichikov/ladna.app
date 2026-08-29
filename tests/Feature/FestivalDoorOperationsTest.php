@@ -301,7 +301,8 @@ class FestivalDoorOperationsTest extends TestCase
         ]);
         $this->actingAs($scanOnlyStaff)
             ->getJson(route('dashboard.accounts.festivals.entrance.search', [$account, $edition, 'q' => $ticket->code]))
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonPath('results.0.tickets.0.code', $ticket->code);
         $this->actingAs($scanOnlyStaff)
             ->getJson(route('dashboard.accounts.festivals.attendance.data', [$account, $edition]))
             ->assertForbidden();

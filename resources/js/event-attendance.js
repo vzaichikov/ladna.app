@@ -26,6 +26,9 @@ export function initEventAttendance() {
     const total = root.querySelector('[data-attendance-total]');
     const passed = root.querySelector('[data-attendance-passed]');
     const waiting = root.querySelector('[data-attendance-waiting]');
+    const guestTickets = root.querySelector('[data-attendance-guests]');
+    const participants = root.querySelector('[data-attendance-participants]');
+    const helpers = root.querySelector('[data-attendance-helpers]');
     const cash = root.querySelector('[data-attendance-cash]');
     const updated = root.querySelector('[data-attendance-updated]');
     const tickets = root.querySelector('[data-attendance-tickets]');
@@ -103,13 +106,18 @@ export function initEventAttendance() {
     };
 
     const update = (payload) => {
-        if (!tickets || !Array.isArray(payload.tickets)) {
+        const credentials = Array.isArray(payload.credentials) ? payload.credentials : payload.tickets;
+
+        if (!tickets || !Array.isArray(credentials)) {
             return;
         }
 
         total && (total.textContent = String(payload.total ?? 0));
         passed && (passed.textContent = String(payload.passed ?? 0));
         waiting && (waiting.textContent = String(payload.waiting ?? payload.unpassed ?? Math.max(0, Number(payload.total ?? 0) - Number(payload.passed ?? 0))));
+        guestTickets && (guestTickets.textContent = `${payload.guest_tickets?.passed ?? payload.passed ?? 0}/${payload.guest_tickets?.total ?? payload.total ?? 0}`);
+        participants && (participants.textContent = `${payload.participants?.passed ?? 0}/${payload.participants?.total ?? 0}`);
+        helpers && (helpers.textContent = `${payload.helpers?.passed ?? 0}/${payload.helpers?.total ?? 0}`);
         cash && (cash.textContent = cashLabel(payload) || '—');
         updated && (updated.textContent = payload.updated_at_label || root.dataset.liveLabel || updated.textContent);
         const existingTickets = new Map(
@@ -118,12 +126,14 @@ export function initEventAttendance() {
         );
         const fragment = document.createDocumentFragment();
 
-        payload.tickets.forEach((ticketData) => {
-            const id = String(ticketData.id);
+        credentials.forEach((ticketData) => {
+            const id = String(ticketData.key ?? ticketData.id);
             const ticket = existingTickets.get(id) ?? createTicket(id);
 
             ticket.querySelector('[data-attendance-customer]').textContent = String(ticketData.customer_name ?? ticketData.customer ?? '');
-            ticket.querySelector('[data-attendance-type]').textContent = String(ticketData.type ?? ticketData.ticket_type ?? '');
+            ticket.querySelector('[data-attendance-type]').textContent = [ticketData.kind_label, ticketData.type ?? ticketData.ticket_type]
+                .filter((value, index, values) => value && values.indexOf(value) === index)
+                .join(' · ');
             ticket.querySelector('[data-attendance-code]').textContent = String(ticketData.code ?? '');
             setTicketState(ticket, ticketData);
             fragment.append(ticket);

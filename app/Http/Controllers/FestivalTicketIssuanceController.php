@@ -4,18 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\IssueManualFestivalTickets;
 use App\Enums\FestivalAdmissionDeliveryMode;
-use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\IssueFestivalAudienceTicketsRequest;
 use App\Http\Requests\IssueFestivalTicketRequest;
 use App\Jobs\IssueFestivalJudgeTickets;
-use App\Jobs\IssueFestivalParticipantTickets;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
-use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrderItem;
@@ -69,16 +66,7 @@ class FestivalTicketIssuanceController extends Controller
             ->orderBy('id')
             ->get();
 
-        $participants = $this->acceptedParticipants($festivalEdition);
-        $usableParticipantRegistrantIds = $this->usableParticipantRegistrantIds($participants, $account);
         $judgeGroups = $this->judgeGroups($festivalEdition);
-        $participantIds = $participants->modelKeys();
-        $participantIssuedIds = FestivalTicket::query()
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->whereIn('festival_participant_id', $participantIds)
-            ->pluck('festival_participant_id')
-            ->filter()
-            ->unique();
         $judgeAutomationKeys = $judgeGroups->pluck('automation_key');
         $judgeIssuedKeys = FestivalTicket::query()
             ->where('festival_edition_id', $festivalEdition->id)
@@ -93,12 +81,6 @@ class FestivalTicketIssuanceController extends Controller
             'admissionTypes' => $admissionTypes,
             'capacityByType' => $this->capacityByType($festivalEdition, $admissionTypes),
             'filters' => $filters,
-            'participantStats' => [
-                'eligible' => $participants->count(),
-                'already_issued' => $participantIssuedIds->count(),
-                'skipped' => $participants->reject(fn (FestivalParticipant $participant) => $usableParticipantRegistrantIds->contains($participant->festival_portal_user_id))->count(),
-                'remaining' => $participants->whereNotIn('id', $participantIssuedIds)->filter(fn (FestivalParticipant $participant) => $usableParticipantRegistrantIds->contains($participant->festival_portal_user_id))->count(),
-            ],
             'judgeStats' => [
                 'eligible' => $judgeGroups->count(),
                 'already_issued' => $judgeIssuedKeys->count(),
@@ -128,27 +110,9 @@ class FestivalTicketIssuanceController extends Controller
     public function storeAudience(IssueFestivalAudienceTicketsRequest $request, Account $account, FestivalEdition $festivalEdition): RedirectResponse
     {
         $admissionTypeId = $request->integer('festival_admission_type_id');
-        $queued = $request->validated('audience') === 'participants'
-            ? $this->dispatchParticipantJobs($festivalEdition, $account, $admissionTypeId, $request->user()->id)
-            : $this->dispatchJudgeJobs($festivalEdition, $admissionTypeId, $request->user()->id);
+        $queued = $this->dispatchJudgeJobs($festivalEdition, $admissionTypeId, $request->user()->id);
 
         return back()->with('status', trans_choice('app.festival_manual_ticket_jobs_queued', $queued, ['count' => $queued]));
-    }
-
-    /** @return Collection<int, FestivalParticipant> */
-    private function acceptedParticipants(FestivalEdition $edition): Collection
-    {
-        return FestivalParticipant::query()
-            ->where('account_id', $edition->account_id)
-            ->whereNull('archived_at')
-            ->whereHas('entries', fn ($query) => $query
-                ->where('festival_edition_id', $edition->id)
-                ->where('status', FestivalEntryStatus::Accepted->value))
-            ->with('portalUser')
-            ->orderBy('id')
-            ->get()
-            ->unique('id')
-            ->values();
     }
 
     /** @return Collection<int, array{email: string, phone_normalized: string|null, assignment_ids: array<int, int>, automation_key: string, is_usable: bool}> */
@@ -211,37 +175,6 @@ class FestivalTicketIssuanceController extends Controller
         });
     }
 
-    /**
-     * @param  Collection<int, FestivalParticipant>  $participants
-     * @return Collection<int, int>
-     */
-    private function usableParticipantRegistrantIds(Collection $participants, Account $account): Collection
-    {
-        $registrants = $participants->pluck('portalUser')->filter()->unique('id');
-        $emails = $registrants->pluck('email_normalized')->filter()->unique();
-        $phones = $registrants->pluck('phone_normalized')->filter()->unique();
-        $guests = FestivalPortalUser::query()
-            ->where('account_id', $account->id)
-            ->where('role', FestivalPortalRole::Guest->value)
-            ->where(fn (Builder $query) => $query->whereIn('email_normalized', $emails)->orWhereIn('phone_normalized', $phones))
-            ->get();
-        $guestsByEmail = $guests->keyBy('email_normalized');
-        $guestsByPhone = $guests->whereNotNull('phone_normalized')->keyBy('phone_normalized');
-
-        return $registrants->filter(function (FestivalPortalUser $registrant) use ($guestsByEmail, $guestsByPhone): bool {
-            if (! $registrant->is_active || blank($registrant->email) || filter_var($registrant->email, FILTER_VALIDATE_EMAIL) === false) {
-                return false;
-            }
-
-            $guest = $guestsByEmail->get($registrant->email_normalized);
-            if ($guest) {
-                return $guest->is_active;
-            }
-
-            return blank($registrant->phone_normalized) || ! $guestsByPhone->has($registrant->phone_normalized);
-        })->pluck('id')->values();
-    }
-
     /** @param Collection<int, FestivalAdmissionType> $admissionTypes */
     private function capacityByType(FestivalEdition $edition, Collection $admissionTypes): Collection
     {
@@ -260,24 +193,6 @@ class FestivalTicketIssuanceController extends Controller
         return $admissionTypes->mapWithKeys(fn (FestivalAdmissionType $type): array => [
             $type->id => min($type->remainingQuantity(), $packageRemaining),
         ]);
-    }
-
-    private function dispatchParticipantJobs(FestivalEdition $edition, Account $account, int $admissionTypeId, int $actorId): int
-    {
-        $participants = $this->acceptedParticipants($edition);
-        $usableRegistrantIds = $this->usableParticipantRegistrantIds($participants, $account);
-        $issuedIds = FestivalTicket::query()->where('festival_edition_id', $edition->id)->whereNotNull('festival_participant_id')->pluck('festival_participant_id');
-        $registrantIds = $participants
-            ->whereNotIn('id', $issuedIds)
-            ->filter(fn (FestivalParticipant $participant) => $usableRegistrantIds->contains($participant->festival_portal_user_id))
-            ->pluck('festival_portal_user_id')
-            ->unique();
-
-        foreach ($registrantIds as $registrantId) {
-            IssueFestivalParticipantTickets::dispatch($edition->id, (int) $registrantId, $admissionTypeId, $actorId);
-        }
-
-        return $registrantIds->count();
     }
 
     private function dispatchJudgeJobs(FestivalEdition $edition, int $admissionTypeId, int $actorId): int

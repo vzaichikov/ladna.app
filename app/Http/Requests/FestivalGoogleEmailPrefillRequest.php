@@ -25,6 +25,7 @@ class FestivalGoogleEmailPrefillRequest extends FormRequest
             'items' => ['nullable', 'array', 'max:25'],
             'items.*' => ['nullable'],
             'terms' => ['sometimes', 'accepted'],
+            'friends' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -40,6 +41,7 @@ class FestivalGoogleEmailPrefillRequest extends FormRequest
                 'provider',
                 'items',
                 'terms',
+                'friends',
             ])
             ->all();
 

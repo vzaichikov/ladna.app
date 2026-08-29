@@ -275,6 +275,16 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalTicket::class);
     }
 
+    public function entrancePasses(): HasMany
+    {
+        return $this->hasMany(FestivalEntrancePass::class);
+    }
+
+    public function festivalEntrancePasses(): HasMany
+    {
+        return $this->entrancePasses();
+    }
+
     public function purchase(): HasOne
     {
         return $this->hasOne(FestivalEditionPurchase::class);

@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionStatus;
+use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Enums\IntegrationProvider;
 use App\Models\Account;
 use App\Models\FestivalEdition;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTimeline;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
@@ -103,6 +105,18 @@ class FestivalPublicController extends Controller
         $festivalTelegramBotUrl = $telegramInstallation?->is_enabled && filled($telegramInstallation->bot_username)
             ? 'https://t.me/'.ltrim((string) $telegramInstallation->bot_username, '@')
             : null;
+        $authenticatedPortalUser = $request->user('festival');
+        $festivalFriendPurchase = $request->boolean('friends')
+            && $authenticatedPortalUser instanceof FestivalPortalUser
+            && $authenticatedPortalUser->account_id === $account->id
+            && $authenticatedPortalUser->role === FestivalPortalRole::Registrant
+            && $authenticatedPortalUser->is_active;
+        $festivalCheckoutPrefill = $festivalFriendPurchase ? [
+            'buyer_name' => $authenticatedPortalUser->displayName(),
+            'buyer_email' => $authenticatedPortalUser->email,
+            'buyer_email_confirmation' => $authenticatedPortalUser->email,
+            'buyer_phone' => $authenticatedPortalUser->phone,
+        ] : [];
 
         return view($landingTemplate['view'], compact(
             'account',
@@ -116,6 +130,8 @@ class FestivalPublicController extends Controller
             'festivalPaymentSettings',
             'festivalGoogleEmailPrefillAvailable',
             'festivalTelegramBotUrl',
+            'festivalFriendPurchase',
+            'festivalCheckoutPrefill',
         ));
     }
 

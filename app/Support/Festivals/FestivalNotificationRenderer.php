@@ -41,6 +41,7 @@ final class FestivalNotificationRenderer
             'rank' => (string) ($payload['rank'] ?? '—'),
             'order' => (string) ($payload['order_id'] ?? '—'),
             'count' => (string) ($payload['tickets_count'] ?? '—'),
+            'passes_count' => (string) ($payload['passes_count'] ?? '—'),
         ];
         if ($type === FestivalNotificationType::EntryReviewed) {
             return $this->entryReviewed($locale, $recipientName, $payload, $replacements, $actionUrl);
@@ -193,7 +194,8 @@ final class FestivalNotificationRenderer
             FestivalNotificationType::SchedulePublished,
             FestivalNotificationType::ScheduleChanged => __('app.festival_view_schedule', locale: $locale),
             FestivalNotificationType::ResultsPublished => __('app.festival_view_results', locale: $locale),
-            FestivalNotificationType::TicketsIssued => __('app.festival_open_tickets', locale: $locale),
+            FestivalNotificationType::TicketsIssued,
+            FestivalNotificationType::EntrancePassesIssued => __('app.festival_open_tickets', locale: $locale),
             default => null,
         };
     }

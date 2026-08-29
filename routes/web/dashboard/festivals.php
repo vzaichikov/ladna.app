@@ -235,6 +235,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/attendance', [FestivalEntranceController::class, 'attendance'])->whereNumber('festivalEdition')->name('attendance');
     Route::get('{festivalEdition:id}/attendance/data', [FestivalEntranceController::class, 'attendanceData'])->whereNumber('festivalEdition')->name('attendance.data');
     Route::post('{festivalEdition:id}/attendance/tickets/{festivalTicket}/undo', [FestivalEntranceController::class, 'undo'])->whereNumber('festivalEdition')->whereNumber('festivalTicket')->middleware('throttle:festival-scanner')->name('attendance.tickets.undo');
+    Route::post('{festivalEdition:id}/attendance/passes/{festivalEntrancePass}/undo', [FestivalEntranceController::class, 'undoPass'])->whereNumber('festivalEdition')->whereNumber('festivalEntrancePass')->middleware('throttle:festival-scanner')->name('attendance.passes.undo');
     Route::get('{festivalEdition:id}/entrance/search', [FestivalEntranceController::class, 'search'])->whereNumber('festivalEdition')->middleware('throttle:120,1')->name('entrance.search');
     Route::post('{festivalEdition:id}/entrance/tickets/cash', [FestivalEntranceController::class, 'cashSale'])->whereNumber('festivalEdition')->middleware('throttle:festival-checkout')->name('entrance.cash');
     Route::post('{festivalEdition:id}/entrance/tickets/card', [FestivalEntranceController::class, 'cardSale'])->whereNumber('festivalEdition')->middleware('throttle:festival-checkout')->name('entrance.card');

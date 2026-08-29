@@ -37,7 +37,7 @@
             <div class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
                 <h2 class="text-xl font-semibold">{{ __('app.festival_manual_code') }}</h2>
                 <form data-scanner-manual class="mt-4 space-y-3">
-                    <input name="code" required autocomplete="off" class="crm-field mt-0 font-mono uppercase tracking-wide" placeholder="FST-XXXX-XXXX">
+                    <input name="code" required autocomplete="off" class="crm-field mt-0 font-mono uppercase tracking-wide" placeholder="FST-… / FSP-…">
                     <x-ui.button type="submit" class="w-full">{{ __('app.festival_check_in') }}</x-ui.button>
                 </form>
                 <div data-scanner-result class="mt-5 hidden rounded-xl p-4 text-sm font-semibold" role="status"></div>
@@ -52,6 +52,11 @@
                 :ticket-types="$entranceTools['ticket_types']"
                 :payment-providers="$entranceTools['payment_providers']"
                 :currency="$festivalEdition->currency"
+                :can-sell="$entranceTools['can_sell']"
+                :search-label="__('app.festival_entrance_search_people')"
+                :search-hint="__('app.festival_entrance_search_hint')"
+                :search-placeholder="__('app.festival_entrance_search_placeholder')"
+                :no-people-label="__('app.festival_entrance_no_people')"
             />
         @endif
 

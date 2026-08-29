@@ -40,6 +40,9 @@ class FestivalPortalController extends Controller
                     ->where('account_id', $account->id)
                     ->where('festival_portal_user_id', $portalUser->id),
             ])
+            ->withExists([
+                'admissionTypes as admission_available' => fn (Builder $query): Builder => $query->availableForSale(),
+            ])
             ->orderBy('starts_at')
             ->get();
 

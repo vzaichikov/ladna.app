@@ -15,6 +15,7 @@ enum FestivalNotificationType: string
     case ScheduleChanged = 'schedule_changed';
     case ResultsPublished = 'results_published';
     case TicketsIssued = 'tickets_issued';
+    case EntrancePassesIssued = 'entrance_passes_issued';
     case Announcement = 'announcement';
 
     public function isOptional(): bool
@@ -35,7 +36,8 @@ enum FestivalNotificationType: string
             self::SchedulePublished,
             self::ScheduleChanged,
             self::ResultsPublished => 'program',
-            self::TicketsIssued => 'tickets',
+            self::TicketsIssued,
+            self::EntrancePassesIssued => 'tickets',
             self::Announcement => 'announcements',
         };
     }

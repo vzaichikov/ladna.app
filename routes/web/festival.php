@@ -11,6 +11,7 @@ use App\Http\Controllers\FestivalParticipantController;
 use App\Http\Controllers\FestivalParticipantPhotoController;
 use App\Http\Controllers\FestivalPortalAuthController;
 use App\Http\Controllers\FestivalPortalController;
+use App\Http\Controllers\FestivalPortalTicketController;
 use App\Http\Controllers\FestivalPublicController;
 use App\Http\Controllers\FestivalStreamAccessController;
 use App\Http\Controllers\FestivalSubmissionController;
@@ -86,6 +87,9 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
             Route::post('profile/phone/change', [FestivalPortalController::class, 'changeProfilePhone'])->middleware(PreventReadOnlyDemoMutations::class)->name('profile.phone.change');
             Route::post('profile/phone/verify', [FestivalPortalController::class, 'verifyProfilePhoneOtp'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-login'])->name('profile.phone.verify');
             Route::get('/', [FestivalPortalController::class, 'dashboard'])->name('dashboard');
+            Route::get('tickets', [FestivalPortalTicketController::class, 'index'])->name('tickets.index');
+            Route::get('tickets/editions/{festivalEdition}/passes.pdf', [FestivalPortalTicketController::class, 'pdf'])->whereNumber('festivalEdition')->middleware('throttle:30,1')->name('tickets.passes.pdf');
+            Route::post('tickets/editions/{festivalEdition}/email', [FestivalPortalTicketController::class, 'email'])->whereNumber('festivalEdition')->middleware(['throttle:10,1', PreventReadOnlyDemoMutations::class])->name('tickets.passes.email');
             Route::get('participants', [FestivalParticipantController::class, 'index'])->name('participants.index');
             Route::get('participants/{festivalParticipant}/photo', [FestivalParticipantPhotoController::class, 'portalParticipant'])->name('participants.photo');
             Route::post('participants', [FestivalParticipantController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('participants.store');

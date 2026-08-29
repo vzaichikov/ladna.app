@@ -233,6 +233,39 @@ class FestivalNotificationOutbox
         return $notification;
     }
 
+    public function queueForEntrancePasses(FestivalPortalUser $portalUser, FestivalEdition $edition, int $passesCount, string $dedupeSuffix): ?FestivalNotification
+    {
+        abort_unless($portalUser->account_id === $edition->account_id, 404);
+        $edition->loadMissing('account');
+
+        if ($edition->account->isReadOnlyDemo() || ! filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $type = FestivalNotificationType::EntrancePassesIssued;
+        $payload = [
+            'festival' => $edition->title,
+            'passes_count' => $passesCount,
+            'action_url' => route('festival.portal.tickets.index', $portalUser->account->slug),
+        ];
+        $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload);
+        $dedupeBase = implode(':', [$type->value, $edition->id, $portalUser->id, $dedupeSuffix]);
+
+        return $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
+            'account_id' => $edition->account_id,
+            'festival_portal_user_id' => $portalUser->id,
+            'festival_edition_id' => $edition->id,
+            'type' => $type,
+            'recipient_email' => $portalUser->email,
+            'recipient_phone' => $portalUser->phone,
+            'recipient_name' => $portalUser->displayName(),
+            'subject' => $message->subject,
+            'text' => $message->emailText(),
+            'payload' => $this->storedPayload($payload, $message),
+            'available_at' => now(),
+        ]);
+    }
+
     /** @param array<string, mixed> $attributes */
     private function createChannel(FestivalNotificationChannel $channel, string $dedupeBase, array $attributes): FestivalNotification
     {

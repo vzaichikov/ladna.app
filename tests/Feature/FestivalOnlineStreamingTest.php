@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalStreamAccessService;
+use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\Payments\PaymentGatewayRegistry;
@@ -961,7 +962,11 @@ class FestivalOnlineStreamingTest extends TestCase
         $gateways = Mockery::mock(PaymentGatewayRegistry::class);
         $gateways->shouldReceive('availableSettingsFor')->andReturn(collect([$setting]));
 
-        return new CreateFestivalTicketOrder($gateways, app(ResolveFestivalGuest::class));
+        return new CreateFestivalTicketOrder(
+            $gateways,
+            app(ResolveFestivalGuest::class),
+            app(FestivalTelegramIdentityLinker::class),
+        );
     }
 
     /** @return array{FestivalTicketOrder, FestivalStreamEntitlement} */

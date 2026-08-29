@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\FestivalEntrancePassEligibility;
 use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Enums\AccountMode;
 use App\Enums\FestivalNotificationChannel;
@@ -262,6 +263,7 @@ class FestivalNotificationDeliveryTest extends TestCase
             app(PhoneNumberNormalizer::class),
             app(MailDeliverySettingsResolver::class),
             app(FestivalTelegramNotificationSender::class),
+            app(FestivalEntrancePassEligibility::class),
         );
 
         $this->assertSame(FestivalNotificationStatus::WaitingForSmsCredit, $sms->refresh()->status);

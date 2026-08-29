@@ -1,5 +1,6 @@
 @php
     $oldItems = collect(old('items', []));
+    $festivalCheckoutPrefill = $festivalCheckoutPrefill ?? [];
     $hasPaidTicketOptions = $festivalAdmissionOptions->contains(fn (array $option): bool => $option['regular_price_cents'] > 0 || ($option['early_bird_price_cents'] ?? 0) > 0);
     $festivalRulesUrl = route('public.festivals.show', [$account->slug, $edition->slug]).'#festival-rules';
     $studioOfferUrl = route('public.studio-offer', ['accountSlug' => $account->slug, 'return_to' => request()->fullUrl()]);
@@ -23,6 +24,9 @@
             data-event-has-paid-ticket-options="{{ $hasPaidTicketOptions ? 'true' : 'false' }}"
         >
             @csrf
+            @if ($festivalFriendPurchase ?? false)
+                <input type="hidden" name="friends" value="1">
+            @endif
             <div class="rounded-2xl border festival-border festival-surface p-5 shadow-crm sm:p-7">
                 <h2 class="text-2xl font-semibold festival-text">{{ __('app.event_choose_tickets') }}</h2>
 
@@ -91,17 +95,17 @@
                 <div class="mt-6 grid gap-4 sm:grid-cols-2">
                     <label class="block sm:col-span-2">
                         <span class="crm-label">{{ __('app.person_name') }}</span>
-                        <input name="buyer_name" value="{{ old('buyer_name') }}" required autocomplete="name" class="crm-field">
+                        <input name="buyer_name" value="{{ old('buyer_name', data_get($festivalCheckoutPrefill, 'buyer_name')) }}" required autocomplete="name" class="crm-field">
                         <x-ui.field-error name="buyer_name" />
                     </label>
                     <label class="block">
                         <span class="crm-label">{{ __('app.email') }}</span>
-                        <input type="email" name="buyer_email" value="{{ old('buyer_email') }}" required autocomplete="email" class="crm-field">
+                        <input type="email" name="buyer_email" value="{{ old('buyer_email', data_get($festivalCheckoutPrefill, 'buyer_email')) }}" required autocomplete="email" class="crm-field">
                         <x-ui.field-error name="buyer_email" />
                     </label>
                     <label class="block">
                         <span class="crm-label">{{ __('app.event_email_confirmation') }}</span>
-                        <input type="email" name="buyer_email_confirmation" value="{{ old('buyer_email_confirmation') }}" required autocomplete="email" class="crm-field">
+                        <input type="email" name="buyer_email_confirmation" value="{{ old('buyer_email_confirmation', data_get($festivalCheckoutPrefill, 'buyer_email_confirmation')) }}" required autocomplete="email" class="crm-field">
                         <x-ui.field-error name="buyer_email_confirmation" />
                     </label>
                     <p class="rounded-xl bg-brand-50 px-4 py-3 text-sm leading-6 text-slate-700 sm:col-span-2">
@@ -119,7 +123,7 @@
                     @endif
                     <label class="block sm:col-span-2">
                         <span class="crm-label">{{ __('app.phone') }}</span>
-                        <input type="tel" name="buyer_phone" value="{{ old('buyer_phone') }}" required autocomplete="tel" class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" data-phone-mask-reject-national-zero data-phone-mask-national-zero-error="{{ __('app.event_phone_national_zero_error') }}">
+                        <input type="tel" name="buyer_phone" value="{{ old('buyer_phone', data_get($festivalCheckoutPrefill, 'buyer_phone')) }}" required autocomplete="tel" class="crm-field" data-phone-mask data-country-code="{{ $account->country_code ?? 'UA' }}" data-phone-mask-reject-national-zero data-phone-mask-national-zero-error="{{ __('app.event_phone_national_zero_error') }}">
                         <x-ui.field-error name="buyer_phone" />
                     </label>
                 </div>

@@ -10,6 +10,7 @@ use App\Http\Requests\FestivalAdmissionOrderRequest;
 use App\Http\Requests\FestivalGoogleEmailPrefillRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
+use App\Models\FestivalPortalUser;
 use App\Support\Festivals\FestivalGoogleEmailPrefill;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalTelegramAuthorizationResolver;
@@ -42,11 +43,20 @@ class FestivalAdmissionController extends Controller
         $telegramGuest = $telegramAuthorization
             ? $telegramAuthorizations->linkedPortalUser($telegramAuthorization, FestivalPortalRole::Guest)
             : null;
+        $authenticatedPortalUser = $request->user('festival');
+        $purchaser = $request->boolean('friends')
+            && $authenticatedPortalUser instanceof FestivalPortalUser
+            && $authenticatedPortalUser->account_id === $account->id
+            && $authenticatedPortalUser->role === FestivalPortalRole::Registrant
+            && $authenticatedPortalUser->is_active
+                ? $authenticatedPortalUser
+                : null;
         $order = $createOrder->execute(
             $edition,
             $input,
             portalUser: $telegramGuest,
             telegramAuthorization: $telegramAuthorization,
+            purchaser: $purchaser,
         );
 
         if ($order->amount_cents === 0) {
@@ -104,7 +114,11 @@ class FestivalAdmissionController extends Controller
             $profile = $googleEmailPrefill->verifiedProfile($request);
         } catch (RuntimeException) {
             return redirect()
-                ->route('public.festivals.show', [$state['account']->slug, $state['edition']->slug])
+                ->route('public.festivals.show', [
+                    $state['account']->slug,
+                    $state['edition']->slug,
+                    ...(($checkoutDraft['friends'] ?? false) ? ['friends' => 1] : []),
+                ])
                 ->withInput($checkoutDraft)
                 ->withErrors(['google' => __('app.festival_google_prefill_failed')]);
         }
@@ -116,7 +130,11 @@ class FestivalAdmissionController extends Controller
         $checkoutDraft['buyer_email_confirmation'] = $profile['email'];
 
         return redirect()
-            ->route('public.festivals.show', [$state['account']->slug, $state['edition']->slug])
+            ->route('public.festivals.show', [
+                $state['account']->slug,
+                $state['edition']->slug,
+                ...(($checkoutDraft['friends'] ?? false) ? ['friends' => 1] : []),
+            ])
             ->withInput($checkoutDraft);
     }
 }

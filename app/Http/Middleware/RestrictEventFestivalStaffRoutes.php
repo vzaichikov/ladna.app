@@ -30,6 +30,7 @@ class RestrictEventFestivalStaffRoutes
         'dashboard.accounts.festivals.attendance',
         'dashboard.accounts.festivals.attendance.data',
         'dashboard.accounts.festivals.attendance.tickets.undo',
+        'dashboard.accounts.festivals.attendance.passes.undo',
         'dashboard.accounts.festivals.entrance.search',
         'dashboard.accounts.festivals.entrance.cash',
         'dashboard.accounts.festivals.entrance.card',

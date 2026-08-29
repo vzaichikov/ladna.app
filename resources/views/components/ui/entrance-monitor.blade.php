@@ -5,7 +5,8 @@
 ])
 
 @php
-    $tickets = collect(data_get($overview, 'tickets', []));
+    $isFestivalMonitor = array_key_exists('participants', $overview) || array_key_exists('helpers', $overview);
+    $tickets = collect(data_get($overview, $isFestivalMonitor ? 'credentials' : 'tickets', []));
     $total = (int) data_get($overview, 'total', $tickets->count());
     $passed = (int) data_get($overview, 'passed', $tickets->where('passed', true)->count());
     $waiting = (int) data_get($overview, 'waiting', data_get($overview, 'unpassed', max(0, $total - $passed)));
@@ -24,6 +25,20 @@
     data-passed-label="{{ __('app.entrance_passed') }}"
 >
     <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" data-attendance-stats>
+        @if ($isFestivalMonitor)
+            <div class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 shadow-xs">
+                <span class="text-xs font-semibold text-sky-700">{{ __('app.festival_guest_tickets') }}</span>
+                <strong class="mt-1 block text-2xl leading-none tabular-nums text-sky-950" data-attendance-guests>{{ data_get($overview, 'guest_tickets.passed', 0) }}/{{ data_get($overview, 'guest_tickets.total', 0) }}</strong>
+            </div>
+            <div class="rounded-xl border border-violet-200 bg-violet-50 px-3 py-3 shadow-xs">
+                <span class="text-xs font-semibold text-violet-700">{{ __('app.festival_participants') }}</span>
+                <strong class="mt-1 block text-2xl leading-none tabular-nums text-violet-950" data-attendance-participants>{{ data_get($overview, 'participants.passed', 0) }}/{{ data_get($overview, 'participants.total', 0) }}</strong>
+            </div>
+            <div class="rounded-xl border border-teal-200 bg-teal-50 px-3 py-3 shadow-xs">
+                <span class="text-xs font-semibold text-teal-700">{{ __('app.festival_helpers') }}</span>
+                <strong class="mt-1 block text-2xl leading-none tabular-nums text-teal-950" data-attendance-helpers>{{ data_get($overview, 'helpers.passed', 0) }}/{{ data_get($overview, 'helpers.total', 0) }}</strong>
+            </div>
+        @else
         <div class="rounded-xl border border-stone-200 bg-white px-3 py-3 shadow-xs">
             <span class="text-xs font-semibold text-slate-500">{{ __('app.entrance_total_tickets') }}</span>
             <strong class="mt-1 block text-2xl leading-none tabular-nums text-slate-950" data-attendance-total>{{ $total }}</strong>
@@ -36,6 +51,7 @@
             <span class="text-xs font-semibold text-rose-700">{{ __('app.entrance_waiting') }}</span>
             <strong class="mt-1 block text-2xl leading-none tabular-nums text-rose-950" data-attendance-waiting>{{ $waiting }}</strong>
         </div>
+        @endif
         <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 shadow-xs">
             <span class="text-xs font-semibold text-amber-800">{{ __('app.entrance_cash_at_door') }}</span>
             <strong class="mt-1 block truncate text-lg leading-none tabular-nums text-amber-950" data-attendance-cash>
@@ -77,7 +93,7 @@
                 $isPassed = (bool) data_get($ticket, 'passed', data_get($ticket, 'is_checked_in', false));
                 $customerName = data_get($ticket, 'customer_name', data_get($ticket, 'customer', __('app.entrance_guest')));
                 $ticketCode = data_get($ticket, 'code');
-                $ticketType = data_get($ticket, 'type', data_get($ticket, 'ticket_type'));
+                $ticketType = collect([data_get($ticket, 'kind_label'), data_get($ticket, 'type', data_get($ticket, 'ticket_type'))])->filter()->unique()->join(' · ');
                 $undoUrl = data_get($ticket, 'undo_url');
             @endphp
             <article
@@ -86,7 +102,7 @@
                     'border-emerald-200 bg-emerald-50 text-emerald-950' => $isPassed,
                     'border-rose-200 bg-rose-50 text-rose-950' => ! $isPassed,
                 ])
-                data-attendance-ticket="{{ data_get($ticket, 'id') }}"
+                data-attendance-ticket="{{ data_get($ticket, 'key', data_get($ticket, 'id')) }}"
                 data-passed="{{ $isPassed ? 'true' : 'false' }}"
             >
                 <div class="min-w-0">

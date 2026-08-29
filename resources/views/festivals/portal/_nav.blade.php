@@ -32,6 +32,7 @@
             >{{ $portalEntryCount }}</span>
         </a>
         <a href="{{ route('festival.portal.participants.index', $account->slug) }}" class="festival-portal-nav-link" data-festival-portal-nav-link @if(request()->routeIs('festival.portal.participants.*')) aria-current="page" @endif>{{ __('app.festival_portal_team') }}</a>
+        <a href="{{ route('festival.portal.tickets.index', $account->slug) }}" class="festival-portal-nav-link" data-festival-portal-nav-link @if(request()->routeIs('festival.portal.tickets.*')) aria-current="page" @endif>{{ __('app.festival_tickets_and_passes') }}</a>
         <a href="{{ route('festival.portal.profile.edit', $account->slug) }}" class="festival-portal-nav-link" data-festival-portal-nav-link @if(request()->routeIs('festival.portal.profile.*')) aria-current="page" @endif>{{ __('app.profile') }}</a>
     @endif
     @if($isJudge && isset($edition) && request()->routeIs('festival.portal.judging.*', 'festival.portal.battle-votes.*'))

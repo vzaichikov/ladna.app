@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'purchaser_festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
 #[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload'])]
 class FestivalTicketOrder extends Model
 {
@@ -60,6 +60,11 @@ class FestivalTicketOrder extends Model
     public function portalUser(): BelongsTo
     {
         return $this->belongsTo(FestivalPortalUser::class, 'festival_portal_user_id');
+    }
+
+    public function purchaser(): BelongsTo
+    {
+        return $this->belongsTo(FestivalPortalUser::class, 'purchaser_festival_portal_user_id');
     }
 
     public function issuer(): BelongsTo

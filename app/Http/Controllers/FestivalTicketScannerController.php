@@ -36,8 +36,15 @@ class FestivalTicketScannerController extends Controller
 
         return view('festivals.staff.scanner', compact('account', 'festivalEdition', 'tickets', 'search') + [
             'workspacePermissions' => $workspaceAccess->permissions($request->user(), $account, $festivalEdition),
-            ...($request->user()?->can('doorStaff', $account) || $this->hasStaffAccess($request, $account, $festivalEdition)
-                ? ['entranceTools' => $this->entranceTools($account, $festivalEdition, $gateways)]
+            ...($request->user()?->can('checkInFestivalTickets', $account)
+                || $request->user()?->can('doorStaff', $account)
+                || $this->hasStaffAccess($request, $account, $festivalEdition)
+                ? ['entranceTools' => $this->entranceTools(
+                    $account,
+                    $festivalEdition,
+                    $gateways,
+                    (bool) ($request->user()?->can('doorStaff', $account) || $this->hasStaffAccess($request, $account, $festivalEdition)),
+                )]
                 : []),
         ]);
     }
@@ -98,7 +105,7 @@ class FestivalTicketScannerController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function entranceTools(Account $account, FestivalEdition $edition, PaymentGatewayRegistry $gateways): array
+    private function entranceTools(Account $account, FestivalEdition $edition, PaymentGatewayRegistry $gateways, bool $canSell = true): array
     {
         $providers = $gateways->availableSettingsFor($account);
         $ticketTypes = $edition->admissionTypes()
@@ -116,6 +123,7 @@ class FestivalTicketScannerController extends Controller
 
         return [
             'search_url' => route('dashboard.accounts.festivals.entrance.search', [$account, $edition]),
+            'can_sell' => $canSell,
             'cash_sale_url' => route('dashboard.accounts.festivals.entrance.cash', [$account, $edition]),
             'card_sale_url' => route('dashboard.accounts.festivals.entrance.card', [$account, $edition]),
             'ticket_types' => $ticketTypes,

@@ -100,7 +100,7 @@ export function initEventScanner() {
 
         const detailValues = [
             [modalCustomerRow, modalCustomer, ticket.customer],
-            [modalTypeRow, modalType, ticket.type],
+            [modalTypeRow, modalType, [ticket.kind_label, ticket.type].filter((value, index, values) => value && values.indexOf(value) === index).join(' · ')],
             [modalCodeRow, modalCode, ticket.code],
             [modalCheckedInRow, modalCheckedIn, checkedInAt],
         ];

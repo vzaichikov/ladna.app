@@ -40,6 +40,11 @@ class EntranceGuestSearchRequest extends FormRequest
 
         $edition = $this->route('festivalEdition');
 
+        if ($edition instanceof FestivalEdition
+            && (bool) $user->can('checkInFestivalTickets', $account)) {
+            return true;
+        }
+
         return $edition instanceof FestivalEdition
             && $staffAccess->canAccessFestival($user, $account, $edition);
     }

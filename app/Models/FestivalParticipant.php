@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'festival_portal_user_id', 'is_profile_owner', 'member_type', 'first_name', 'last_name', 'patronymic', 'date_of_birth', 'notes', 'photo_path', 'archived_at'])]
 class FestivalParticipant extends Model
@@ -68,7 +69,9 @@ class FestivalParticipant extends Model
 
     public function isInUse(): bool
     {
-        return $this->entries()->exists() || $this->helperRequirements()->exists();
+        return $this->entries()->exists()
+            || $this->helperRequirements()->exists()
+            || $this->entrancePasses()->exists();
     }
 
     public function account(): BelongsTo
@@ -99,5 +102,19 @@ class FestivalParticipant extends Model
             'festival_participant_id',
             'festival_entry_requirement_id',
         )->withPivot('sort_order');
+    }
+
+    public function entrancePasses(): HasMany
+    {
+        return $this->hasMany(FestivalEntrancePass::class);
+    }
+
+    public function hasCheckedInFestivalTicket(FestivalEdition $edition): bool
+    {
+        return FestivalTicket::query()
+            ->where('festival_edition_id', $edition->id)
+            ->where('festival_participant_id', $this->id)
+            ->where('is_checked_in', true)
+            ->exists();
     }
 }

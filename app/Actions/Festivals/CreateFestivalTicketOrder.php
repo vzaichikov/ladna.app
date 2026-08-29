@@ -36,12 +36,16 @@ class CreateFestivalTicketOrder
         array $input,
         ?FestivalPortalUser $portalUser = null,
         ?TelegramChatAuthorization $telegramAuthorization = null,
+        ?FestivalPortalUser $purchaser = null,
     ): FestivalTicketOrder {
         if ($portalUser && $portalUser->account_id !== $edition->account_id) {
             abort(404);
         }
+        if ($purchaser && ($purchaser->account_id !== $edition->account_id || $purchaser->role !== FestivalPortalRole::Registrant || ! $purchaser->is_active)) {
+            abort(404);
+        }
 
-        return DB::transaction(function () use ($edition, $input, $portalUser, $telegramAuthorization): FestivalTicketOrder {
+        return DB::transaction(function () use ($edition, $input, $portalUser, $telegramAuthorization, $purchaser): FestivalTicketOrder {
             $edition = FestivalEdition::query()
                 ->whereKey($edition->id)
                 ->where('account_id', $edition->account_id)
@@ -130,6 +134,16 @@ class CreateFestivalTicketOrder
                     (string) ($input['locale'] ?? app()->getLocale()),
                 );
             }
+
+            if ($purchaser) {
+                $purchaser = FestivalPortalUser::query()
+                    ->whereKey($purchaser->id)
+                    ->where('account_id', $edition->account_id)
+                    ->where('role', FestivalPortalRole::Registrant->value)
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            }
             if (! $portalUser) {
                 throw ValidationException::withMessages(['buyer_email' => __('app.festival_admission_guest_unavailable')]);
             }
@@ -176,6 +190,7 @@ class CreateFestivalTicketOrder
                 'account_id' => $edition->account_id,
                 'festival_edition_id' => $edition->id,
                 'festival_portal_user_id' => $portalUser->id,
+                'purchaser_festival_portal_user_id' => $purchaser?->id,
                 'source' => FestivalTicketOrderSource::Checkout,
                 'provider' => $amount > 0 ? $provider : null,
                 'order_id' => 'FTO-'.Str::upper(Str::random(18)),

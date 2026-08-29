@@ -68,6 +68,7 @@ export function initEntranceOperations() {
 
         root.dataset.entranceToolsReady = 'true';
         const scannerRoot = root.closest('[data-event-scanner]') || document.querySelector('[data-event-scanner]');
+        const interactionRoot = scannerRoot || root;
         const csrfToken = root.dataset.csrfToken || scannerRoot?.dataset.csrfToken || '';
         const searchToggle = root.querySelector('[data-entrance-search-toggle]');
         const searchPanel = root.querySelector('[data-entrance-search-panel]');
@@ -168,7 +169,9 @@ export function initEntranceOperations() {
             button.className = 'flex w-full items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left transition hover:border-brand-200 hover:bg-brand-50 disabled:pointer-events-none disabled:opacity-55 crm-focus';
             body.className = 'min-w-0';
             name.className = 'block truncate text-sm font-semibold text-slate-950';
-            name.textContent = ticket.type || ticket.ticket_type || root.dataset.ticketFallback;
+            name.textContent = [ticket.kind_label, ticket.type || ticket.ticket_type]
+                .filter((value, index, values) => value && values.indexOf(value) === index)
+                .join(' · ') || root.dataset.ticketFallback;
             code.className = 'mt-1 block truncate font-mono text-xs text-slate-500';
             code.textContent = ticket.code || ticket.ticket_code || '';
             action.className = `shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${passed ? 'bg-emerald-100 text-emerald-800' : blocked ? 'bg-stone-100 text-stone-600' : 'bg-brand-100 text-brand-800'}`;
@@ -235,7 +238,7 @@ export function initEntranceOperations() {
             }
 
             guests.forEach((result, index) => {
-                const guest = result.guest || result;
+                const guest = result.person || result.guest || result;
                 const article = document.createElement('article');
                 const button = document.createElement('button');
                 const body = document.createElement('span');
@@ -243,7 +246,9 @@ export function initEntranceOperations() {
                 const contact = document.createElement('span');
                 const count = document.createElement('span');
                 const tickets = document.createElement('div');
-                const guestTickets = Array.isArray(result.tickets) ? result.tickets : (Array.isArray(guest.tickets) ? guest.tickets : []);
+                const guestTickets = Array.isArray(result.credentials)
+                    ? result.credentials
+                    : (Array.isArray(result.tickets) ? result.tickets : (Array.isArray(guest.tickets) ? guest.tickets : []));
 
                 article.className = 'rounded-xl border border-stone-200 bg-white p-2';
                 button.type = 'button';
@@ -470,10 +475,10 @@ export function initEntranceOperations() {
         });
         saleAdmit?.addEventListener('click', () => dispatchScan({ code: saleAdmit.dataset.ticketCode }, saleAdmit, 'entrance_sale'));
 
-        root.addEventListener('click', (event) => {
+        interactionRoot.addEventListener('click', (event) => {
             const button = event.target.closest('[data-entrance-undo]');
 
-            if (!button || !root.contains(button)) {
+            if (!button || !interactionRoot.contains(button)) {
                 return;
             }
 

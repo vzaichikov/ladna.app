@@ -131,6 +131,15 @@ class ScheduledTaskRegistry
                 'single_server' => true,
             ],
             [
+                'key' => 'festival_entrance_passes_reconcile',
+                'command' => 'festival-entrance-passes:reconcile',
+                'expression' => '0 2 * * *',
+                'frequency_key' => 'scheduled_task_frequency_daily',
+                'description_key' => 'scheduled_task_festival_entrance_passes_reconcile_description',
+                'overlap_minutes' => 30,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'festival_notifications_dispatch',
                 'command' => 'festivals:dispatch-notifications --limit=100',
                 'expression' => '* * * * *',

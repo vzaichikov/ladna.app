@@ -6,12 +6,15 @@ use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\FestivalTicketStatus;
 use App\Models\FestivalEdition;
+use App\Models\FestivalParticipant;
 use App\Models\FestivalTicket;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class FestivalTicketScanner
 {
+    public function __construct(private readonly FestivalEntrancePassScanner $entrancePassScanner) {}
+
     /** @return array<string, mixed> */
     public function checkIn(FestivalEdition $edition, string $value, User $actor, string $source, ?string $ip, bool $confirmed = false): array
     {
@@ -21,20 +24,23 @@ class FestivalTicketScanner
             ->first();
 
         if (! $ticket) {
-            return ['state' => 'invalid', 'message' => __('app.festival_scan_invalid')];
+            return $this->entrancePassScanner->checkIn($edition, $value, $actor, $source, $ip, $confirmed);
         }
         if ($ticket->festival_edition_id !== $edition->id) {
             return ['state' => 'wrong_edition', 'message' => __('app.festival_scan_wrong_edition')];
         }
 
         return DB::transaction(function () use ($ticket, $edition, $actor, $source, $ip, $confirmed): array {
-            $ticketQuery = FestivalTicket::query()->with(['order', 'admissionType'])->whereKey($ticket->id);
+            $ticketQuery = FestivalTicket::query()->with(['order', 'admissionType', 'participant'])->whereKey($ticket->id);
 
             if ($confirmed) {
                 $ticketQuery->lockForUpdate();
             }
 
             $ticket = $ticketQuery->firstOrFail();
+            if ($confirmed && $ticket->festival_participant_id) {
+                FestivalParticipant::query()->whereKey($ticket->festival_participant_id)->lockForUpdate()->firstOrFail();
+            }
             if (in_array($edition->status, [FestivalEditionStatus::Cancelled, FestivalEditionStatus::Archived], true)
                 || $ticket->status !== FestivalTicketStatus::Valid
                 || $ticket->order->status !== FestivalTicketOrderStatus::Paid) {
@@ -46,6 +52,16 @@ class FestivalTicketScanner
                     'message' => __('app.festival_scan_duplicate'),
                     'checked_in_at' => $ticket->checked_in_at?->toIso8601String(),
                     'checked_in_at_label' => $ticket->checked_in_at?->timezone($edition->timezone)->format('d.m.Y H:i'),
+                    'ticket' => $this->ticketSummary($ticket),
+                ];
+            }
+            if ($ticket->participant?->entrancePasses()
+                ->where('festival_edition_id', $edition->id)
+                ->where('is_checked_in', true)
+                ->exists()) {
+                return [
+                    'state' => 'already_checked_in',
+                    'message' => __('app.festival_scan_duplicate'),
                     'ticket' => $this->ticketSummary($ticket),
                 ];
             }
@@ -95,13 +111,15 @@ class FestivalTicketScanner
         ]);
     }
 
-    /** @return array{code: string, type: string|null, customer: string} */
+    /** @return array{code: string, type: string|null, customer: string, kind: string, kind_label: string} */
     private function ticketSummary(FestivalTicket $ticket): array
     {
         return [
             'code' => $ticket->code,
             'type' => $ticket->admissionType?->name,
             'customer' => $ticket->holder_name ?: ($ticket->order?->buyer_name ?? __('app.unknown')),
+            'kind' => 'guest_ticket',
+            'kind_label' => __('app.festival_guest_ticket'),
         ];
     }
 }
