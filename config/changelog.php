@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.157.1',
+                'date' => '2026-08-29',
+                'title' => 'Compact Festival category changes',
+                'items' => ['Festival staff can now change an application category from a compact action in the category summary. The category selector and required reason open in a focused confirmation dialog instead of occupying the full application page.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.157.0',
                 'date' => '2026-08-29',
                 'title' => 'Clearer Festival application review and communication',
@@ -1395,6 +1402,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.157.1',
+                'date' => '2026-08-29',
+                'title' => 'Компактна зміна категорії фестивальної заявки',
+                'items' => ['Команда фестивалю тепер може змінити категорію заявки через компактну дію в картці категорії. Вибір нової категорії та обовʼязкова причина відкриваються в окремому діалозі, а не займають всю ширину сторінки заявки.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.157.0',
                 'date' => '2026-08-29',

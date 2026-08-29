@@ -619,6 +619,12 @@ class FestivalRegistrationStepperTest extends TestCase
         $page->assertOk()
             ->assertSee('data-festival-application-fragment-key="category-'.$entry->id.'"', false)
             ->assertSee($targetCategory->name)
+            ->assertSee('data-festival-category-modal-open', false)
+            ->assertSee('id="festival-category-modal-'.$entry->id.'"', false)
+            ->assertSee('data-festival-category-modal', false)
+            ->assertSee('class="fixed inset-0 z-50 hidden', false)
+            ->assertSee('name="category_reassignment_form" value="1"', false)
+            ->assertSee('maxlength="2000"', false)
             ->assertSee('data-festival-application-fragment-key="step-'.$entry->id.'"', false)
             ->assertSee('data-festival-application-fragment-key="requirement-'.$requirement->id.'"', false)
             ->assertSee('data-festival-application-fragment-key="charge-'.$charge->id.'"', false)
@@ -636,7 +642,25 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertJsonCount(2, 'fragments_html');
         $this->assertStringContainsString('data-festival-application-fragment-key="category-'.$entry->id.'"', $categoryReview->json('fragments_html.0'));
         $this->assertStringContainsString($targetCategory->name, $categoryReview->json('fragments_html.0'));
+        $this->assertStringContainsString('data-festival-category-modal-open', $categoryReview->json('fragments_html.0'));
+        $this->assertStringContainsString('data-festival-category-modal', $categoryReview->json('fragments_html.0'));
         $this->assertSame($targetCategory->id, $entry->refresh()->festival_category_id);
+
+        $this->actingAs($owner)
+            ->from($applicationUrl)
+            ->patch(route('dashboard.accounts.festivals.entries.reassign-category', [$account, $edition, $entry]), [
+                'category_reassignment_form' => '1',
+                'festival_category_id' => $category->id,
+            ])
+            ->assertRedirect($applicationUrl)
+            ->assertSessionHasErrors('reason')
+            ->assertSessionHasInput('category_reassignment_form', '1');
+
+        $this->get($applicationUrl)
+            ->assertOk()
+            ->assertSee('data-festival-category-modal', false)
+            ->assertSee('data-open="true"', false)
+            ->assertSee('value="'.$category->id.'" selected', false);
 
         $this->actingAs($owner)
             ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [

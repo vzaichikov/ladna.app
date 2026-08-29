@@ -4828,8 +4828,16 @@ function replaceFestivalApplicationFragment(fragmentHtml, fallbackFragment) {
     const target = fragmentKey
         ? document.querySelector('[data-festival-application-fragment-key="' + window.CSS.escape(fragmentKey) + '"]')
         : fallbackFragment;
+    const categoryModalWasOpen = Boolean(target?.querySelector('[data-festival-category-modal]:not(.hidden)'));
 
     (target ?? fallbackFragment)?.replaceWith(replacement);
+    initFestivalApplicationCategoryModal(replacement);
+
+    if (categoryModalWasOpen) {
+        document.body.classList.remove('overflow-hidden');
+        window.requestAnimationFrame(() => replacement.querySelector('[data-festival-category-modal-open]')?.focus());
+    }
+
     createIcons({ icons });
 
     return replacement;
@@ -7936,6 +7944,88 @@ function initFestivalAnnouncementModal() {
     }
 }
 
+function initFestivalApplicationCategoryModal(root = document) {
+    if (document.documentElement.dataset.festivalCategoryModalEscapeReady !== 'true') {
+        document.documentElement.dataset.festivalCategoryModalEscapeReady = 'true';
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') {
+                return;
+            }
+
+            document.querySelector('[data-festival-category-modal]:not(.hidden)')
+                ?.querySelector('[data-festival-category-modal-close]')
+                ?.click();
+        });
+    }
+
+    const fragments = [
+        ...(root.matches?.('[data-festival-application-fragment]') ? [root] : []),
+        ...root.querySelectorAll('[data-festival-application-fragment]'),
+    ];
+
+    fragments.forEach((fragment) => {
+        const modal = fragment.querySelector('[data-festival-category-modal]');
+        const openButton = fragment.querySelector('[data-festival-category-modal-open]');
+
+        if (!modal || !openButton || modal.dataset.festivalCategoryModalReady === 'true') {
+            return;
+        }
+
+        modal.dataset.festivalCategoryModalReady = 'true';
+        let opener = null;
+        const focusableElements = () => [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+            .filter((element) => !element.closest('.hidden'));
+        const close = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('overflow-hidden');
+            (opener?.isConnected ? opener : fragment.querySelector('[data-festival-category-modal-open]'))?.focus();
+            opener = null;
+        };
+        const open = (trigger = openButton) => {
+            opener = trigger;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+            window.requestAnimationFrame(() => {
+                const invalidControl = modal.querySelector('[aria-invalid="true"]');
+                (invalidControl ?? modal.querySelector('select:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled])'))?.focus();
+            });
+        };
+
+        openButton.addEventListener('click', () => open(openButton));
+        modal.querySelectorAll('[data-festival-category-modal-close]').forEach((button) => {
+            button.addEventListener('click', close);
+        });
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                close();
+            }
+        });
+        modal.addEventListener('keydown', (event) => {
+            if (event.key !== 'Tab') {
+                return;
+            }
+
+            const focusable = focusableElements();
+            const first = focusable[0];
+            const last = focusable.at(-1);
+
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        });
+
+        if (modal.dataset.open === 'true') {
+            open(openButton);
+        }
+    });
+}
+
 function initFestivalApplicationPickerModal() {
     const modal = document.querySelector('[data-festival-application-picker-modal]');
     const openButton = document.querySelector('[data-festival-application-picker-open]');
@@ -10253,6 +10343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalStreamPlayer();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
+    initFestivalApplicationCategoryModal();
     initFestivalApplicationPickerModal();
     initFestivalQuickProfileModal();
     initFestivalTeamModals();
