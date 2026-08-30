@@ -35,6 +35,8 @@ public static class AppText
                 ["Audience"] = "Audience",
                 ["Combined"] = "Combined",
                 ["ConfirmRetake"] = "Replace the existing capture for this performer?",
+                ["LocalCertificateWarning"] = "Certificate validation is disabled for this local server during the current app session. Production servers are never exempted.",
+                ["LocalCertificateConfirm"] = "Windows may not trust this local HTTPS development certificate. Allow this app to accept it for this server during the current session? Continue only if you control and trust the local server.",
             },
             ["uk"] = new Dictionary<string, string>
             {
@@ -64,6 +66,8 @@ public static class AppText
                 ["Audience"] = "Глядачі",
                 ["Combined"] = "Разом",
                 ["ConfirmRetake"] = "Замінити наявний запис цього учасника?",
+                ["LocalCertificateWarning"] = "Перевірку сертифіката вимкнено для цього локального сервера до закриття програми. Для робочих серверів виняток ніколи не застосовується.",
+                ["LocalCertificateConfirm"] = "Windows може не довіряти цьому локальному HTTPS-сертифікату для розробки. Дозволити програмі приймати його для цього сервера до завершення поточного сеансу? Продовжуйте лише якщо ви контролюєте локальний сервер і довіряєте йому.",
             },
         };
 

@@ -650,21 +650,26 @@ class FestivalWorkspaceTabsTest extends TestCase
                 __('app.festival_notification_group_announcements'),
             ])
             ->assertSee('email['.FestivalNotificationType::EntrySubmitted->value.']', false)
+            ->assertSee('email['.FestivalNotificationType::RequirementAccepted->value.']', false)
+            ->assertSee('email['.FestivalNotificationType::RequirementRejected->value.']', false)
+            ->assertDontSee('email['.FestivalNotificationType::RequirementReviewed->value.']', false)
             ->assertSee('telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
             ->assertSee('owner_telegram['.FestivalNotificationType::EntrySubmitted->value.']', false)
+            ->assertSee('xl:grid-cols-[minmax(12rem,1fr)_minmax(0,40rem)]', false)
+            ->assertSee('sm:grid-cols-2 xl:grid-cols-4', false)
             ->assertSee(trans_choice('app.festival_owner_telegram_connections', 0, ['count' => 0]));
 
-        foreach (FestivalNotificationType::cases() as $type) {
+        foreach (FestivalNotificationType::configurableCases() as $type) {
             $response->assertSee(__('app.festival_notification_type_'.$type->value.'_copy'));
         }
 
         $this->actingAs($owner)
             ->from($url)
             ->put(route('dashboard.accounts.festivals.notification-settings.update', $account), [
-                'email' => [FestivalNotificationType::EntryReviewed->value => '1'],
-                'sms' => [FestivalNotificationType::Announcement->value => '1'],
-                'telegram' => [FestivalNotificationType::EntryReviewed->value => '1'],
-                'owner_telegram' => [FestivalNotificationType::EntrySubmitted->value => '1'],
+                'email' => [FestivalNotificationType::EntryReviewed->value => '1', FestivalNotificationType::RequirementAccepted->value => '1'],
+                'sms' => [FestivalNotificationType::Announcement->value => '1', FestivalNotificationType::RequirementRejected->value => '1'],
+                'telegram' => [FestivalNotificationType::EntryReviewed->value => '1', FestivalNotificationType::RequirementAccepted->value => '1'],
+                'owner_telegram' => [FestivalNotificationType::EntrySubmitted->value => '1', FestivalNotificationType::RequirementRejected->value => '1'],
             ])
             ->assertRedirect($url);
 
@@ -708,12 +713,36 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->where('type', FestivalNotificationType::Announcement->value)
             ->firstOrFail()
             ->notify_owner_telegram);
-        $this->assertSame(FestivalNotificationType::cases(), FestivalNotificationSetting::query()
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
+            ->firstOrFail()
+            ->send_email);
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::RequirementRejected->value)
+            ->firstOrFail()
+            ->send_email);
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::RequirementRejected->value)
+            ->firstOrFail()
+            ->send_sms);
+        $this->assertTrue(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::RequirementRejected->value)
+            ->firstOrFail()
+            ->notify_owner_telegram);
+        $this->assertSame(FestivalNotificationType::configurableCases(), FestivalNotificationSetting::query()
             ->whereBelongsTo($account)
             ->orderBy('id')
             ->get()
             ->pluck('type')
             ->all());
+        $this->assertFalse(FestivalNotificationSetting::query()
+            ->whereBelongsTo($account)
+            ->where('type', FestivalNotificationType::RequirementReviewed->value)
+            ->exists());
     }
 
     public function test_admission_type_create_and_edit_pages_have_ticket_breadcrumbs_and_tenant_boundaries(): void

@@ -590,7 +590,7 @@ class FestivalWorkspaceController extends Controller
             'account' => $account,
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
-            'notificationTypes' => FestivalNotificationType::cases(),
+            'notificationTypes' => FestivalNotificationType::configurableCases(),
             'notificationSettings' => $notificationSettings,
             'connectedFestivalOwnerCount' => $ownerTelegramAlerts->connectedOwnerCount($account),
         ]);

@@ -11,15 +11,16 @@ use App\Enums\TelegramChatAuthorizationStatus;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
-use App\Models\FestivalNotificationSetting;
 use App\Models\TelegramBotInstallation;
 use App\Models\TelegramChatAuthorization;
+use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use Illuminate\Support\Collection;
 
 class QueueFestivalOwnerTelegramAlert
 {
     public function __construct(
         private readonly TelegramAlertProducer $alerts,
+        private readonly FestivalNotificationScenarioSettings $scenarioSettings,
     ) {}
 
     /**
@@ -33,7 +34,7 @@ class QueueFestivalOwnerTelegramAlert
         string $eventKey,
         ?FestivalEntry $entry = null,
     ): int {
-        if (! $this->scenarioIsEnabled($account, $type)) {
+        if (! $this->scenarioSettings->ownerTelegramIsEnabled($account->id, $type)) {
             return 0;
         }
 
@@ -76,15 +77,6 @@ class QueueFestivalOwnerTelegramAlert
     public function connectedOwnerCount(Account $account): int
     {
         return $this->connectedOwnerAuthorizations($account)->count();
-    }
-
-    private function scenarioIsEnabled(Account $account, FestivalNotificationType $type): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->whereBelongsTo($account)
-            ->where('type', $type->value)
-            ->where('notify_owner_telegram', true)
-            ->exists();
     }
 
     /** @return Collection<int, TelegramChatAuthorization> */

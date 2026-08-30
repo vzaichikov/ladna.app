@@ -8,6 +8,9 @@ enum FestivalNotificationType: string
     case EntryReviewed = 'entry_reviewed';
     case EntryStepReviewed = 'entry_step_reviewed';
     case RequirementDue = 'requirement_due';
+    case RequirementAccepted = 'requirement_accepted';
+    case RequirementRejected = 'requirement_rejected';
+    case RequirementWaived = 'requirement_waived';
     case RequirementReviewed = 'requirement_reviewed';
     case PaymentDue = 'payment_due';
     case PaymentPaid = 'payment_paid';
@@ -17,6 +20,30 @@ enum FestivalNotificationType: string
     case TicketsIssued = 'tickets_issued';
     case EntrancePassesIssued = 'entrance_passes_issued';
     case Announcement = 'announcement';
+
+    /** @return array<int, self> */
+    public static function configurableCases(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $type): bool => $type->isConfigurable(),
+        ));
+    }
+
+    public function isConfigurable(): bool
+    {
+        return $this !== self::RequirementReviewed;
+    }
+
+    public function settingsFallback(): ?self
+    {
+        return match ($this) {
+            self::RequirementAccepted,
+            self::RequirementRejected,
+            self::RequirementWaived => self::RequirementReviewed,
+            default => null,
+        };
+    }
 
     public function isOptional(): bool
     {
@@ -30,6 +57,9 @@ enum FestivalNotificationType: string
             self::EntryReviewed,
             self::EntryStepReviewed,
             self::RequirementDue,
+            self::RequirementAccepted,
+            self::RequirementRejected,
+            self::RequirementWaived,
             self::RequirementReviewed => 'registration',
             self::PaymentDue,
             self::PaymentPaid => 'payments',

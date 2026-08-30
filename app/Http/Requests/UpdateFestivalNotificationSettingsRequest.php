@@ -24,7 +24,7 @@ class UpdateFestivalNotificationSettingsRequest extends FormRequest
      */
     public function rules(): array
     {
-        $notificationTypes = collect(FestivalNotificationType::cases())
+        $notificationTypes = collect(FestivalNotificationType::configurableCases())
             ->map(fn (FestivalNotificationType $type): string => $type->value)
             ->implode(',');
 

@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _operationCancellation;
     private AppSettings _settings = new();
     private string _locale = "en";
+    private string? _invalidCertificateAuthority;
     private int _pollIntervalSeconds = 5;
     private bool _busy;
     private bool _suppressSelectionEvents;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _submission = new SubmissionCoordinator(_apiClient);
+        ServerTextBox.TextChanged += ServerTextBox_OnTextChanged;
         Loaded += MainWindow_OnLoaded;
         Closing += MainWindow_OnClosing;
     }
@@ -59,7 +61,7 @@ public partial class MainWindow : Window
     {
         await RunUiOperationAsync(async cancellationToken =>
         {
-            var server = CurrentServer();
+            var server = CurrentServer(requireLocalCertificateConfirmation: true);
             var token = CurrentToken();
             SetStatus(_locale == "uk" ? "Підключення до Ladna…" : "Connecting to Ladna…");
             var response = await _apiClient.GetMatchesAsync(server, token, cancellationToken);
@@ -388,13 +390,13 @@ public partial class MainWindow : Window
                 },
             };
 
-            _submission.Prepare(CurrentServer(), CurrentToken(), match.Id, submission);
+            _submission.Prepare(CurrentServer(requireLocalCertificateConfirmation: true), CurrentToken(), match.Id, submission);
             _session.BeginSubmission();
             UpdateControls();
         }
         else
         {
-            _submission.Prepare(CurrentServer(), CurrentToken(), match.Id, _submission.PendingSubmission!);
+            _submission.Prepare(CurrentServer(requireLocalCertificateConfirmation: true), CurrentToken(), match.Id, _submission.PendingSubmission!);
         }
 
         while (_submission.HasPendingSubmission)
@@ -616,7 +618,64 @@ public partial class MainWindow : Window
             ?? throw new AudioDeviceException(_locale == "uk" ? "Оберіть мікрофон." : "Select a microphone first.");
     }
 
-    private Uri CurrentServer() => LadnaApiClient.ValidateServer(ServerTextBox.Text);
+    private Uri CurrentServer(bool requireLocalCertificateConfirmation = false)
+    {
+        var server = LadnaApiClient.ValidateServer(ServerTextBox.Text);
+
+        if (requireLocalCertificateConfirmation)
+        {
+            ConfirmLocalCertificateException(server);
+        }
+
+        return server;
+    }
+
+    private void ConfirmLocalCertificateException(Uri server)
+    {
+        if (server.Scheme != Uri.UriSchemeHttps || !LadnaApiClient.IsLocalDevelopmentServer(server))
+        {
+            return;
+        }
+
+        var authority = server.GetLeftPart(UriPartial.Authority);
+        if (_apiClient.AllowsInvalidCertificateFor(server))
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            $"{AppText.Get(_locale, "LocalCertificateConfirm")}\n\n{authority}",
+            AppText.Get(_locale, "AppTitle"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            throw new OperationCanceledException();
+        }
+
+        _apiClient.AllowInvalidCertificateFor(server);
+        _invalidCertificateAuthority = authority;
+        UpdateCertificateWarning();
+    }
+
+    private void ServerTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        _apiClient.ClearInvalidCertificateAllowance();
+        _invalidCertificateAuthority = null;
+        UpdateCertificateWarning();
+    }
+
+    private void UpdateCertificateWarning()
+    {
+        LocalCertificateWarningText.Text = string.IsNullOrWhiteSpace(_invalidCertificateAuthority)
+            ? AppText.Get(_locale, "LocalCertificateWarning")
+            : $"{AppText.Get(_locale, "LocalCertificateWarning")}\n{_invalidCertificateAuthority}";
+        LocalCertificateWarning.Visibility = string.IsNullOrWhiteSpace(_invalidCertificateAuthority)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
 
     private string CurrentToken()
     {
@@ -735,6 +794,7 @@ public partial class MainWindow : Window
         RetakeAButton.Content = AppText.Get(_locale, "RetakeA");
         RetakeBButton.Content = AppText.Get(_locale, "RetakeB");
         StopWaitingButton.Content = AppText.Get(_locale, "StopWaiting");
+        UpdateCertificateWarning();
         _audienceWindow?.SetLocale(_locale);
         UpdateMeasurementSummary();
     }

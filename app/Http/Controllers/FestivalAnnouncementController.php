@@ -20,7 +20,7 @@ class FestivalAnnouncementController extends Controller
 {
     public function updateSettings(UpdateFestivalNotificationSettingsRequest $request, Account $account): RedirectResponse
     {
-        foreach (FestivalNotificationType::cases() as $type) {
+        foreach (FestivalNotificationType::configurableCases() as $type) {
             FestivalNotificationSetting::query()->updateOrCreate(
                 ['account_id' => $account->id, 'type' => $type->value],
                 [
@@ -42,7 +42,7 @@ class FestivalAnnouncementController extends Controller
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
         abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser && $portalUser->account_id === $account->id, 404);
-        foreach (FestivalNotificationType::cases() as $type) {
+        foreach (FestivalNotificationType::configurableCases() as $type) {
             if (! $type->isOptional()) {
                 continue;
             }

@@ -14,9 +14,9 @@ use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalEntrancePass;
 use App\Models\FestivalNotification;
-use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
+use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
@@ -57,6 +57,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         MailDeliverySettingsResolver $mailSettingsResolver,
         FestivalTelegramNotificationSender $telegramSender,
         FestivalEntrancePassEligibility $entrancePassEligibility,
+        FestivalNotificationScenarioSettings $scenarioSettings,
     ): void {
         $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
 
@@ -91,19 +92,22 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if ($notification->channel === FestivalNotificationChannel::Email && ! $this->emailStillEnabled($notification)) {
+        if ($notification->channel === FestivalNotificationChannel::Email
+            && ! $scenarioSettings->emailIsEnabled($notification->account_id, $notification->type)) {
             $this->cancel($notification, 'festival_email_scenario_disabled');
 
             return;
         }
 
-        if ($notification->channel === FestivalNotificationChannel::Sms && ! $this->smsStillEnabled($notification)) {
+        if ($notification->channel === FestivalNotificationChannel::Sms
+            && ! $scenarioSettings->smsIsEnabled($notification->account_id, $notification->type)) {
             $this->cancel($notification, 'festival_sms_scenario_disabled');
 
             return;
         }
 
-        if ($notification->channel === FestivalNotificationChannel::Telegram && ! $this->telegramStillEnabled($notification)) {
+        if ($notification->channel === FestivalNotificationChannel::Telegram
+            && ! $scenarioSettings->telegramIsEnabled($notification->account_id, $notification->type)) {
             $this->cancel($notification, 'festival_telegram_scenario_disabled');
 
             return;
@@ -300,31 +304,6 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         }
 
         return null;
-    }
-
-    private function smsStillEnabled(FestivalNotification $notification): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $notification->account_id)
-            ->where('type', $notification->type->value)
-            ->where('send_sms', true)
-            ->exists();
-    }
-
-    private function emailStillEnabled(FestivalNotification $notification): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $notification->account_id)
-            ->where('type', $notification->type->value)
-            ->value('send_email') ?? true;
-    }
-
-    private function telegramStillEnabled(FestivalNotification $notification): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $notification->account_id)
-            ->where('type', $notification->type->value)
-            ->value('send_telegram') ?? true;
     }
 
     private function markSent(FestivalNotification $notification): void

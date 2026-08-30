@@ -699,7 +699,7 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame(FestivalRequirementStatus::Accepted, $requirement->refresh()->status);
         $acceptedNotification = FestivalNotification::query()
             ->where('festival_entry_id', $entry->id)
-            ->where('type', FestivalNotificationType::RequirementReviewed->value)
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
             ->latest('id')
             ->firstOrFail();
         $this->assertSame(FestivalRequirementStatus::Accepted->value, $acceptedNotification->payload['status']);
@@ -715,11 +715,25 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame(FestivalRequirementStatus::Rejected, $requirement->refresh()->status);
         $rejectedNotification = FestivalNotification::query()
             ->where('festival_entry_id', $entry->id)
-            ->where('type', FestivalNotificationType::RequirementReviewed->value)
+            ->where('type', FestivalNotificationType::RequirementRejected->value)
             ->latest('id')
             ->firstOrFail();
         $this->assertSame(FestivalRequirementStatus::Rejected->value, $rejectedNotification->payload['status']);
         $this->assertStringNotContainsString('Decision: rejected', (string) $rejectedNotification->text);
+
+        $waived = $this->actingAs($owner)
+            ->patchJson(route('dashboard.accounts.festivals.requirements.review', [$account, $edition, $requirement]), [
+                'status' => FestivalRequirementStatus::Waived->value,
+                'review_notes' => 'Waived asynchronously.',
+            ]);
+        $waived->assertOk();
+        $this->assertSame(FestivalRequirementStatus::Waived, $requirement->refresh()->status);
+        $waivedNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::RequirementWaived->value)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame(FestivalRequirementStatus::Waived->value, $waivedNotification->payload['status']);
 
         $this->actingAs($owner)
             ->from($applicationUrl)

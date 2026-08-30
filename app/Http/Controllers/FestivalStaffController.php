@@ -398,7 +398,12 @@ class FestivalStaffController extends Controller
                 $submission->forceFill(['status' => $data['status'] === 'accepted' ? 'accepted' : ($data['status'] === 'rejected' ? 'rejected' : $submission->status), 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'review_notes' => $data['review_notes'] ?? null])->save();
             }
             $activity->record($requirement, 'requirement.reviewed', $festivalEdition, $request->user(), $data);
-            $notifications->queueForEntry($requirement->entry, FestivalNotificationType::RequirementReviewed, [
+            $notificationType = match ($data['status']) {
+                FestivalRequirementStatus::Accepted->value => FestivalNotificationType::RequirementAccepted,
+                FestivalRequirementStatus::Rejected->value => FestivalNotificationType::RequirementRejected,
+                FestivalRequirementStatus::Waived->value => FestivalNotificationType::RequirementWaived,
+            };
+            $notifications->queueForEntry($requirement->entry, $notificationType, [
                 'requirement' => $requirement->definition->name,
                 'status' => $data['status'],
                 'comment' => $data['review_notes'] ?? null,

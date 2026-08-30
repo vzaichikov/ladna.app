@@ -9,12 +9,12 @@ use App\Jobs\SendFestivalNotification;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
-use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\TelegramChatAuthorization;
 use App\Support\Festivals\FestivalNotificationMessage;
 use App\Support\Festivals\FestivalNotificationRenderer;
+use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +22,7 @@ class FestivalNotificationOutbox
 {
     public function __construct(
         private readonly FestivalNotificationRenderer $renderer,
+        private readonly FestivalNotificationScenarioSettings $scenarioSettings,
         private readonly QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts,
     ) {}
 
@@ -74,7 +75,7 @@ class FestivalNotificationOutbox
 
         $notification = null;
         if (filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
-            && $this->emailIsEnabled($edition->account_id, $type)) {
+            && $this->scenarioSettings->emailIsEnabled($edition->account_id, $type)) {
             $notification = $this->createChannel(
                 channel: FestivalNotificationChannel::Email,
                 dedupeBase: $dedupeBase,
@@ -95,7 +96,7 @@ class FestivalNotificationOutbox
             );
         }
 
-        if ($this->smsIsEnabled($edition->account_id, $type)) {
+        if ($this->scenarioSettings->smsIsEnabled($edition->account_id, $type)) {
             $smsNotification = $this->createChannel(
                 channel: FestivalNotificationChannel::Sms,
                 dedupeBase: $dedupeBase,
@@ -118,7 +119,7 @@ class FestivalNotificationOutbox
         }
 
         $telegramAuthorization = $portalUser->role === FestivalPortalRole::Registrant
-            && $this->telegramIsEnabled($edition->account_id, $type)
+            && $this->scenarioSettings->telegramIsEnabled($edition->account_id, $type)
             ? $this->telegramAuthorization($portalUser, $edition, $type)
             : null;
         if ($telegramAuthorization) {
@@ -194,14 +195,14 @@ class FestivalNotificationOutbox
         ];
         $notification = null;
         if (filter_var($order->buyer_email, FILTER_VALIDATE_EMAIL)
-            && $this->emailIsEnabled($order->account_id, $type)) {
+            && $this->scenarioSettings->emailIsEnabled($order->account_id, $type)) {
             $notification = $this->createChannel(FestivalNotificationChannel::Email, $dedupeBase, [
                 ...$attributes,
                 'text' => $message->emailText(),
             ]);
         }
 
-        if (filled($order->buyer_phone) && $this->smsIsEnabled($order->account_id, $type)) {
+        if (filled($order->buyer_phone) && $this->scenarioSettings->smsIsEnabled($order->account_id, $type)) {
             $smsNotification = $this->createChannel(FestivalNotificationChannel::Sms, $dedupeBase, [
                 ...$attributes,
                 'text' => $message->smsText,
@@ -209,7 +210,7 @@ class FestivalNotificationOutbox
             $notification ??= $smsNotification;
         }
 
-        $telegramAuthorization = $guest && $this->telegramIsEnabled($order->account_id, $type)
+        $telegramAuthorization = $guest && $this->scenarioSettings->telegramIsEnabled($order->account_id, $type)
             ? $this->telegramAuthorization($guest, $order->edition, $type)
             : null;
         if ($telegramAuthorization) {
@@ -242,7 +243,7 @@ class FestivalNotificationOutbox
 
         if ($edition->account->isReadOnlyDemo()
             || ! filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
-            || ! $this->emailIsEnabled($edition->account_id, FestivalNotificationType::EntrancePassesIssued)) {
+            || ! $this->scenarioSettings->emailIsEnabled($edition->account_id, FestivalNotificationType::EntrancePassesIssued)) {
             return null;
         }
 
@@ -285,31 +286,6 @@ class FestivalNotificationOutbox
         }
 
         return $notification;
-    }
-
-    private function smsIsEnabled(int $accountId, FestivalNotificationType $type): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $accountId)
-            ->where('type', $type->value)
-            ->where('send_sms', true)
-            ->exists();
-    }
-
-    private function emailIsEnabled(int $accountId, FestivalNotificationType $type): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $accountId)
-            ->where('type', $type->value)
-            ->value('send_email') ?? true;
-    }
-
-    private function telegramIsEnabled(int $accountId, FestivalNotificationType $type): bool
-    {
-        return FestivalNotificationSetting::query()
-            ->where('account_id', $accountId)
-            ->where('type', $type->value)
-            ->value('send_telegram') ?? true;
     }
 
     private function telegramAuthorization(FestivalPortalUser $portalUser, FestivalEdition $edition, FestivalNotificationType $type): ?TelegramChatAuthorization

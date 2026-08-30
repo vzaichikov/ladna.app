@@ -124,6 +124,27 @@ public sealed class LadnaApiClientTests
         Assert.AreEqual("http://localhost:8080/", LadnaApiClient.ValidateServer("http://localhost:8080").ToString());
     }
 
+    [TestMethod]
+    public void InvalidCertificateAllowanceIsExplicitSessionScopedAndLocalOnly()
+    {
+        var localServer = LadnaApiClient.ValidateServer("https://ladna.local");
+        var productionServer = LadnaApiClient.ValidateServer("https://ladna.app");
+        using var client = new LadnaApiClient();
+
+        Assert.IsTrue(LadnaApiClient.IsLocalDevelopmentServer(localServer));
+        Assert.IsFalse(LadnaApiClient.IsLocalDevelopmentServer(productionServer));
+        Assert.IsFalse(client.AllowsInvalidCertificateFor(localServer));
+
+        client.AllowInvalidCertificateFor(localServer);
+
+        Assert.IsTrue(client.AllowsInvalidCertificateFor(localServer));
+        Assert.IsFalse(client.AllowsInvalidCertificateFor(productionServer));
+        Assert.ThrowsException<InvalidOperationException>(() => client.AllowInvalidCertificateFor(productionServer));
+
+        client.ClearInvalidCertificateAllowance();
+        Assert.IsFalse(client.AllowsInvalidCertificateFor(localServer));
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode status, string json)
     {
         return new HttpResponseMessage(status)

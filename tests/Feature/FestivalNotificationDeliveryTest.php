@@ -34,6 +34,7 @@ use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
 use App\Models\User;
 use App\Support\Festivals\FestivalNotificationRenderer;
+use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\ResumeSmsNotificationsAfterTopUp;
@@ -166,6 +167,66 @@ class FestivalNotificationDeliveryTest extends TestCase
             ->count());
         $this->assertSame(2, FestivalNotification::query()
             ->whereBelongsTo($account)
+            ->where('channel', FestivalNotificationChannel::Sms->value)
+            ->count());
+    }
+
+    public function test_split_field_review_scenarios_inherit_legacy_channels_until_their_own_setting_is_saved(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival(locale: 'en');
+        $legacySetting = FestivalNotificationSetting::query()->create([
+            'account_id' => $account->id,
+            'type' => FestivalNotificationType::RequirementReviewed,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'send_email' => true,
+            'send_sms' => true,
+        ]);
+
+        app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::RequirementAccepted,
+            ['entry_code' => 'FIELD-LEGACY', 'requirement' => 'Music', 'status' => 'accepted'],
+            dedupeSuffix: 'field-legacy',
+        );
+
+        $legacyEmail = FestivalNotification::query()
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->sole();
+        $this->assertSame(1, FestivalNotification::query()
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
+            ->where('channel', FestivalNotificationChannel::Sms->value)
+            ->count());
+
+        $legacySetting->update(['send_email' => false]);
+        app()->call([new SendFestivalNotification($legacyEmail->id), 'handle']);
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $legacyEmail->refresh()->status);
+        $this->assertSame('festival_email_scenario_disabled', $legacyEmail->failure_reason);
+
+        FestivalNotificationSetting::query()->create([
+            'account_id' => $account->id,
+            'type' => FestivalNotificationType::RequirementAccepted,
+            'is_enabled' => true,
+            'is_optional' => false,
+            'send_email' => true,
+            'send_sms' => false,
+        ]);
+        app(FestivalNotificationOutbox::class)->queue(
+            $portalUser,
+            $edition,
+            FestivalNotificationType::RequirementAccepted,
+            ['entry_code' => 'FIELD-SPECIFIC', 'requirement' => 'Music', 'status' => 'accepted'],
+            dedupeSuffix: 'field-specific',
+        );
+
+        $this->assertSame(2, FestivalNotification::query()
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->count());
+        $this->assertSame(1, FestivalNotification::query()
+            ->where('type', FestivalNotificationType::RequirementAccepted->value)
             ->where('channel', FestivalNotificationChannel::Sms->value)
             ->count());
     }
@@ -348,6 +409,7 @@ class FestivalNotificationDeliveryTest extends TestCase
             app(MailDeliverySettingsResolver::class),
             app(FestivalTelegramNotificationSender::class),
             app(FestivalEntrancePassEligibility::class),
+            app(FestivalNotificationScenarioSettings::class),
         );
 
         $this->assertSame(FestivalNotificationStatus::WaitingForSmsCredit, $sms->refresh()->status);
@@ -537,7 +599,7 @@ class FestivalNotificationDeliveryTest extends TestCase
                 'correction_due_at' => '20.08.2026 18:00',
                 'action_url' => $actionUrl,
             ]);
-            $requirement = $renderer->render(FestivalNotificationType::RequirementReviewed, $locale, 'Recipient', [
+            $requirement = $renderer->render(FestivalNotificationType::RequirementAccepted, $locale, 'Recipient', [
                 'entry_code' => 'ENTRY-STEP',
                 'requirement' => 'Music',
                 'status' => 'accepted',
@@ -558,7 +620,7 @@ class FestivalNotificationDeliveryTest extends TestCase
 
             $this->assertStringContainsString($locale === 'uk' ? 'Можна переходити до оплати' : 'You can proceed to payment', $approved->smsText);
             $this->assertStringContainsString($locale === 'uk' ? 'повернуто на доопрацювання' : 'returned for additional processing', $changes->emailText());
-            $this->assertStringContainsString(__('app.festival_requirement_status_accepted', locale: $locale), $requirement->emailText());
+            $this->assertStringContainsString($locale === 'uk' ? 'прийнято' : 'accepted', $requirement->emailText());
             $this->assertStringContainsString($locale === 'uk' ? 'заявники стали учасниками фестивалю' : 'applicants are now Festival participants', $acceptedEntry->emailText());
             $this->assertStringContainsString($locale === 'uk' ? 'заявку ENTRY-STEP не прийнято' : 'application ENTRY-STEP was not accepted', $rejectedEntry->emailText());
             $this->assertStringNotContainsString('Decision: approve', $approved->emailText());

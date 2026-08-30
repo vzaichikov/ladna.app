@@ -44,6 +44,12 @@
                     <StackPanel>
                         <TextBlock x:Name="ServerLabel" Text="Server" />
                         <TextBox x:Name="ServerTextBox" Text="https://ladna.app" />
+                        <Border x:Name="LocalCertificateWarning" Visibility="Collapsed"
+                                Background="#FFF4D6" BorderBrush="#B7791F" BorderThickness="1"
+                                CornerRadius="7" Padding="10" Margin="0,0,0,10">
+                            <TextBlock x:Name="LocalCertificateWarningText" TextWrapping="Wrap"
+                                       Foreground="#7A4B00" FontWeight="SemiBold" />
+                        </Border>
                         <TextBlock x:Name="TokenLabel" Text="API token (protected for this Windows user with DPAPI)" />
                         <PasswordBox x:Name="TokenPasswordBox" />
                         <WrapPanel>

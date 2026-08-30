@@ -12,6 +12,7 @@ description: Safely deploy the Ladna Laravel production app from this repository
 - Use the local ignored connection files in `.codex/`; do not commit SSH host, key material, or generated deploy logs.
 - Before committing or pushing, use `ladna-versioning` to decide whether release metadata is needed. Include `VERSION` plus `config/changelog.php` only when the change is client-facing and useful to users, studio owners, or clients. For patch-only bugfixes, internal maintenance, tests, refactors, deploy tooling, or cleanup that the user wants released quietly, leave release metadata unchanged and state the exclusion reason before committing.
 - Prefer minimal, relevant local verification before production deploy. If PHP files changed, run Pint and the focused tests. If frontend assets changed, run `npm run build`.
+- Do not rebuild, publish, or run tests for the Windows Battle Meter as part of an ordinary production deploy, even when Battle Meter files changed. Run those Windows-specific steps only when the user explicitly asks for them in the current request.
 - Treat production as mutable and high risk. Stop on unclear Git state, failed tests, failed build, failed SSH, dirty production worktree, branch mismatch, or any migration concern that needs human review.
 
 ## Standard Workflow

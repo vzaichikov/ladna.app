@@ -2,7 +2,9 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net.Security;
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Ladna.BattleMeter.Models;
 
@@ -41,11 +43,23 @@ public sealed class LadnaApiClient : IBattleApiClient, IDisposable
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private string? _allowedInvalidCertificateAuthority;
 
     public LadnaApiClient(HttpClient? httpClient = null)
     {
         _ownsClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+        if (httpClient is not null)
+        {
+            _httpClient = httpClient;
+            return;
+        }
+
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = ValidateServerCertificate,
+        };
+        _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
     }
 
     public async Task<BattleListResponse> GetMatchesAsync(
@@ -110,6 +124,46 @@ public sealed class LadnaApiClient : IBattleApiClient, IDisposable
         };
 
         return builder.Uri;
+    }
+
+    public static bool IsLocalDevelopmentServer(Uri server)
+    {
+        return server.IsLoopback || server.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void AllowInvalidCertificateFor(Uri server)
+    {
+        if (server.Scheme != Uri.UriSchemeHttps || !IsLocalDevelopmentServer(server))
+        {
+            throw new InvalidOperationException("Invalid TLS certificates can be allowed only for local HTTPS development servers.");
+        }
+
+        _allowedInvalidCertificateAuthority = server.GetLeftPart(UriPartial.Authority);
+    }
+
+    public void ClearInvalidCertificateAllowance()
+    {
+        _allowedInvalidCertificateAuthority = null;
+    }
+
+    public bool AllowsInvalidCertificateFor(Uri server)
+    {
+        return server.Scheme == Uri.UriSchemeHttps
+            && IsLocalDevelopmentServer(server)
+            && string.Equals(
+                _allowedInvalidCertificateAuthority,
+                server.GetLeftPart(UriPartial.Authority),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ValidateServerCertificate(
+        HttpRequestMessage request,
+        X509Certificate2? certificate,
+        X509Chain? chain,
+        SslPolicyErrors sslPolicyErrors)
+    {
+        return sslPolicyErrors == SslPolicyErrors.None
+            || (request.RequestUri is not null && AllowsInvalidCertificateFor(request.RequestUri));
     }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, Uri server, string path, string token)

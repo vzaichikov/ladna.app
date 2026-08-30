@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.161.0',
+                'date' => '2026-08-30',
+                'title' => 'Independent Festival field-review notifications',
+                'items' => ['Festival teams can now configure accepted, rejected, and waived registration-field notifications independently for Email, SMS, participant Telegram, and owner Telegram. Routine accepted-field messages can be disabled while correction alerts stay active.', 'Communication settings now keep all four channel controls aligned in responsive columns, including on wide screens.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.160.0',
                 'date' => '2026-08-30',
                 'title' => 'Festival Battle audience meter',
@@ -1423,6 +1430,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.161.0',
+                'date' => '2026-08-30',
+                'title' => 'Окремі сповіщення про перевірку полів фестивалю',
+                'items' => ['Команда фестивалю тепер може окремо налаштувати сповіщення про прийняті, відхилені та пропущені поля реєстрації для Email, SMS, Telegram учасника й Telegram власника. Звичайні повідомлення про прийняті поля можна вимкнути, не втрачаючи сповіщень про потрібні виправлення.', 'У налаштуваннях комунікації всі чотири канали тепер вирівняні в адаптивні колонки, зокрема на широких екранах.'],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.160.0',
                 'date' => '2026-08-30',

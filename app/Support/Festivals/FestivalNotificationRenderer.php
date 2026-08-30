@@ -7,6 +7,7 @@ use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowStepType;
 use Illuminate\Support\Str;
+use LogicException;
 
 final class FestivalNotificationRenderer
 {
@@ -51,8 +52,13 @@ final class FestivalNotificationRenderer
             return $this->entryStepReviewed($locale, $recipientName, $payload, $replacements, $actionUrl);
         }
 
-        if ($type === FestivalNotificationType::RequirementReviewed) {
-            return $this->requirementReviewed($locale, $recipientName, $payload, $replacements, $actionUrl);
+        if (in_array($type, [
+            FestivalNotificationType::RequirementAccepted,
+            FestivalNotificationType::RequirementRejected,
+            FestivalNotificationType::RequirementWaived,
+            FestivalNotificationType::RequirementReviewed,
+        ], true)) {
+            return $this->requirementReviewed($type, $locale, $recipientName, $payload, $replacements, $actionUrl);
         }
 
         $subject = $this->emailSubject(
@@ -140,25 +146,32 @@ final class FestivalNotificationRenderer
      * @param  array<string, mixed>  $payload
      * @param  array<string, string>  $replacements
      */
-    private function requirementReviewed(string $locale, string $recipientName, array $payload, array $replacements, ?string $actionUrl): FestivalNotificationMessage
+    private function requirementReviewed(FestivalNotificationType $type, string $locale, string $recipientName, array $payload, array $replacements, ?string $actionUrl): FestivalNotificationMessage
     {
         $status = FestivalRequirementStatus::tryFrom((string) ($payload['status'] ?? $payload['decision'] ?? ''));
         $replacements['decision'] = $status
             ? __('app.festival_requirement_status_'.$status->value, locale: $locale)
             : $replacements['decision'];
-        $lines = [__('app.festival_notification_template_requirement_reviewed_body', $replacements, $locale)];
+        $template = match ($type) {
+            FestivalNotificationType::RequirementAccepted => 'requirement_accepted',
+            FestivalNotificationType::RequirementRejected => 'requirement_rejected',
+            FestivalNotificationType::RequirementWaived => 'requirement_waived',
+            FestivalNotificationType::RequirementReviewed => 'requirement_reviewed',
+            default => throw new LogicException('Unsupported Festival requirement notification type.'),
+        };
+        $lines = [__('app.festival_notification_template_'.$template.'_body', $replacements, $locale)];
         $this->appendReviewDetails($lines, $payload, $locale);
 
         return new FestivalNotificationMessage(
             subject: $this->emailSubject(
-                __('app.festival_notification_template_requirement_reviewed_subject', $replacements, $locale),
+                __('app.festival_notification_template_'.$template.'_subject', $replacements, $locale),
                 $payload,
                 $locale,
             ),
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
             lines: $this->emailLines($lines, $payload, $locale),
-            smsText: __('app.festival_notification_template_requirement_reviewed_sms', $replacements, $locale),
-            actionLabel: $this->actionLabel(FestivalNotificationType::RequirementReviewed, $actionUrl, $locale),
+            smsText: __('app.festival_notification_template_'.$template.'_sms', $replacements, $locale),
+            actionLabel: $this->actionLabel($type, $actionUrl, $locale),
             actionUrl: $actionUrl,
         );
     }
@@ -188,6 +201,9 @@ final class FestivalNotificationRenderer
             FestivalNotificationType::EntrySubmitted,
             FestivalNotificationType::EntryReviewed,
             FestivalNotificationType::EntryStepReviewed,
+            FestivalNotificationType::RequirementAccepted,
+            FestivalNotificationType::RequirementRejected,
+            FestivalNotificationType::RequirementWaived,
             FestivalNotificationType::RequirementReviewed,
             FestivalNotificationType::PaymentDue,
             FestivalNotificationType::PaymentPaid => __('app.festival_open_application', locale: $locale),
