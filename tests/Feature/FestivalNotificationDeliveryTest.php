@@ -631,6 +631,90 @@ class FestivalNotificationDeliveryTest extends TestCase
         }
     }
 
+    public function test_step_completion_overrides_are_channel_specific_and_preserve_fixed_message_parts(): void
+    {
+        $renderer = app(FestivalNotificationRenderer::class);
+        $actionUrl = 'https://ladna.test/festival/application/custom';
+        $payload = [
+            'festival' => 'Ladna Fest',
+            'entry_code' => 'ENTRY-CUSTOM',
+            'step' => 'Questionnaire',
+            'decision' => 'approve',
+            'action_url' => $actionUrl,
+        ];
+        $message = $renderer->render(
+            FestivalNotificationType::EntryStepReviewed,
+            'en',
+            'Registrant',
+            $payload,
+            [
+                'email' => 'Custom email body.',
+                'sms' => 'Custom SMS body.',
+                'telegram' => 'Custom Telegram body.',
+            ],
+        );
+
+        $this->assertStringContainsString('Custom email body.', $message->emailText());
+        $this->assertStringNotContainsString('Custom Telegram body.', $message->emailText());
+        $this->assertSame('Custom SMS body.', $message->smsText);
+        $this->assertStringContainsString('Custom Telegram body.', $message->telegramText());
+        $this->assertStringNotContainsString('Custom email body.', $message->telegramText());
+        $this->assertStringContainsString('Festival: Ladna Fest', $message->emailText());
+        $this->assertStringContainsString($actionUrl, $message->emailText());
+        $this->assertStringContainsString($actionUrl, $message->telegramText());
+        $this->assertSame(__('app.festival_open_application', locale: 'en'), $message->actionLabel);
+
+        $ukrainian = $renderer->render(
+            FestivalNotificationType::EntryStepReviewed,
+            'uk',
+            'Учасниця',
+            [...$payload, 'festival' => 'Фестиваль Ladna'],
+            [
+                'email' => 'Власний текст листа.',
+                'sms' => 'Власний текст SMS.',
+                'telegram' => 'Власний текст Telegram.',
+            ],
+        );
+        $this->assertStringContainsString('Власний текст листа.', $ukrainian->emailText());
+        $this->assertSame('Власний текст SMS.', $ukrainian->smsText);
+        $this->assertStringContainsString('Власний текст Telegram.', $ukrainian->telegramText());
+        $this->assertStringContainsString('Фестиваль: Фестиваль Ladna', $ukrainian->emailText());
+        $this->assertSame(__('app.festival_open_application', locale: 'uk'), $ukrainian->actionLabel);
+
+        $fallback = $renderer->render(
+            FestivalNotificationType::EntryStepReviewed,
+            'en',
+            'Registrant',
+            $payload,
+            ['email' => 'Only email is overridden.'],
+        );
+        $this->assertStringContainsString('Only email is overridden.', $fallback->emailText());
+        $this->assertStringContainsString('is approved', $fallback->smsText);
+        $this->assertStringContainsString('has been approved', $fallback->telegramText());
+
+        $changes = $renderer->render(
+            FestivalNotificationType::EntryStepReviewed,
+            'en',
+            'Registrant',
+            [...$payload, 'decision' => 'request_changes'],
+            ['email' => 'Must not replace corrections.'],
+        );
+        $this->assertStringNotContainsString('Must not replace corrections.', $changes->emailText());
+        $this->assertStringContainsString('returned for additional processing', $changes->emailText());
+
+        $mail = new FestivalPortalMail(
+            subjectLine: $message->subject,
+            greeting: $message->greeting,
+            lines: $message->lines,
+            actionLabel: $message->actionLabel,
+            actionUrl: $message->actionUrl,
+            messageLocale: 'en',
+        );
+        $mail->assertSeeInHtml('Custom email body.');
+        $mail->assertSeeInHtml($actionUrl);
+        $mail->assertSeeInHtml(__('app.festival_mail_footer', locale: 'en'));
+    }
+
     public function test_enabled_scenario_notifies_each_connected_studio_owner_through_the_general_ladna_bot(): void
     {
         Http::fake(['api.telegram.org/*' => Http::response([

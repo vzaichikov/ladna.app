@@ -103,6 +103,55 @@ class FestivalTelegramNotificationTest extends TestCase
         $this->assertSame(1, FestivalNotification::query()->whereBelongsTo($fixture['account'])->count());
     }
 
+    public function test_step_completion_telegram_override_is_independent_and_keeps_the_cabinet_link_and_button(): void
+    {
+        Http::fake(['api.telegram.org/*' => Http::response([
+            'ok' => true,
+            'result' => ['message_id' => 44003],
+        ])]);
+        $fixture = $this->authorizedFestival('7101751');
+        $actionUrl = 'https://ladna.local/festival-portal/entries/100/steps/200';
+
+        app(FestivalNotificationOutbox::class)->queue(
+            $fixture['registrant'],
+            $fixture['edition'],
+            FestivalNotificationType::EntryStepReviewed,
+            [
+                'entry_code' => 'ENTRY-TELEGRAM-CUSTOM',
+                'step' => 'Questionnaire',
+                'decision' => 'approve',
+                'action_url' => $actionUrl,
+            ],
+            dedupeSuffix: 'custom-step-completion',
+            channelBodies: [
+                'email' => 'Email-only completion body.',
+                'telegram' => 'Telegram-only completion body.',
+            ],
+        );
+
+        $email = FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->sole();
+        $telegram = FestivalNotification::query()
+            ->where('channel', FestivalNotificationChannel::Telegram->value)
+            ->sole();
+        $this->assertStringContainsString('Email-only completion body.', $email->text);
+        $this->assertStringNotContainsString('Telegram-only completion body.', $email->text);
+        $this->assertStringContainsString('Telegram-only completion body.', $telegram->text);
+        $this->assertStringNotContainsString('Email-only completion body.', $telegram->text);
+        $this->assertStringContainsString($actionUrl, $telegram->text);
+
+        app()->call([new SendFestivalNotification($telegram->id), 'handle']);
+
+        Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/sendMessage')
+            && str_contains((string) $request['text'], 'Telegram-only completion body.')
+            && str_contains((string) $request['text'], $actionUrl)
+            && data_get($request->data(), 'reply_markup.inline_keyboard.0.0.web_app.url') === route(
+                'public.festival-telegram.show',
+                [$fixture['account']->slug, $fixture['series']->slug],
+            ).'?action=dashboard');
+    }
+
     public function test_optional_notification_is_enabled_by_default_and_respects_an_explicit_opt_out(): void
     {
         $fixture = $this->authorizedFestival('7102001');

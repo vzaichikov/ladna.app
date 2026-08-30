@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.163.0',
+                'date' => '2026-08-30',
+                'title' => 'Custom Festival step-completion messages',
+                'items' => ['Festival teams can now set separate Ukrainian and English Email, SMS, and Telegram text for every registration step, including Summary. Empty fields continue using Ladnaʼs localized defaults, while %name% and %category% insert the application performers and category.', 'A message is created after every new step approval, including automatic and paid Payment steps and final confirmation. Existing cabinet links, Telegram buttons, email presentation, and Ladna footer remain in place.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.162.0',
                 'date' => '2026-08-30',
                 'title' => 'Fresh Festival confirmations and a livelier Battle audience screen',
@@ -1437,6 +1444,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.163.0',
+                'date' => '2026-08-30',
+                'title' => 'Власні повідомлення після завершення кроків фестивалю',
+                'items' => ['Команда фестивалю тепер може окремо задати український та англійський текст Email, SMS і Telegram для кожного кроку реєстрації, включно з Підсумком. Порожні поля й надалі використовують стандартний локалізований текст Ladna, а %name% і %category% підставляють виконавців та категорію заявки.', 'Повідомлення створюється після кожного нового підтвердження кроку, включно з автоматичними й оплаченими кроками Оплати та остаточним підтвердженням. Посилання до кабінету, кнопки Telegram, оформлення листа й підвал Ladna залишаються на місці.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.162.0',
                 'date' => '2026-08-30',

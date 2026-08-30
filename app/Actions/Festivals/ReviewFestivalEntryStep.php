@@ -20,6 +20,7 @@ class ReviewFestivalEntryStep
     public function __construct(
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly QueueFestivalEntryStepCompletionNotification $completionNotifications,
         private readonly ActivateFestivalParticipationCharges $activateParticipationCharges,
         private readonly FestivalEntryStepCompletion $completion,
         private readonly ReserveFestivalEntryTrack $reserveTrack,
@@ -103,20 +104,24 @@ class ReviewFestivalEntryStep
                 'comment' => $comment,
                 'correction_due_at' => $decision === 'request_changes' ? $correctionDueAt : null,
             ]);
-            $currentStepIndex = $step->entry->steps->search(fn (FestivalEntryStep $entryStep): bool => $entryStep->is($step));
-            $nextStep = $decision === 'approve' && $currentStepIndex !== false
-                ? $step->entry->steps->slice($currentStepIndex + 1)->first(fn (FestivalEntryStep $entryStep): bool => $entryStep->status !== FestivalEntryStepStatus::Approved)
-                : null;
-            $this->notifications->queueForEntry($step->entry, FestivalNotificationType::EntryStepReviewed, [
-                'step' => $step->workflowStep->title,
-                'decision' => $decision,
-                'comment' => $comment,
-                'correction_due_at' => $correctionDueAt,
-                'entry_status' => $step->entry->status->value,
-                'next_step' => $nextStep?->workflowStep->title,
-                'next_step_type' => $nextStep?->workflowStep->type->value,
-                'action_url' => route('festival.portal.entry-steps.show', [$step->entry->account->slug, $step->entry, $step]),
-            ], 'step-review:'.$step->id.':'.$reviewDedupeToken);
+            if ($decision === 'approve') {
+                $this->completionNotifications->execute(
+                    $step,
+                    'step-review:'.$step->id.':'.$reviewDedupeToken,
+                    queueOwnerTelegramAlert: true,
+                );
+            } else {
+                $this->notifications->queueForEntry($step->entry, FestivalNotificationType::EntryStepReviewed, [
+                    'step' => $step->workflowStep->title,
+                    'decision' => $decision,
+                    'comment' => $comment,
+                    'correction_due_at' => $correctionDueAt,
+                    'entry_status' => $step->entry->status->value,
+                    'next_step' => null,
+                    'next_step_type' => null,
+                    'action_url' => route('festival.portal.entry-steps.show', [$step->entry->account->slug, $step->entry, $step]),
+                ], 'step-review:'.$step->id.':'.$reviewDedupeToken);
+            }
 
             return $step->refresh();
         }, 3);

@@ -11,8 +11,11 @@ use LogicException;
 
 final class FestivalNotificationRenderer
 {
-    /** @param array<string, mixed> $payload */
-    public function render(FestivalNotificationType $type, string $locale, string $recipientName, array $payload): FestivalNotificationMessage
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, string>  $channelBodies
+     */
+    public function render(FestivalNotificationType $type, string $locale, string $recipientName, array $payload, array $channelBodies = []): FestivalNotificationMessage
     {
         $actionUrl = filled($payload['action_url'] ?? null) ? (string) $payload['action_url'] : null;
 
@@ -49,7 +52,7 @@ final class FestivalNotificationRenderer
         }
 
         if ($type === FestivalNotificationType::EntryStepReviewed) {
-            return $this->entryStepReviewed($locale, $recipientName, $payload, $replacements, $actionUrl);
+            return $this->entryStepReviewed($locale, $recipientName, $payload, $replacements, $actionUrl, $channelBodies);
         }
 
         if (in_array($type, [
@@ -111,7 +114,7 @@ final class FestivalNotificationRenderer
      * @param  array<string, mixed>  $payload
      * @param  array<string, string>  $replacements
      */
-    private function entryStepReviewed(string $locale, string $recipientName, array $payload, array $replacements, ?string $actionUrl): FestivalNotificationMessage
+    private function entryStepReviewed(string $locale, string $recipientName, array $payload, array $replacements, ?string $actionUrl, array $channelBodies): FestivalNotificationMessage
     {
         $decision = (string) ($payload['decision'] ?? '');
         $nextStepType = FestivalWorkflowStepType::tryFrom((string) ($payload['next_step_type'] ?? ''));
@@ -125,8 +128,17 @@ final class FestivalNotificationRenderer
             $decision === 'reject_entry' => 'rejected',
             default => 'reviewed',
         };
-        $lines = [__('app.festival_notification_template_entry_step_reviewed_'.$template.'_body', $replacements, $locale)];
+        $defaultBody = __('app.festival_notification_template_entry_step_reviewed_'.$template.'_body', $replacements, $locale);
+        $emailBody = $decision === 'approve' && filled($channelBodies['email'] ?? null)
+            ? (string) $channelBodies['email']
+            : $defaultBody;
+        $telegramBody = $decision === 'approve' && filled($channelBodies['telegram'] ?? null)
+            ? (string) $channelBodies['telegram']
+            : $defaultBody;
+        $lines = [$emailBody];
+        $telegramLines = [$telegramBody];
         $this->appendReviewDetails($lines, $payload, $locale);
+        $this->appendReviewDetails($telegramLines, $payload, $locale);
 
         return new FestivalNotificationMessage(
             subject: $this->emailSubject(
@@ -136,9 +148,12 @@ final class FestivalNotificationRenderer
             ),
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
             lines: $this->emailLines($lines, $payload, $locale),
-            smsText: __('app.festival_notification_template_entry_step_reviewed_'.$template.'_sms', $replacements, $locale),
+            smsText: $decision === 'approve' && filled($channelBodies['sms'] ?? null)
+                ? (string) $channelBodies['sms']
+                : __('app.festival_notification_template_entry_step_reviewed_'.$template.'_sms', $replacements, $locale),
             actionLabel: $this->actionLabel(FestivalNotificationType::EntryStepReviewed, $actionUrl, $locale),
             actionUrl: $actionUrl,
+            telegramLines: $this->emailLines($telegramLines, $payload, $locale),
         );
     }
 

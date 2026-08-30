@@ -280,6 +280,12 @@ class HelpPagesTest extends TestCase
             ],
             'festival-registration-settings' => [
                 'Категорії, сценарії, поля та внески',
+                'Сповіщення про завершення',
+                '%name%',
+                '%category%',
+                'стандартне повідомлення цією мовою',
+                'Наступна зміна шаблону не переписує вже створене повідомлення',
+                'assets/help/screenshots/festival-step-completion-notifications.png',
                 'умова-підтвердження',
                 'редагування після підтвердження',
                 'Вибір помічників завжди стосується всієї заявки',
@@ -352,6 +358,8 @@ class HelpPagesTest extends TestCase
                 $response->assertSee($needle, false);
             }
         }
+
+        $this->assertFileExists(public_path('assets/help/screenshots/festival-step-completion-notifications.png'));
     }
 
     public function test_help_screenshot_catalog_has_no_missing_or_duplicate_files(): void

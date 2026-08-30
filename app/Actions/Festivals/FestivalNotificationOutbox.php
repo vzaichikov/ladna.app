@@ -26,8 +26,11 @@ class FestivalNotificationOutbox
         private readonly QueueFestivalOwnerTelegramAlert $ownerTelegramAlerts,
     ) {}
 
-    /** @param array<string, mixed> $payload */
-    public function queueForEntry(FestivalEntry $entry, string|FestivalNotificationType $type, array $payload, ?string $dedupeSuffix = null): ?FestivalNotification
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, string>  $channelBodies
+     */
+    public function queueForEntry(FestivalEntry $entry, string|FestivalNotificationType $type, array $payload, ?string $dedupeSuffix = null, array $channelBodies = [], bool $queueOwnerTelegramAlert = true): ?FestivalNotification
     {
         $entry->loadMissing(['account', 'portalUser', 'edition']);
         $payload = [
@@ -45,11 +48,16 @@ class FestivalNotificationOutbox
             payload: $payload,
             entry: $entry,
             dedupeSuffix: $dedupeSuffix,
+            channelBodies: $channelBodies,
+            queueOwnerTelegramAlert: $queueOwnerTelegramAlert,
         );
     }
 
-    /** @param array<string, mixed> $payload */
-    public function queue(FestivalPortalUser $portalUser, FestivalEdition $edition, string|FestivalNotificationType $type, array $payload, ?FestivalEntry $entry = null, ?string $dedupeSuffix = null): ?FestivalNotification
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, string>  $channelBodies
+     */
+    public function queue(FestivalPortalUser $portalUser, FestivalEdition $edition, string|FestivalNotificationType $type, array $payload, ?FestivalEntry $entry = null, ?string $dedupeSuffix = null, array $channelBodies = [], bool $queueOwnerTelegramAlert = true): ?FestivalNotification
     {
         $type = $type instanceof FestivalNotificationType ? $type : FestivalNotificationType::from($type);
         abort_unless($portalUser->account_id === $edition->account_id, 404);
@@ -71,7 +79,7 @@ class FestivalNotificationOutbox
             $portalUser->id,
             $dedupeSuffix ?? hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
         ]);
-        $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload);
+        $message = $this->renderer->render($type, $portalUser->locale, $portalUser->displayName(), $payload, $channelBodies);
 
         $notification = null;
         if (filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
@@ -137,7 +145,7 @@ class FestivalNotificationOutbox
                     'recipient_phone' => $portalUser->phone,
                     'recipient_name' => $portalUser->displayName(),
                     'subject' => $message->subject,
-                    'text' => $message->emailText(),
+                    'text' => $message->telegramText(),
                     'payload' => $this->storedPayload($payload, $message),
                     'available_at' => now(),
                 ],
@@ -145,14 +153,16 @@ class FestivalNotificationOutbox
             $notification ??= $telegramNotification;
         }
 
-        $this->ownerTelegramAlerts->execute(
-            $edition->account,
-            $edition,
-            $type,
-            $payload,
-            $this->ownerEventKey($type, $edition, $entry, $payload, $dedupeSuffix),
-            $entry,
-        );
+        if ($queueOwnerTelegramAlert) {
+            $this->ownerTelegramAlerts->execute(
+                $edition->account,
+                $edition,
+                $type,
+                $payload,
+                $this->ownerEventKey($type, $edition, $entry, $payload, $dedupeSuffix),
+                $entry,
+            );
+        }
 
         return $notification;
     }
@@ -217,7 +227,7 @@ class FestivalNotificationOutbox
             $telegramNotification = $this->createChannel(FestivalNotificationChannel::Telegram, $dedupeBase, [
                 ...$attributes,
                 'telegram_chat_authorization_id' => $telegramAuthorization->id,
-                'text' => $message->emailText(),
+                'text' => $message->telegramText(),
             ]);
             $notification ??= $telegramNotification;
         }

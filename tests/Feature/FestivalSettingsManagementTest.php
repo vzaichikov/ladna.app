@@ -1283,6 +1283,147 @@ class FestivalSettingsManagementTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_workflow_step_completion_notifications_are_tabbed_validated_and_merge_config(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $workflow = app(ProvisionFestivalWorkflow::class)->execute($edition, 'Notification workflow');
+        $step = $workflow->steps->firstWhere('code', 'application');
+        $summary = $workflow->steps->firstWhere('type', FestivalWorkflowStepType::Summary);
+        $step->forceFill(['config' => ['unrelated' => ['preserved' => true]]])->save();
+        $editRoute = route('dashboard.accounts.festivals.workflow-steps.edit', [
+            $account,
+            $edition,
+            $workflow,
+            $step,
+            'tab' => 'completion-notifications',
+        ]);
+        $updateRoute = route('dashboard.accounts.festivals.workflow-steps.completion-notifications.update', [$account, $edition, $workflow, $step]);
+
+        $this->actingAs($owner)
+            ->get($editRoute)
+            ->assertOk()
+            ->assertSee(__('app.festival_workflow_step_tab_details'))
+            ->assertSee(__('app.festival_workflow_step_tab_completion_notifications'))
+            ->assertSee('name="completion_notifications[uk][email]"', false)
+            ->assertSee('name="completion_notifications[en][telegram]"', false)
+            ->assertSee('%name%', false)
+            ->assertSee('%category%', false);
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.workflow-steps.create', [$account, $edition, $workflow]))
+            ->assertOk()
+            ->assertDontSee(__('app.festival_workflow_step_tab_completion_notifications'));
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.workflow-steps.edit', [$account, $edition, $workflow, $summary, 'tab' => 'completion-notifications']))
+            ->assertOk()
+            ->assertSee('name="completion_notifications[uk][email]"', false);
+
+        $payload = [
+            'completion_notifications' => [
+                'uk' => [
+                    'email' => '  Вітаємо, %name%! Категорія: %category%.  ',
+                    'sms' => '',
+                    'telegram' => 'Telegram для %name%',
+                ],
+                'en' => [
+                    'email' => 'Welcome, %name%!',
+                    'sms' => 'Approved in %category%',
+                    'telegram' => '',
+                ],
+            ],
+        ];
+        $this->actingAs($owner)
+            ->put($updateRoute, $payload)
+            ->assertRedirect($editRoute)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame([
+            'unrelated' => ['preserved' => true],
+            'completion_notifications' => [
+                'uk' => [
+                    'email' => 'Вітаємо, %name%! Категорія: %category%.',
+                    'telegram' => 'Telegram для %name%',
+                ],
+                'en' => [
+                    'email' => 'Welcome, %name%!',
+                    'sms' => 'Approved in %category%',
+                ],
+            ],
+        ], $step->refresh()->config);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.workflow-steps.update', [$account, $edition, $workflow, $step]), [
+                'title' => 'Application details updated',
+                'type' => $step->type->value,
+                'sort_order' => $step->sort_order,
+                'review_mode' => $step->review_mode->value,
+                'review_effect' => $step->review_effect->value,
+                'description' => $step->description,
+                'opens_at' => null,
+                'due_at' => null,
+                'is_active' => 1,
+            ])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Welcome, %name%!', data_get($step->refresh()->config, 'completion_notifications.en.email'));
+
+        $this->actingAs($owner)
+            ->from($editRoute)
+            ->put($updateRoute, [
+                ...$payload,
+                'completion_notifications' => [
+                    ...$payload['completion_notifications'],
+                    'en' => [
+                        ...$payload['completion_notifications']['en'],
+                        'email' => 'Unknown %studio%',
+                    ],
+                ],
+            ])
+            ->assertRedirect($editRoute)
+            ->assertSessionHasErrors('completion_notifications.en.email');
+        $this->actingAs($owner)
+            ->from($editRoute)
+            ->put($updateRoute, [
+                ...$payload,
+                'completion_notifications' => [
+                    ...$payload['completion_notifications'],
+                    'uk' => [
+                        ...$payload['completion_notifications']['uk'],
+                        'sms' => str_repeat('x', 1001),
+                    ],
+                ],
+            ])
+            ->assertRedirect($editRoute)
+            ->assertSessionHasErrors('completion_notifications.uk.sms');
+
+        $blank = [
+            'completion_notifications' => [
+                'uk' => ['email' => '', 'sms' => '', 'telegram' => ''],
+                'en' => ['email' => '', 'sms' => '', 'telegram' => ''],
+            ],
+        ];
+        $this->actingAs($owner)->put($updateRoute, $blank)->assertSessionHasNoErrors();
+        $this->assertSame(['unrelated' => ['preserved' => true]], $step->refresh()->config);
+
+        $summaryUpdateRoute = route('dashboard.accounts.festivals.workflow-steps.completion-notifications.update', [$account, $edition, $workflow, $summary]);
+        $this->actingAs($owner)->put($summaryUpdateRoute, [
+            'completion_notifications' => [
+                'uk' => ['email' => 'Фінал для %name%', 'sms' => '', 'telegram' => ''],
+                'en' => ['email' => '', 'sms' => '', 'telegram' => ''],
+            ],
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('Фінал для %name%', data_get($summary->refresh()->config, 'completion_notifications.uk.email'));
+
+        $this->actingAs(User::factory()->create())
+            ->put($updateRoute, $blank)
+            ->assertForbidden();
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.workflow-steps.completion-notifications.update', [$account, $edition, $workflow, FestivalWorkflowStep::factory()->for(
+                FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]),
+                'workflow',
+            )->create(['account_id' => $account->id])]), $blank)
+            ->assertNotFound();
+    }
+
     public function test_document_replacement_keeps_the_record_and_removes_the_previous_file(): void
     {
         Storage::fake('local');

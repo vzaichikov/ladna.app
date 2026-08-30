@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\ManageFestivalWorkflowStep;
+use App\Actions\Festivals\UpdateFestivalWorkflowStepCompletionNotifications;
 use App\Enums\FestivalWorkflowReviewMode;
 use App\Enums\FestivalWorkflowStepType;
 use App\Http\Requests\FestivalMoveRequest;
+use App\Http\Requests\FestivalWorkflowStepCompletionNotificationRequest;
 use App\Http\Requests\FestivalWorkflowStepRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
@@ -78,8 +80,9 @@ class FestivalWorkflowStepController extends Controller
     {
         $permissions = $this->managerPermissions($request, $account, $festivalEdition);
         $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
+        $activeTab = $request->query('tab') === 'completion-notifications' ? 'completion-notifications' : 'details';
 
-        return $this->formView($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep, $permissions);
+        return $this->formView($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep, $permissions, $activeTab);
     }
 
     public function update(FestivalWorkflowStepRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
@@ -88,6 +91,21 @@ class FestivalWorkflowStepController extends Controller
         $manager->update($festivalWorkflowStep, $request->validated());
 
         return $this->redirect($account, $festivalEdition, $festivalWorkflow);
+    }
+
+    public function updateCompletionNotifications(FestivalWorkflowStepCompletionNotificationRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, UpdateFestivalWorkflowStepCompletionNotifications $updateNotifications): RedirectResponse
+    {
+        $this->assertStep($account, $festivalEdition, $festivalWorkflow, $festivalWorkflowStep);
+        $validated = $request->validated();
+        $updateNotifications->execute($festivalWorkflowStep, $validated['completion_notifications']);
+
+        return redirect()->route('dashboard.accounts.festivals.workflow-steps.edit', [
+            $account,
+            $festivalEdition,
+            $festivalWorkflow,
+            $festivalWorkflowStep,
+            'tab' => 'completion-notifications',
+        ])->with('status', __('app.festival_workflow_step_completion_notifications_saved'));
     }
 
     public function toggle(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalWorkflow $festivalWorkflow, FestivalWorkflowStep $festivalWorkflowStep, ManageFestivalWorkflowStep $manager): RedirectResponse
@@ -129,7 +147,7 @@ class FestivalWorkflowStepController extends Controller
     /**
      * @param  array{manage: bool, registrations: bool, schedule: bool, finance: bool, judging: bool, ticket_check_in: bool}  $permissions
      */
-    private function formView(Account $account, FestivalEdition $edition, FestivalWorkflow $workflow, FestivalWorkflowStep $step, array $permissions): View
+    private function formView(Account $account, FestivalEdition $edition, FestivalWorkflow $workflow, FestivalWorkflowStep $step, array $permissions, string $activeTab = 'details'): View
     {
         return view('festivals.staff.settings.workflow-step-form', [
             'account' => $account,
@@ -137,6 +155,7 @@ class FestivalWorkflowStepController extends Controller
             'workflow' => $workflow,
             'step' => $step,
             'hasSummaryStep' => $workflow->steps()->where('type', FestivalWorkflowStepType::Summary->value)->exists(),
+            'activeTab' => $activeTab,
             'workspacePermissions' => $permissions,
         ]);
     }

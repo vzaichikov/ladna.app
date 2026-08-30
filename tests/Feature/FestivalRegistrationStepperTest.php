@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Actions\Festivals\DeleteFestivalEntry;
+use App\Actions\Festivals\FullyConfirmFestivalEntry;
 use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\ProvisionFestivalWorkflow;
+use App\Actions\Festivals\QueueFestivalEntryStepCompletionNotification;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\StoreFestivalSubmission;
@@ -52,6 +54,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class FestivalRegistrationStepperTest extends TestCase
@@ -2134,6 +2137,174 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertOk()
             ->assertSee('10 ₴')
             ->assertSee('25 $');
+    }
+
+    public function test_every_newly_approved_step_queues_its_configured_completion_message(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $portalUser->forceFill(['locale' => 'en'])->save();
+        $category->forceFill(['name' => 'Aerial Duo', 'min_members' => 2, 'max_members' => 2])->save();
+        $participant->forceFill(['first_name' => 'Anna', 'last_name' => 'First', 'patronymic' => null])->save();
+        $secondParticipant = FestivalParticipant::factory()->for($portalUser)->create([
+            'account_id' => $account->id,
+            'member_type' => FestivalTeamMemberType::Performer,
+            'first_name' => 'Bella',
+            'last_name' => 'Second',
+            'patronymic' => null,
+        ]);
+        $applicationDefinition = $workflow->steps->firstWhere('code', 'application');
+        $applicationDefinition->forceFill([
+            'review_mode' => 'organizer',
+            'config' => [
+                'completion_notifications' => [
+                    'en' => [
+                        'email' => 'Approved for %name% in %category%.',
+                    ],
+                ],
+            ],
+        ])->save();
+        $paymentDefinition = $workflow->steps->firstWhere('code', 'participation_payment');
+        $paymentDefinition->forceFill([
+            'config' => [
+                'completion_notifications' => [
+                    'en' => ['email' => 'Payment step completed for %name%.'],
+                ],
+            ],
+        ])->save();
+        $summaryDefinition = $workflow->steps->firstWhere('code', 'summary');
+        $summaryDefinition->forceFill([
+            'config' => [
+                'completion_notifications' => [
+                    'en' => ['email' => 'Registration completed in %category%.'],
+                ],
+            ],
+        ])->save();
+        $entry = $this->entry($account, $edition, $portalUser, $participant, $category, 'Completion message entry');
+        $entry->participants()->attach($secondParticipant->id, [
+            'account_id' => $account->id,
+            'sort_order' => 1,
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($entry);
+        $application = $this->step($entry, 'application');
+
+        app(SubmitFestivalEntryStep::class)->execute($entry, $application);
+        $reviewer = User::factory()->create();
+        $account->addOwner($reviewer);
+        app(ReviewFestivalEntryStep::class)->execute(
+            $application->refresh(),
+            $reviewer,
+            'request_changes',
+            'Please confirm the roster.',
+            now()->addDay()->toDateTimeString(),
+        );
+        $this->assertFalse(FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->where('text', 'like', '%Approved for First Anna, Second Bella in Aerial Duo.%')
+            ->exists());
+
+        app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $application->refresh());
+        app(ReviewFestivalEntryStep::class)->execute($application->refresh(), $reviewer, 'approve');
+
+        $applicationNotification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->where('channel', 'email')
+            ->where('text', 'like', '%Approved for First Anna, Second Bella in Aerial Duo.%')
+            ->sole();
+        $this->assertStringContainsString('Approved for First Anna, Second Bella in Aerial Duo.', $applicationNotification->text);
+        $this->assertStringContainsString(
+            route('festival.portal.entry-steps.show', [$account->slug, $entry, $application]),
+            $applicationNotification->text,
+        );
+        $this->assertStringNotContainsString('%name%', json_encode($applicationNotification->payload, JSON_THROW_ON_ERROR));
+
+        $applicationDefinition->forceFill(['config' => null])->save();
+        $this->assertStringContainsString('Approved for First Anna, Second Bella in Aerial Duo.', $applicationNotification->refresh()->text);
+
+        $payment = $this->step($entry->refresh()->load('steps.workflowStep'), 'participation_payment');
+        app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $payment);
+        $this->assertSame(FestivalEntryStepStatus::Approved, $payment->refresh()->status);
+        $this->assertTrue(FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->where('channel', 'email')
+            ->where('text', 'like', '%Payment step completed for First Anna, Second Bella.%')
+            ->exists());
+
+        $technical = $this->step($entry->refresh()->load('steps.workflowStep'), 'technical_form');
+        $technical->forceFill([
+            'status' => FestivalEntryStepStatus::Approved,
+            'reviewed_at' => now(),
+        ])->save();
+        app(FullyConfirmFestivalEntry::class)->execute($entry->refresh(), $reviewer);
+
+        $this->assertSame(FestivalEntryStatus::Accepted, $entry->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Approved, $this->step($entry->load('steps.workflowStep'), 'summary')->status);
+        $this->assertTrue(FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->where('channel', 'email')
+            ->where('text', 'like', '%Registration completed in Aerial Duo.%')
+            ->exists());
+        $this->assertSame(1, FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryReviewed->value)
+            ->where('channel', 'email')
+            ->count());
+
+        $notificationCount = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->count();
+        try {
+            app(SubmitFestivalEntryStep::class)->execute($entry->refresh(), $payment->refresh());
+            $this->fail('An already approved step must not be submitted again.');
+        } catch (HttpException $exception) {
+            $this->assertContains($exception->getStatusCode(), [409, 423]);
+        }
+        $this->assertSame($notificationCount, FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->count());
+    }
+
+    public function test_step_completion_name_placeholder_falls_back_to_the_entry_name_without_performers(): void
+    {
+        Queue::fake();
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $portalUser->forceFill(['locale' => 'en'])->save();
+        $applicationDefinition = $workflow->steps->firstWhere('code', 'application');
+        $applicationDefinition->forceFill([
+            'config' => [
+                'completion_notifications' => [
+                    'en' => ['email' => 'Welcome, %name%.'],
+                ],
+            ],
+        ])->save();
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Historic roster entry'),
+        );
+        $entry->participants()->detach();
+        $application = $this->step($entry, 'application');
+        $application->forceFill([
+            'status' => FestivalEntryStepStatus::Approved,
+            'reviewed_at' => now(),
+        ])->save();
+
+        app(QueueFestivalEntryStepCompletionNotification::class)->execute(
+            $application,
+            'historic-roster-fallback',
+            queueOwnerTelegramAlert: false,
+        );
+
+        $notification = FestivalNotification::query()
+            ->where('festival_entry_id', $entry->id)
+            ->where('type', FestivalNotificationType::EntryStepReviewed->value)
+            ->where('channel', 'email')
+            ->sole();
+        $this->assertStringContainsString('Welcome, Historic roster entry.', $notification->text);
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser, FestivalParticipant, FestivalCategory, FestivalWorkflow} */

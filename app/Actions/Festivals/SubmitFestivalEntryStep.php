@@ -18,6 +18,7 @@ use App\Support\Festivals\FestivalEntryStepCompletion;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\FestivalRuleRegistry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class SubmitFestivalEntryStep
@@ -28,12 +29,15 @@ class SubmitFestivalEntryStep
         private readonly FestivalRuleRegistry $rules,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly QueueFestivalEntryStepCompletionNotification $completionNotifications,
         private readonly ReserveFestivalEntryTrack $reserveTrack,
     ) {}
 
     public function execute(FestivalEntry $entry, FestivalEntryStep $step): FestivalEntryStep
     {
-        return DB::transaction(function () use ($entry, $step): FestivalEntryStep {
+        $completionNotificationToken = (string) Str::uuid();
+
+        return DB::transaction(function () use ($entry, $step, $completionNotificationToken): FestivalEntryStep {
             $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $entry->festival_edition_id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
 
@@ -79,6 +83,14 @@ class SubmitFestivalEntryStep
             }
 
             $this->activity->record($step, 'entry_step.submitted', $entry->edition, $entry->portalUser, ['step' => $step->workflowStep->code]);
+
+            if ($automatic) {
+                $this->completionNotifications->execute(
+                    $step,
+                    'step-auto:'.$step->id.':'.$completionNotificationToken,
+                    queueOwnerTelegramAlert: false,
+                );
+            }
 
             return $step->refresh();
         }, 3);

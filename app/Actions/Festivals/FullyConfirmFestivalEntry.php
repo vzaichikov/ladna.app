@@ -23,6 +23,7 @@ class FullyConfirmFestivalEntry
         private readonly FestivalEntryFinalConfirmation $finalConfirmation,
         private readonly FestivalActivityRecorder $activity,
         private readonly FestivalNotificationOutbox $notifications,
+        private readonly QueueFestivalEntryStepCompletionNotification $completionNotifications,
         private readonly ReserveFestivalEntryTrack $reserveTrack,
     ) {}
 
@@ -74,6 +75,13 @@ class FullyConfirmFestivalEntry
             $summary = $steps->first(
                 fn (FestivalEntryStep $step): bool => $step->workflowStep->type === FestivalWorkflowStepType::Summary,
             );
+            $completionSteps = $changedSteps
+                ->filter(fn (FestivalEntryStep $step): bool => $step->status !== FestivalEntryStepStatus::Approved)
+                ->values();
+
+            if ($summary->status !== FestivalEntryStepStatus::Approved) {
+                $completionSteps->push($summary);
+            }
 
             $reviewedAt = now();
             foreach ($changedSteps as $step) {
@@ -119,6 +127,13 @@ class FullyConfirmFestivalEntry
                 'status' => FestivalEntryStatus::Accepted->value,
                 'decision' => 'fully_confirmed',
             ]);
+            foreach ($completionSteps as $completionStep) {
+                $this->completionNotifications->execute(
+                    $completionStep,
+                    'full-confirm-step:'.$completionStep->id.':'.$notificationToken,
+                    queueOwnerTelegramAlert: false,
+                );
+            }
             $this->notifications->queueForEntry($entry, FestivalNotificationType::EntryReviewed, [
                 'status' => FestivalEntryStatus::Accepted->value,
                 'comment' => null,
