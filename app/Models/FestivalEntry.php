@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalQualificationStatus;
+use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
 use Database\Factories\FestivalEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -40,7 +41,12 @@ class FestivalEntry extends Model
 
     public function isReady(): bool
     {
-        $requirementsReady = ! $this->requirements()->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value])->exists();
+        $requirementsReady = ! $this->requirements()
+            ->whereHas('definition', fn ($query) => $query
+                ->where('is_required', true)
+                ->orWhere('input_type', FestivalRequirementInputType::Agreement->value))
+            ->whereNotIn('status', [FestivalRequirementStatus::Accepted->value, FestivalRequirementStatus::Waived->value])
+            ->exists();
         $chargesReady = ! $this->charges()->whereNotIn('status', [FestivalChargeStatus::Paid->value, FestivalChargeStatus::Cancelled->value])->exists();
         $qualificationReady = in_array($this->qualification_status, [FestivalQualificationStatus::NotRequired, FestivalQualificationStatus::Passed], true);
 
