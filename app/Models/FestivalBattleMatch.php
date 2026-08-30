@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'round', 'position', 'entry_a_id', 'entry_b_id', 'next_match_id', 'next_position', 'status', 'audience_votes_a', 'audience_votes_b', 'judge_votes_a', 'judge_votes_b', 'jury_percentage_a', 'jury_percentage_b', 'audience_percentage_a', 'audience_percentage_b', 'combined_percentage_a', 'combined_percentage_b', 'winner_entry_id', 'decided_by', 'tie_break_reason', 'finalized_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'round', 'position', 'entry_a_id', 'entry_b_id', 'next_match_id', 'next_position', 'status', 'audience_votes_a', 'audience_votes_b', 'judge_votes_a', 'judge_votes_b', 'jury_percentage_a', 'jury_percentage_b', 'audience_percentage_a', 'audience_percentage_b', 'combined_percentage_a', 'combined_percentage_b', 'winner_entry_id', 'decided_by', 'decided_by_account_api_token_id', 'tie_break_reason', 'finalized_at'])]
 class FestivalBattleMatch extends Model
 {
     /** @use HasFactory<FestivalBattleMatchFactory> */
@@ -61,6 +61,11 @@ class FestivalBattleMatch extends Model
     public function winner(): BelongsTo
     {
         return $this->belongsTo(FestivalEntry::class, 'winner_entry_id');
+    }
+
+    public function decidingApiToken(): BelongsTo
+    {
+        return $this->belongsTo(AccountApiToken::class, 'decided_by_account_api_token_id');
     }
 
     public function nextMatch(): BelongsTo

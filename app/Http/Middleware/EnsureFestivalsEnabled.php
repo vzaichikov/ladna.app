@@ -3,12 +3,15 @@
 namespace App\Http\Middleware;
 
 use App\Models\Account;
+use App\Support\Http\AccountFromRequest;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureFestivalsEnabled
 {
+    public function __construct(private readonly AccountFromRequest $accountFromRequest) {}
+
     /**
      * Handle an incoming request.
      *
@@ -16,12 +19,7 @@ class EnsureFestivalsEnabled
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $account = $request->route('account');
-
-        if (! $account instanceof Account) {
-            $slug = $request->route('accountSlug');
-            $account = is_string($slug) ? Account::active()->where('slug', $slug)->first() : null;
-        }
+        $account = $this->accountFromRequest->resolve($request);
 
         abort_unless($account instanceof Account && $account->enable_festivals, 404);
         $request->attributes->set('festivalAccount', $account);

@@ -50,7 +50,8 @@ class AuthenticateAccountApiToken
             ], Response::HTTP_LOCKED);
         }
 
-        if (! $accountApiToken->account->isReadOnlyDemo()) {
+        if (! $accountApiToken->account->isReadOnlyDemo()
+            && ($accountApiToken->last_used_at === null || $accountApiToken->last_used_at->lte(now()->subMinutes(5)))) {
             $accountApiToken->forceFill(['last_used_at' => now()])->save();
         }
         $request->attributes->set('accountApiToken', $accountApiToken);

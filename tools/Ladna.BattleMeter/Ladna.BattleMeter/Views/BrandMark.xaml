@@ -1,0 +1,15 @@
+<UserControl x:Class="Ladna.BattleMeter.Views.BrandMark"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsHitTestVisible="False">
+    <Viewbox Stretch="Uniform">
+        <Canvas Width="190" Height="225">
+            <Path Fill="{StaticResource PlumBrush}"
+                  Data="M29,29 C50,29 68,45 68,64 L68,140 C58,139 48,134 39,125 C33,119 29,107 29,96 Z" />
+            <Path Fill="{StaticResource SoftLavenderBrush}"
+                  Data="M74,107 L119,107 C139,107 153,123 156,144 L93,144 C83,144 74,136 74,126 Z" />
+            <Path Fill="{StaticResource SandBrush}"
+                  Data="M29,122 C32,138 45,149 62,149 L115,149 C137,149 154,166 156,194 L76,194 C50,194 30,174 29,141 Z" />
+        </Canvas>
+    </Viewbox>
+</UserControl>

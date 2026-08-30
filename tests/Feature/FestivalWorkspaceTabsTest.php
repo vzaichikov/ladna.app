@@ -121,12 +121,19 @@ class FestivalWorkspaceTabsTest extends TestCase
 
     public function test_festival_group_orders_overview_content_and_users_before_other_workflows(): void
     {
+        $this->assertSame('Battles', __('app.festival_battles', [], 'en'));
+        $this->assertSame('Battles', __('app.festival_battle_voting', [], 'en'));
+        $this->assertSame('Батли', __('app.festival_battles', [], 'uk'));
+        $this->assertSame('Батли', __('app.festival_battle_voting', [], 'uk'));
+
         [$account, $edition] = $this->festival();
         $owner = User::factory()->create();
         $account->addOwner($owner);
 
         $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]));
-        $response->assertOk();
+        $response->assertOk()
+            ->assertSee(__('app.festival_battles'))
+            ->assertDontSee('Exotic Battles');
         $response->assertSeeInOrder([
             __('app.festival_workspace_group_festival'),
             __('app.festival_tab_overview'),
@@ -138,6 +145,13 @@ class FestivalWorkspaceTabsTest extends TestCase
             $response->getContent(),
             'href="'.route('dashboard.accounts.festivals.settings.content', [$account, $edition]).'"',
         ));
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.judging.battles.index', [$account, $edition]))
+            ->assertOk()
+            ->assertSee('<h1', false)
+            ->assertSee(__('app.festival_battles'))
+            ->assertDontSee('Exotic Battles');
     }
 
     public function test_festival_workspace_finishes_with_public_and_judge_links(): void

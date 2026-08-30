@@ -124,6 +124,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('mcp', fn (Request $request): Limit => Limit::perMinute(120)->by(
             $request->attributes->get('accountApiToken')?->id ?: $request->ip(),
         ));
+        RateLimiter::for('festival-battles-api', fn (Request $request): Limit => Limit::perMinute(120)->by(
+            $request->attributes->get('accountApiToken')?->id ?: $request->ip(),
+        ));
         RateLimiter::for('mcp-oauth', fn (Request $request): Limit => Limit::perMinute(120)->by(
             $request->attributes->get('mcpOAuthConnection')?->id ?: $request->ip(),
         ));

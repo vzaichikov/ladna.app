@@ -154,7 +154,7 @@ class FestivalWorkspaceController extends Controller
             ->where('account_id', $account->id)
             ->where('festival_edition_id', $festivalEdition->id)
             ->where('festival_entry_id', $festivalEntry->id)
-            ->with(['actorUser:id,name', 'actorPortalUser:id,first_name,last_name,email,phone']);
+            ->with(['actorUser:id,name', 'actorPortalUser:id,first_name,last_name,email,phone', 'actorAccountApiToken:id,name']);
 
         if ($historyType !== null) {
             $this->applicationHistoryTypes->apply($activityQuery, $historyType);

@@ -75,11 +75,11 @@
                                                     <div class="grid grid-cols-2 gap-3">
                                                         <label>
                                                             <span class="crm-label">{{ __('app.festival_battle_audience_a') }}</span>
-                                                            <input type="number" min="0" name="audience_votes_a" value="{{ old('audience_votes_a', 0) }}" required class="crm-field">
+                                                            <input type="number" min="0" name="audience_votes_a" value="{{ old('audience_votes_a', $match->audience_votes_a ?? 0) }}" required class="crm-field">
                                                         </label>
                                                         <label>
                                                             <span class="crm-label">{{ __('app.festival_battle_audience_b') }}</span>
-                                                            <input type="number" min="0" name="audience_votes_b" value="{{ old('audience_votes_b', 0) }}" required class="crm-field">
+                                                            <input type="number" min="0" name="audience_votes_b" value="{{ old('audience_votes_b', $match->audience_votes_b ?? 0) }}" required class="crm-field">
                                                         </label>
                                                     </div>
                                                     <label>

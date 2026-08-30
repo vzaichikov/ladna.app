@@ -62,6 +62,7 @@ class AccountApiTokenAbilityAuthorizer
             AccountApiTokenAbility::McpCashflowRead => StudioPermission::ManageStudioCashflow,
             AccountApiTokenAbility::McpPayrollRead => StudioPermission::ManageStudioPayroll,
             AccountApiTokenAbility::McpEventsRead => StudioPermission::ManageEvents,
+            AccountApiTokenAbility::FestivalBattlesOperate => StudioPermission::ManageFestivals,
         };
     }
 }

@@ -74,6 +74,8 @@ class AccountApiTokenAbilityTest extends TestCase
         $this->assertSame(StudioPermission::ManageStudioCashflow, $authorizer->requiredPermission(AccountApiTokenAbility::McpCashflowRead));
         $this->assertSame(StudioPermission::ManageStudioPayroll, $authorizer->requiredPermission(AccountApiTokenAbility::McpPayrollRead));
         $this->assertSame(StudioPermission::ManageEvents, $authorizer->requiredPermission(AccountApiTokenAbility::McpEventsRead));
+        $this->assertSame(StudioPermission::ManageFestivals, $authorizer->requiredPermission(AccountApiTokenAbility::FestivalBattlesOperate));
+        $this->assertTrue(AccountApiTokenAbility::FestivalBattlesOperate->mutatesAccountData());
     }
 
     public function test_staff_cannot_submit_an_ability_outside_current_permissions(): void

@@ -4,6 +4,7 @@ namespace App\Actions\Festivals;
 
 use App\Enums\FestivalBattleMatchStatus;
 use App\Enums\FestivalCompetitionFormat;
+use App\Models\AccountApiToken;
 use App\Models\FestivalBattleJudgeVote;
 use App\Models\FestivalBattleMatch;
 use App\Models\FestivalEntry;
@@ -20,7 +21,7 @@ class FinalizeFestivalBattleMatch
         FestivalBattleMatch $match,
         int $audienceVotesA,
         int $audienceVotesB,
-        User $actor,
+        User|AccountApiToken $actor,
         ?int $tieWinnerEntryId = null,
         ?string $tieBreakReason = null,
     ): FestivalBattleMatch {
@@ -32,6 +33,7 @@ class FinalizeFestivalBattleMatch
                 && $match->category->competition_format === FestivalCompetitionFormat::Knockout,
                 404,
             );
+            abort_unless(! $actor instanceof AccountApiToken || $actor->account_id === $match->account_id, 404);
 
             if ($match->status !== FestivalBattleMatchStatus::Ready || $match->entry_a_id === null || $match->entry_b_id === null) {
                 throw ValidationException::withMessages(['match' => __('app.festival_battle_match_not_open')]);
@@ -111,7 +113,8 @@ class FinalizeFestivalBattleMatch
                 'combined_percentage_a' => round((50 * $weightedNumeratorA) / $combinedDenominator, 4),
                 'combined_percentage_b' => round((50 * $weightedNumeratorB) / $combinedDenominator, 4),
                 'winner_entry_id' => $winnerEntryId,
-                'decided_by' => $actor->id,
+                'decided_by' => $actor instanceof User ? $actor->id : null,
+                'decided_by_account_api_token_id' => $actor instanceof AccountApiToken ? $actor->id : null,
                 'tie_break_reason' => $isTie ? trim((string) $tieBreakReason) : null,
                 'status' => FestivalBattleMatchStatus::Completed,
                 'finalized_at' => now(),

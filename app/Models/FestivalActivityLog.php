@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_entry_id', 'actor_user_id', 'actor_portal_user_id', 'action', 'subject_type', 'subject_id', 'payload', 'occurred_at'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_entry_id', 'actor_user_id', 'actor_portal_user_id', 'actor_account_api_token_id', 'action', 'subject_type', 'subject_id', 'payload', 'occurred_at'])]
 class FestivalActivityLog extends Model
 {
     protected function casts(): array
@@ -33,6 +33,11 @@ class FestivalActivityLog extends Model
     public function actorPortalUser(): BelongsTo
     {
         return $this->belongsTo(FestivalPortalUser::class, 'actor_portal_user_id');
+    }
+
+    public function actorAccountApiToken(): BelongsTo
+    {
+        return $this->belongsTo(AccountApiToken::class, 'actor_account_api_token_id');
     }
 
     public function subject(): MorphTo

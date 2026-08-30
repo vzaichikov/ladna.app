@@ -15,6 +15,7 @@ enum AccountApiTokenAbility: string
     case McpCashflowRead = 'mcp:cashflow:read';
     case McpPayrollRead = 'mcp:payroll:read';
     case McpEventsRead = 'mcp:events:read';
+    case FestivalBattlesOperate = 'festival_battles:operate';
 
     public function labelKey(): string
     {
@@ -27,6 +28,7 @@ enum AccountApiTokenAbility: string
             self::WebsiteLeadsCreate,
             self::McpBookingsCreate,
             self::McpBookingsCancel,
+            self::FestivalBattlesOperate,
         ], true);
     }
 }

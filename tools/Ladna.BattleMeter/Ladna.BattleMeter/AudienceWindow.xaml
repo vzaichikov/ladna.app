@@ -1,0 +1,81 @@
+<Window x:Class="Ladna.BattleMeter.AudienceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Ladna.BattleMeter.Views"
+        Title="Ladna Battle" Background="{StaticResource DarkPlumBrush}"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        PreviewKeyDown="AudienceWindow_OnPreviewKeyDown">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border x:Name="PanelA" Grid.Column="0" Background="{StaticResource PlumBrush}">
+            <Grid Margin="48,42">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="NameA" Foreground="{StaticResource CreamBrush}" FontSize="52"
+                           FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
+                <Grid Grid.Row="1" Margin="0,30">
+                    <ProgressBar x:Name="MeterA" Orientation="Vertical" Minimum="0" Maximum="100" Value="0"
+                                 Width="150" Height="Auto" Foreground="{StaticResource SoftLavenderBrush}"
+                                 Background="#2B1731" BorderThickness="0" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="LevelA" Foreground="White" FontSize="28" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Text="−∞ dBFS" />
+                </Grid>
+                <TextBlock x:Name="StatsA" Grid.Row="2" Foreground="{StaticResource CreamBrush}" FontSize="25"
+                           TextAlignment="Center" TextWrapping="Wrap" MinHeight="68" />
+            </Grid>
+        </Border>
+
+        <Border x:Name="PanelB" Grid.Column="1" Background="{StaticResource LavenderBrush}">
+            <Grid Margin="48,42">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="NameB" Foreground="{StaticResource DarkPlumBrush}" FontSize="52"
+                           FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
+                <Grid Grid.Row="1" Margin="0,30">
+                    <ProgressBar x:Name="MeterB" Orientation="Vertical" Minimum="0" Maximum="100" Value="0"
+                                 Width="150" Height="Auto" Foreground="{StaticResource CreamBrush}"
+                                 Background="#806B5688" BorderThickness="0" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="LevelB" Foreground="{StaticResource DarkPlumBrush}" FontSize="28" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Text="−∞ dBFS" />
+                </Grid>
+                <TextBlock x:Name="StatsB" Grid.Row="2" Foreground="{StaticResource DarkPlumBrush}" FontSize="25"
+                           TextAlignment="Center" TextWrapping="Wrap" MinHeight="68" />
+            </Grid>
+        </Border>
+
+        <Border Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,22,0,0" Background="#E6FAF8F5" CornerRadius="32" Padding="18,8">
+            <StackPanel Orientation="Horizontal">
+                <views:BrandMark Width="38" Height="45" />
+                <TextBlock Text="LADNA BATTLE" Foreground="{StaticResource DarkPlumBrush}" FontSize="24"
+                           FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Button x:Name="CloseAudienceButton" Grid.ColumnSpan="2" Panel.ZIndex="20"
+                HorizontalAlignment="Right" VerticalAlignment="Top" Margin="20"
+                Width="54" Height="54" Padding="0" Content="×" FontSize="30"
+                Background="#D92B1731" Foreground="{StaticResource CreamBrush}"
+                ToolTip="Close audience display" Click="CloseAudienceButton_OnClick" />
+
+        <Border x:Name="CenterMessagePanel" Grid.ColumnSpan="2" Background="#D92B1731"
+                VerticalAlignment="Center" Padding="40,30" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="CenterCaption" Foreground="{StaticResource SoftLavenderBrush}" FontSize="28"
+                           FontWeight="SemiBold" TextAlignment="Center" />
+                <TextBlock x:Name="CenterMessage" Foreground="White" FontSize="82" FontWeight="Black"
+                           TextAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

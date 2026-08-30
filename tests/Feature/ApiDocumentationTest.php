@@ -53,10 +53,13 @@ class ApiDocumentationTest extends TestCase
             ->assertSee('/api/v1/mobile/customer/profile/phone/verify')
             ->assertSee('/api/v1/website-leads')
             ->assertSee('/api/v1/festival-payments/{provider}/callbacks')
+            ->assertSee('/api/v1/festival-battles/matches')
+            ->assertSee('/api/v1/festival-battles/matches/{match}/audience-score')
             ->assertSee('Receives a payment provider callback for a Festival performance charge or spectator admission order')
             ->assertDontSee('/api/v1/public/{accountSlug}/{locationSlug}/schedule')
             ->assertDontSee('/mcp/ladna-studio')
             ->assertSee(__('app.api_docs_example_website_lead'))
+            ->assertSee(__('app.api_docs_example_festival_battle_score'))
             ->assertSee('PHP')
             ->assertSee('Python')
             ->assertSee('JS')
@@ -164,6 +167,16 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.parameters.0.name', 'provider')
             ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.requestBody.content.application/json.schema.additionalProperties', true)
             ->assertJsonPath('paths./api/v1/festival-payments/{provider}/callbacks.post.responses.400.description', 'The callback signature, order identifier, amount, currency, or state is invalid.')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches.get.tags.0', 'Festival battles')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches.get.security.0.AccountBearerToken', [])
+            ->assertJsonPath('paths./api/v1/festival-battles/matches/{match}.get.responses.200.content.application/json.schema.properties.data.$ref', '#/components/schemas/FestivalBattleMatch')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches/{match}/audience-score.put.requestBody.content.application/json.schema.$ref', '#/components/schemas/FestivalBattleAudienceScoreRequest')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches/{match}/audience-score.put.responses.202.content.application/json.schema.properties.data.$ref', '#/components/schemas/FestivalBattleMatch')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches/{match}/audience-score.put.responses.409.content.application/json.schema.$ref', '#/components/schemas/FestivalBattleConflictResponse')
+            ->assertJsonPath('paths./api/v1/festival-battles/matches/{match}/audience-score.put.responses.423.$ref', '#/components/responses/DemoReadOnly')
+            ->assertJsonPath('components.schemas.FestivalBattleAudienceScoreRequest.properties.audience_score_a.maximum', 1000000)
+            ->assertJsonPath('components.schemas.FestivalBattleMatch.properties.state.enum.2', 'jury_decision_required')
+            ->assertJsonPath('components.schemas.FestivalBattleMeta.properties.poll_interval_seconds.enum.0', 5)
             ->assertJsonPath('paths./mcp/ladna-studio.post.tags.0', 'MCP')
             ->assertJsonPath('paths./mcp/ladna-studio.post.security.0.AccountBearerToken', [])
             ->assertJsonPath('paths./mcp/ladna-studio/{accountSlug}.post.security.0.LadnaUserOAuth.0', 'mcp:use')
@@ -239,7 +252,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.type', 'array')
             ->assertJsonPath('components.schemas.MobileScheduledClass.properties.additional_trainers.items.$ref', '#/components/schemas/Trainer')
             ->assertJsonPath('components.schemas.MobileDeviceTokenRequest.properties.provider.enum.0', 'fcm')
-            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token. Tokens remain account service credentials until revoked.');
+            ->assertJsonPath('components.securitySchemes.AccountBearerToken.description', 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create, Festival battle operations require festival_battles:operate, and MCP tools require their documented mcp:* abilities. Account scope always comes from this token; clients never submit an account identifier. Tokens remain account service credentials until revoked.');
 
         $toolNames = $response->json('components.schemas.McpToolCallRequest.properties.params.properties.name.enum');
 

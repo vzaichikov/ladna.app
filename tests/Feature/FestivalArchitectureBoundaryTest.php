@@ -63,6 +63,7 @@ class FestivalArchitectureBoundaryTest extends TestCase
             app_path('Http/Controllers/FestivalTimelineController.php'),
             app_path('Http/Controllers/FestivalOnlineStreamController.php'),
             app_path('Http/Controllers/FestivalStreamAccessController.php'),
+            app_path('Http/Controllers/Api/V1/FestivalBattleMatchController.php'),
             app_path('Jobs/AdvanceFestivalTimelineJob.php'),
             app_path('View/Composers/FestivalWorkspaceComposer.php'),
         ];
@@ -74,13 +75,17 @@ class FestivalArchitectureBoundaryTest extends TestCase
         }
     }
 
-    public function test_festival_routes_expose_only_the_payment_callback_as_json_api(): void
+    public function test_festival_json_api_is_limited_to_payment_callbacks_and_battle_operations(): void
     {
         $festivalApiRoutes = collect(app('router')->getRoutes()->getRoutes())
             ->filter(fn ($route): bool => str_contains($route->uri(), 'festival') && str_starts_with($route->uri(), 'api/'));
 
-        $this->assertCount(1, $festivalApiRoutes);
-        $this->assertSame('api/v1/festival-payments/{provider}/callbacks', $festivalApiRoutes->first()->uri());
+        $this->assertSame([
+            'api/v1/festival-battles/matches',
+            'api/v1/festival-battles/matches/{match}',
+            'api/v1/festival-battles/matches/{match}/audience-score',
+            'api/v1/festival-payments/{provider}/callbacks',
+        ], $festivalApiRoutes->map(fn ($route): string => $route->uri())->sort()->values()->all());
 
         $internalStreamRoutes = collect(app('router')->getRoutes()->getRoutes())
             ->filter(fn ($route): bool => str_starts_with($route->uri(), 'internal/festival-stream/'))

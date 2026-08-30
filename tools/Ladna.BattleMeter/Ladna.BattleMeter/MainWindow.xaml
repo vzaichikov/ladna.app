@@ -1,0 +1,148 @@
+<Window x:Class="Ladna.BattleMeter.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Ladna.BattleMeter.Views"
+        Title="Ladna Battle Applause Meter" Width="1240" Height="830" MinWidth="1040" MinHeight="720"
+        Icon="Assets/LadnaBattleMeter.ico"
+        Background="{StaticResource CreamBrush}" Foreground="{StaticResource InkBrush}"
+        WindowStartupLocation="CenterScreen">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="180" />
+                </Grid.ColumnDefinitions>
+                <views:BrandMark Width="58" Height="68" />
+                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Text="Ladna Battle Applause Meter" FontSize="27"
+                               FontWeight="Bold" Foreground="{StaticResource PlumBrush}" />
+                    <TextBlock x:Name="SubtitleText" Text="Relative crowd-energy vote · no audio is stored or uploaded"
+                               Foreground="#6D5A70" FontSize="14" Margin="0,3,0,0" />
+                </StackPanel>
+                <ComboBox x:Name="LocaleCombo" Grid.Column="2" SelectionChanged="LocaleCombo_OnSelectionChanged">
+                    <ComboBoxItem Tag="en" Content="English" />
+                    <ComboBoxItem Tag="uk" Content="Українська" />
+                </ComboBox>
+            </Grid>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox x:Name="ConnectionGroup" Header="Ladna connection" Grid.Column="0">
+                    <StackPanel>
+                        <TextBlock x:Name="ServerLabel" Text="Server" />
+                        <TextBox x:Name="ServerTextBox" Text="https://ladna.app" />
+                        <TextBlock x:Name="TokenLabel" Text="API token (protected for this Windows user with DPAPI)" />
+                        <PasswordBox x:Name="TokenPasswordBox" />
+                        <WrapPanel>
+                            <Button x:Name="ConnectButton" Content="Connect and load matches" Click="ConnectButton_OnClick" />
+                            <Button x:Name="SaveButton" Content="Save settings" Background="{StaticResource LavenderBrush}"
+                                    Click="SaveButton_OnClick" />
+                        </WrapPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox x:Name="HardwareGroup" Header="Hardware" Grid.Column="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="MicrophoneLabel" Text="Microphone" />
+                        <ComboBox x:Name="MicrophoneCombo" Grid.Row="1" SelectionChanged="MicrophoneCombo_OnSelectionChanged" />
+                        <TextBlock x:Name="DisplayLabel" Grid.Row="2" Text="Audience display" />
+                        <ComboBox x:Name="DisplayCombo" Grid.Row="3" SelectionChanged="DisplayCombo_OnSelectionChanged" />
+                        <WrapPanel Grid.Row="4">
+                            <Button x:Name="RefreshDevicesButton" Content="Refresh devices" Click="RefreshDevicesButton_OnClick" />
+                            <Button x:Name="TestMicrophoneButton" Content="Test microphone" Background="{StaticResource LavenderBrush}"
+                                    Click="TestMicrophoneButton_OnClick" />
+                            <Button x:Name="ShowAudienceButton" Content="Show audience display" Background="{StaticResource DarkPlumBrush}"
+                                    Click="ShowAudienceButton_OnClick" />
+                            <Button x:Name="CloseAudienceButton" Content="Close audience display" Background="#8B5E34"
+                                    Click="CloseAudienceButton_OnClick" />
+                        </WrapPanel>
+                    </Grid>
+                </GroupBox>
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="0.95*" />
+                    <ColumnDefinition Width="1.3*" />
+                </Grid.ColumnDefinitions>
+
+                <GroupBox x:Name="MatchGroup" Header="Battle match" Grid.Column="0">
+                    <StackPanel>
+                        <TextBlock x:Name="MatchLabel" Text="Select a ready match explicitly" />
+                        <ComboBox x:Name="MatchCombo" MinHeight="38" SelectionChanged="MatchCombo_OnSelectionChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplayLabel}" TextWrapping="Wrap" MaxWidth="450" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Border Background="#F0EAF3" CornerRadius="10" Padding="14" Margin="0,4,0,12">
+                            <StackPanel>
+                                <TextBlock x:Name="SelectedMatchTitle" Text="No match selected" FontSize="17"
+                                           FontWeight="SemiBold" Foreground="{StaticResource PlumBrush}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedPerformers" Margin="0,6,0,0" FontSize="20" FontWeight="Bold"
+                                           Foreground="{StaticResource DarkPlumBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock x:Name="MeasurementSummary" Text="Capture a shared ambient baseline, then both performers."
+                                   TextWrapping="Wrap" FontSize="14" />
+                        <TextBlock x:Name="ScoreSummary" Margin="0,12,0,0" FontSize="22" FontWeight="Bold"
+                                   Foreground="{StaticResource PlumBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox x:Name="MeasurementGroup" Header="Measurement" Grid.Column="1">
+                    <StackPanel>
+                        <ProgressBar x:Name="CaptureProgress" Height="22" Minimum="0" Maximum="100"
+                                     Foreground="{StaticResource LavenderBrush}" Background="#E9E0EA" />
+                        <TextBlock x:Name="LiveLevelText" Text="−∞ dBFS" FontSize="28" FontWeight="Bold"
+                                   Foreground="{StaticResource PlumBrush}" Margin="0,8,0,12" />
+                        <WrapPanel>
+                            <Button x:Name="BaselineButton" Content="Capture 2 s baseline" Click="BaselineButton_OnClick" />
+                            <Button x:Name="CaptureAButton" Content="Capture performer A" Click="CaptureAButton_OnClick" />
+                            <Button x:Name="CaptureBButton" Content="Capture performer B" Click="CaptureBButton_OnClick" />
+                        </WrapPanel>
+                        <WrapPanel>
+                            <Button x:Name="RetakeAButton" Content="Retake A" Background="{StaticResource LavenderBrush}"
+                                    Click="RetakeAButton_OnClick" />
+                            <Button x:Name="RetakeBButton" Content="Retake B" Background="{StaticResource LavenderBrush}"
+                                    Click="RetakeBButton_OnClick" />
+                            <Button x:Name="SubmitButton" Content="Submit audience vote" Background="#2F7D65"
+                                    Click="SubmitButton_OnClick" />
+                            <Button x:Name="StopWaitingButton" Content="Stop waiting" Background="#8B5E34"
+                                    Click="StopWaitingButton_OnClick" Visibility="Collapsed" />
+                        </WrapPanel>
+                        <Border x:Name="ResultPanel" Background="#EFE7F2" CornerRadius="10" Padding="14" Margin="0,8,0,0"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="17" FontWeight="SemiBold" />
+                        </Border>
+                    </StackPanel>
+                </GroupBox>
+            </Grid>
+
+            <Border Grid.Row="3" Background="{StaticResource DarkPlumBrush}" CornerRadius="9" Padding="14,10">
+                <TextBlock x:Name="StatusText" Text="Ready" Foreground="White" FontSize="15" TextWrapping="Wrap" />
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</Window>

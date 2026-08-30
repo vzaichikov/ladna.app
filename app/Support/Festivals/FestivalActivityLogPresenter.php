@@ -21,6 +21,7 @@ class FestivalActivityLogPresenter
             'title' => Lang::has($titleKey) ? __($titleKey) : __('app.festival_activity_action_updated'),
             'actor' => $activity->actorUser?->name
                 ?? $activity->actorPortalUser?->displayName()
+                ?? ($activity->actorAccountApiToken ? __('app.festival_activity_actor_api_token', ['name' => $activity->actorAccountApiToken->name]) : null)
                 ?? __('app.festival_activity_actor_system'),
             'details' => $this->details($activity, $timezone, $canViewFinance),
             'occurred_at' => $activity->occurred_at,

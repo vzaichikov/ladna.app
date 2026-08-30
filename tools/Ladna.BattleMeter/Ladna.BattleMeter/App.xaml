@@ -1,0 +1,54 @@
+<Application x:Class="Ladna.BattleMeter.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <Color x:Key="Plum">#3B223F</Color>
+        <Color x:Key="DarkPlum">#2B1731</Color>
+        <Color x:Key="Lavender">#A78AB9</Color>
+        <Color x:Key="SoftLavender">#C7B4D3</Color>
+        <Color x:Key="PaleLavender">#DCCFF0</Color>
+        <Color x:Key="Cream">#FAF8F5</Color>
+        <Color x:Key="Sand">#E7DDC9</Color>
+        <Color x:Key="Ink">#2B2B2F</Color>
+        <SolidColorBrush x:Key="PlumBrush" Color="{StaticResource Plum}" />
+        <SolidColorBrush x:Key="DarkPlumBrush" Color="{StaticResource DarkPlum}" />
+        <SolidColorBrush x:Key="LavenderBrush" Color="{StaticResource Lavender}" />
+        <SolidColorBrush x:Key="SoftLavenderBrush" Color="{StaticResource SoftLavender}" />
+        <SolidColorBrush x:Key="PaleLavenderBrush" Color="{StaticResource PaleLavender}" />
+        <SolidColorBrush x:Key="CreamBrush" Color="{StaticResource Cream}" />
+        <SolidColorBrush x:Key="SandBrush" Color="{StaticResource Sand}" />
+        <SolidColorBrush x:Key="InkBrush" Color="{StaticResource Ink}" />
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource PlumBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="9,7" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftLavenderBrush}" />
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Padding" Value="9,7" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftLavenderBrush}" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="0,4,0,10" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftLavenderBrush}" />
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,14,14" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="BorderBrush" Value="{StaticResource SoftLavenderBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource PlumBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Application.Resources>
+</Application>

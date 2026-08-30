@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.160.0',
+                'date' => '2026-08-30',
+                'title' => 'Festival Battle audience meter',
+                'items' => ['Festival teams can now connect the Windows Ladna Battle Meter with a securely scoped studio API token, select a ready match and microphone, compare two applause captures against one ambient baseline, and present the live vote on a separate audience screen without recording or uploading audio.', 'The meter submits safely retryable audience scores and waits for Ladnaʼs official 50/50 jury-and-audience result, including manager-resolved ties. Festival administration and judge interfaces now use the general Battles name for every competition style.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.159.0',
                 'date' => '2026-08-30',
                 'title' => 'Faster Festival applicant review',
@@ -1416,6 +1423,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.160.0',
+                'date' => '2026-08-30',
+                'title' => 'Глядацький шумомір для фестивальних батлів',
+                'items' => ['Команда фестивалю тепер може підʼєднати Windows-застосунок Ladna Battle Meter через безпечно обмежений API-токен студії, обрати готовий батл і мікрофон, порівняти дві реакції глядачів зі спільним фоновим рівнем та показати голосування на окремому екрані без запису чи завантаження аудіо.', 'Застосунок безпечно повторює надсилання глядацьких оцінок і очікує офіційний результат Ladna за формулою 50/50 між журі та глядачами, зокрема рішення менеджера за нічиєї. Адміністративний і суддівський інтерфейси тепер використовують загальну назву «Батли» для будь-якого стилю змагань.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.159.0',
                 'date' => '2026-08-30',

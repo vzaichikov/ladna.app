@@ -14,7 +14,7 @@ class LadnaOpenApiSpec
             'info' => [
                 'title' => 'Ladna API',
                 'version' => config('app.version', '1.0.0'),
-                'description' => 'Public schedule, public prices, native mobile app, website lead intake, Festival payment callbacks, and account-scoped MCP tools for Ladna studios.',
+                'description' => 'Public schedule, public prices, native mobile app, website lead intake, Festival battle operations and payment callbacks, and account-scoped MCP tools for Ladna studios.',
             ],
             'servers' => [
                 [
@@ -32,6 +32,7 @@ class LadnaOpenApiSpec
                 ['name' => 'Mobile customer'],
                 ['name' => 'Website leads'],
                 ['name' => 'Festival payments'],
+                ['name' => 'Festival battles'],
                 ['name' => 'MCP'],
             ],
             'paths' => [
@@ -64,6 +65,9 @@ class LadnaOpenApiSpec
                 '/api/v1/mobile/staff/customers' => $this->mobileStaffCustomersPath(),
                 '/api/v1/website-leads' => $this->websiteLeadPath(),
                 '/api/v1/festival-payments/{provider}/callbacks' => $this->festivalPaymentCallbackPath(),
+                '/api/v1/festival-battles/matches' => $this->festivalBattleMatchesPath(),
+                '/api/v1/festival-battles/matches/{match}' => $this->festivalBattleMatchPath(),
+                '/api/v1/festival-battles/matches/{match}/audience-score' => $this->festivalBattleAudienceScorePath(),
                 '/mcp/ladna-studio' => $this->mcpStudioPath(),
                 '/mcp/ladna-studio/{accountSlug}' => $this->mcpStudioOAuthPath(),
             ],
@@ -73,7 +77,7 @@ class LadnaOpenApiSpec
                         'type' => 'http',
                         'scheme' => 'bearer',
                         'bearerFormat' => 'Ladna account API token',
-                        'description' => 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create. MCP tools require their documented mcp:* abilities and always resolve account scope from this token. Tokens remain account service credentials until revoked.',
+                        'description' => 'Bearer token issued in studio settings. The issuing user must have the studio permission mapped to each selected ability. Website lead intake requires website_leads:create, Festival battle operations require festival_battles:operate, and MCP tools require their documented mcp:* abilities. Account scope always comes from this token; clients never submit an account identifier. Tokens remain account service credentials until revoked.',
                     ],
                     'MobileBearerToken' => [
                         'type' => 'http',
@@ -129,6 +133,31 @@ class LadnaOpenApiSpec
                     'name' => 'Олена Коваль',
                     'source_page' => 'https://studio.example.com/trial',
                 ]),
+            ],
+            'festival_battle_matches' => [
+                'title' => __('app.api_docs_example_festival_battle_matches'),
+                'method' => 'GET',
+                'path' => '/api/v1/festival-battles/matches',
+                'samples' => $this->codeSamples('GET', '/api/v1/festival-battles/matches', null, true),
+            ],
+            'festival_battle_score' => [
+                'title' => __('app.api_docs_example_festival_battle_score'),
+                'method' => 'PUT',
+                'path' => '/api/v1/festival-battles/matches/{match}/audience-score',
+                'samples' => $this->codeSamples('PUT', '/api/v1/festival-battles/matches/42/audience-score', [
+                    'audience_score_a' => 612345,
+                    'audience_score_b' => 387655,
+                    'measurement' => [
+                        'metric' => 'baseline_adjusted_integrated_energy',
+                        'baseline_duration_ms' => 2000,
+                        'duration_ms' => 5000,
+                        'baseline_dbfs' => -52.4,
+                        'mean_dbfs_a' => -18.2,
+                        'mean_dbfs_b' => -20.1,
+                        'peak_dbfs_a' => -2.1,
+                        'peak_dbfs_b' => -3.4,
+                    ],
+                ], true),
             ],
             'mcp_class_bookings' => [
                 'title' => __('app.api_docs_example_mcp_class_bookings'),
@@ -1006,6 +1035,132 @@ class LadnaOpenApiSpec
         ];
     }
 
+    /** @return array<string, mixed> */
+    private function festivalBattleMatchesPath(): array
+    {
+        return [
+            'get' => [
+                'tags' => ['Festival battles'],
+                'summary' => 'Lists ready knockout matches from published or in-progress Festival editions.',
+                'description' => 'Requires an account API token with festival_battles:operate. The token supplies the account scope. Only safe aggregate competition fields are returned; applicant contacts, credentials, judge identities, and individual judge votes are never exposed.',
+                'security' => [['AccountBearerToken' => []]],
+                'responses' => [
+                    '200' => $this->festivalBattleResponse(true),
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
+                    '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/festival-battles/matches', null, true),
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function festivalBattleMatchPath(): array
+    {
+        return [
+            'get' => [
+                'tags' => ['Festival battles'],
+                'summary' => 'Returns the current aggregate state of one ready or completed Festival battle.',
+                'security' => [['AccountBearerToken' => []]],
+                'parameters' => [$this->festivalBattleMatchParameter()],
+                'responses' => [
+                    '200' => $this->festivalBattleResponse(),
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
+                    '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+                'x-codeSamples' => $this->codeSamples('GET', '/api/v1/festival-battles/matches/42', null, true),
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function festivalBattleAudienceScorePath(): array
+    {
+        return [
+            'put' => [
+                'tags' => ['Festival battles'],
+                'summary' => 'Idempotently records the normalized applause score and finalizes when all four judge votes permit it.',
+                'description' => 'The two integer scores must total exactly 1,000,000. Audio is never accepted or stored. Repeat the identical PUT every five seconds after a 202 response. Ladna returns 202 while judges are incomplete or an exact 50/50 tie requires a manager jury decision, 200 after official completion, and 409 for a conflicting retry.',
+                'security' => [['AccountBearerToken' => []]],
+                'parameters' => [$this->festivalBattleMatchParameter()],
+                'requestBody' => [
+                    'required' => true,
+                    'content' => [
+                        'application/json' => [
+                            'schema' => ['$ref' => '#/components/schemas/FestivalBattleAudienceScoreRequest'],
+                        ],
+                    ],
+                ],
+                'responses' => [
+                    '200' => $this->festivalBattleResponse(),
+                    '202' => $this->festivalBattleResponse(),
+                    '401' => ['$ref' => '#/components/responses/Unauthorized'],
+                    '402' => ['$ref' => '#/components/responses/SubscriptionExpired'],
+                    '403' => ['$ref' => '#/components/responses/Forbidden'],
+                    '404' => ['$ref' => '#/components/responses/NotFound'],
+                    '409' => [
+                        'description' => 'A different score is already stored for the match.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/FestivalBattleConflictResponse']]],
+                    ],
+                    '422' => ['$ref' => '#/components/responses/ValidationError'],
+                    '423' => ['$ref' => '#/components/responses/DemoReadOnly'],
+                    '426' => [
+                        'description' => 'HTTPS is required outside local and test environments.',
+                        'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ErrorResponse']]],
+                    ],
+                    '429' => ['$ref' => '#/components/responses/TooManyRequests'],
+                ],
+                'x-codeSamples' => $this->codeSamples('PUT', '/api/v1/festival-battles/matches/42/audience-score', [
+                    'audience_score_a' => 612345,
+                    'audience_score_b' => 387655,
+                    'measurement' => [
+                        'metric' => 'baseline_adjusted_integrated_energy',
+                        'baseline_duration_ms' => 2000,
+                        'duration_ms' => 5000,
+                    ],
+                ], true),
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function festivalBattleResponse(bool $collection = false): array
+    {
+        return [
+            'description' => 'Safe Festival battle aggregate.',
+            'content' => [
+                'application/json' => [
+                    'schema' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'data' => $collection
+                                ? ['type' => 'array', 'items' => ['$ref' => '#/components/schemas/FestivalBattleMatch']]
+                                : ['$ref' => '#/components/schemas/FestivalBattleMatch'],
+                            'meta' => ['$ref' => '#/components/schemas/FestivalBattleMeta'],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function festivalBattleMatchParameter(): array
+    {
+        return [
+            'name' => 'match',
+            'in' => 'path',
+            'required' => true,
+            'schema' => ['type' => 'integer', 'minimum' => 1],
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1835,6 +1990,105 @@ class LadnaOpenApiSpec
                     'source_page' => ['type' => ['string', 'null'], 'example' => 'https://studio.example.com/trial'],
                 ],
             ],
+            'FestivalBattleAudienceScoreRequest' => [
+                'type' => 'object',
+                'required' => ['audience_score_a', 'audience_score_b'],
+                'properties' => [
+                    'audience_score_a' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 1000000, 'example' => 612345],
+                    'audience_score_b' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 1000000, 'example' => 387655],
+                    'measurement' => [
+                        'type' => 'object',
+                        'required' => ['metric', 'baseline_duration_ms', 'duration_ms'],
+                        'additionalProperties' => false,
+                        'properties' => [
+                            'metric' => ['type' => 'string', 'enum' => ['baseline_adjusted_integrated_energy']],
+                            'baseline_duration_ms' => ['type' => 'integer', 'enum' => [2000]],
+                            'duration_ms' => ['type' => 'integer', 'enum' => [5000]],
+                            'baseline_dbfs' => ['type' => 'number', 'minimum' => -160, 'maximum' => 0],
+                            'mean_dbfs_a' => ['type' => 'number', 'minimum' => -160, 'maximum' => 0],
+                            'mean_dbfs_b' => ['type' => 'number', 'minimum' => -160, 'maximum' => 0],
+                            'peak_dbfs_a' => ['type' => 'number', 'minimum' => -160, 'maximum' => 0],
+                            'peak_dbfs_b' => ['type' => 'number', 'minimum' => -160, 'maximum' => 0],
+                        ],
+                    ],
+                ],
+                'description' => 'The two scores must total exactly 1,000,000. Measurement metadata is optional and never contains audio.',
+            ],
+            'FestivalBattlePerformer' => [
+                'type' => 'object',
+                'required' => ['id', 'name'],
+                'properties' => [
+                    'id' => ['type' => 'integer'],
+                    'name' => ['type' => 'string'],
+                ],
+            ],
+            'FestivalBattleMatch' => [
+                'type' => 'object',
+                'required' => ['id', 'edition_label', 'category_label', 'round_number', 'position', 'state', 'performer_a', 'performer_b', 'judge_votes', 'audience', 'combined'],
+                'properties' => [
+                    'id' => ['type' => 'integer'],
+                    'edition_label' => ['type' => 'string'],
+                    'category_label' => ['type' => 'string'],
+                    'round_number' => ['type' => 'integer'],
+                    'position' => ['type' => 'integer'],
+                    'state' => ['type' => 'string', 'enum' => ['ready', 'waiting_for_judges', 'jury_decision_required', 'completed']],
+                    'performer_a' => ['$ref' => '#/components/schemas/FestivalBattlePerformer'],
+                    'performer_b' => ['$ref' => '#/components/schemas/FestivalBattlePerformer'],
+                    'judge_votes' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'required' => ['type' => 'integer', 'enum' => [4]],
+                            'submitted' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 4],
+                            'a' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 4],
+                            'b' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 4],
+                        ],
+                    ],
+                    'audience' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'score_a' => ['type' => ['integer', 'null']],
+                            'score_b' => ['type' => ['integer', 'null']],
+                            'percentage_a' => ['type' => ['number', 'null']],
+                            'percentage_b' => ['type' => ['number', 'null']],
+                        ],
+                    ],
+                    'combined' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'percentage_a' => ['type' => ['number', 'null']],
+                            'percentage_b' => ['type' => ['number', 'null']],
+                        ],
+                    ],
+                    'winner' => [
+                        'anyOf' => [
+                            ['$ref' => '#/components/schemas/FestivalBattlePerformer'],
+                            ['type' => 'null'],
+                        ],
+                    ],
+                ],
+            ],
+            'FestivalBattleMeta' => [
+                'type' => 'object',
+                'properties' => [
+                    'locale' => ['type' => 'string', 'enum' => ['en', 'uk']],
+                    'poll_interval_seconds' => ['type' => 'integer', 'enum' => [5]],
+                ],
+            ],
+            'FestivalBattleConflictResponse' => [
+                'type' => 'object',
+                'properties' => [
+                    'message' => ['type' => 'string'],
+                    'code' => ['type' => 'string', 'enum' => ['audience_score_conflict']],
+                    'data' => ['$ref' => '#/components/schemas/FestivalBattleMatch'],
+                ],
+            ],
+            'ErrorResponse' => [
+                'type' => 'object',
+                'properties' => [
+                    'message' => ['type' => 'string'],
+                    'code' => ['type' => ['string', 'null']],
+                ],
+            ],
             'WebsiteLead' => [
                 'allOf' => [
                     ['$ref' => '#/components/schemas/WebsiteLeadRequest'],
@@ -2364,7 +2618,7 @@ class LadnaOpenApiSpec
      * @param  array<string, mixed>|null  $body
      * @return array<int, array{lang: string, label: string, source: string}>
      */
-    private function codeSamples(string $method, string $path, ?array $body = null): array
+    private function codeSamples(string $method, string $path, ?array $body = null, bool $authenticated = false): array
     {
         $url = rtrim(url('/'), '/').$path;
         $json = $body ? json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
@@ -2376,21 +2630,27 @@ class LadnaOpenApiSpec
                 'label' => 'PHP',
                 'source' => $body
                     ? "\$response = (new \\GuzzleHttp\\Client())->request('{$method}', '{$url}', [\n    'headers' => [\n        'Authorization' => 'Bearer ladna_your_token',\n        'Accept' => 'application/json',\n    ],\n    'json' => json_decode('{$jsonForPhp}', true),\n]);\n\n\$data = json_decode((string) \$response->getBody(), true);"
-                    : "\$response = (new \\GuzzleHttp\\Client())->request('{$method}', '{$url}', [\n    'headers' => ['Accept' => 'application/json'],\n]);\n\n\$data = json_decode((string) \$response->getBody(), true);",
+                    : ($authenticated
+                        ? "\$response = (new \\GuzzleHttp\\Client())->request('{$method}', '{$url}', [\n    'headers' => [\n        'Authorization' => 'Bearer ladna_your_token',\n        'Accept' => 'application/json',\n    ],\n]);\n\n\$data = json_decode((string) \$response->getBody(), true);"
+                        : "\$response = (new \\GuzzleHttp\\Client())->request('{$method}', '{$url}', [\n    'headers' => ['Accept' => 'application/json'],\n]);\n\n\$data = json_decode((string) \$response->getBody(), true);"),
             ],
             [
                 'lang' => 'Python',
                 'label' => 'Python',
                 'source' => $body
                     ? "import requests\n\nresponse = requests.request(\n    '{$method}',\n    '{$url}',\n    headers={\n        'Authorization': 'Bearer ladna_your_token',\n        'Accept': 'application/json',\n    },\n    json={$json},\n)\nresponse.raise_for_status()\ndata = response.json()"
-                    : "import requests\n\nresponse = requests.request(\n    '{$method}',\n    '{$url}',\n    headers={'Accept': 'application/json'},\n)\nresponse.raise_for_status()\ndata = response.json()",
+                    : ($authenticated
+                        ? "import requests\n\nresponse = requests.request(\n    '{$method}',\n    '{$url}',\n    headers={\n        'Authorization': 'Bearer ladna_your_token',\n        'Accept': 'application/json',\n    },\n)\nresponse.raise_for_status()\ndata = response.json()"
+                        : "import requests\n\nresponse = requests.request(\n    '{$method}',\n    '{$url}',\n    headers={'Accept': 'application/json'},\n)\nresponse.raise_for_status()\ndata = response.json()"),
             ],
             [
                 'lang' => 'JavaScript',
                 'label' => 'JS',
                 'source' => $body
                     ? "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: {\n    'Authorization': 'Bearer ladna_your_token',\n    'Accept': 'application/json',\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({$json}),\n});\n\nconst data = await response.json();"
-                    : "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: { 'Accept': 'application/json' },\n});\n\nconst data = await response.json();",
+                    : ($authenticated
+                        ? "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: {\n    'Authorization': 'Bearer ladna_your_token',\n    'Accept': 'application/json',\n  },\n});\n\nconst data = await response.json();"
+                        : "const response = await fetch('{$url}', {\n  method: '{$method}',\n  headers: { 'Accept': 'application/json' },\n});\n\nconst data = await response.json();"),
             ],
         ];
     }

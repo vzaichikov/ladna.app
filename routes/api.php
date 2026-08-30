@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\FestivalBattleMatchController;
 use App\Http\Controllers\Api\V1\Mobile\MobileAuthController;
 use App\Http\Controllers\Api\V1\Mobile\MobileBookingController;
 use App\Http\Controllers\Api\V1\Mobile\MobileCustomerController;
@@ -16,8 +17,12 @@ use App\Http\Controllers\Payments\EventOrderCallbackController;
 use App\Http\Controllers\Payments\SaasPaymentCallbackController;
 use App\Http\Middleware\AuthenticateAccountApiToken;
 use App\Http\Middleware\AuthenticateMobileSession;
+use App\Http\Middleware\EnsureFestivalBattleApiUsesTls;
+use App\Http\Middleware\EnsureFestivalEditionWritable;
+use App\Http\Middleware\EnsureFestivalsEnabled;
 use App\Http\Middleware\EnsurePublicSubscriptionIsActive;
 use App\Http\Middleware\PreventReadOnlyDemoMutations;
+use App\Http\Middleware\ThrottleFestivalBattleApi;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/public/{accountSlug}/{locationSlug}')
@@ -32,6 +37,22 @@ Route::prefix('v1/public/{accountSlug}/{locationSlug}')
 Route::post('v1/website-leads', WebsiteLeadController::class)
     ->middleware([AuthenticateAccountApiToken::class.':website_leads:create', PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:website-leads'])
     ->name('api.v1.website-leads.store');
+
+Route::prefix('v1/festival-battles')
+    ->name('api.v1.festival-battles.')
+    ->middleware([
+        AuthenticateAccountApiToken::class.':festival_battles:operate',
+        EnsureFestivalBattleApiUsesTls::class,
+        EnsureFestivalsEnabled::class,
+        EnsurePublicSubscriptionIsActive::class,
+        EnsureFestivalEditionWritable::class,
+        ThrottleFestivalBattleApi::class,
+    ])
+    ->group(function (): void {
+        Route::get('matches', [FestivalBattleMatchController::class, 'index'])->name('matches.index');
+        Route::get('matches/{match}', [FestivalBattleMatchController::class, 'show'])->name('matches.show');
+        Route::put('matches/{match}/audience-score', [FestivalBattleMatchController::class, 'updateAudienceScore'])->name('matches.audience-score.update');
+    });
 
 Route::prefix('v1/mobile')->name('api.v1.mobile.')->group(function (): void {
     Route::get('studios/{accountSlug}', [MobileStudioController::class, 'show'])

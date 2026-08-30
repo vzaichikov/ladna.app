@@ -104,6 +104,9 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
             ->assertOk()
             ->assertSee($edition->title)
             ->assertDontSee('Hidden inactive assignment')
+            ->assertSee(__('app.festival_battle_voting'))
+            ->assertDontSee('Battle voting')
+            ->assertDontSee('Exotic Battles')
             ->assertSee(route('festival.portal.judging.index', [$account->slug, $edition]), false)
             ->assertSee(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]), false);
 
@@ -112,6 +115,10 @@ class FestivalPortalRoleAuthenticationTest extends TestCase
             ->assertSee('max-w-6xl', false);
         $this->get(route('festival.portal.battle-votes.index', [$account->slug, $edition->slug]))
             ->assertOk()
+            ->assertSee('<h1', false)
+            ->assertSee(__('app.festival_battle_voting'))
+            ->assertDontSee('Battle voting')
+            ->assertDontSee('Exotic Battles')
             ->assertSee('max-w-6xl', false);
     }
 
