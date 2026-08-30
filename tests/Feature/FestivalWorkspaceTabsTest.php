@@ -209,6 +209,14 @@ class FestivalWorkspaceTabsTest extends TestCase
     public function test_workflow_routes_enforce_permission_specific_data_boundaries(): void
     {
         [$account, $edition, $category, $portalUser, $entry] = $this->festivalWithEntry();
+        $portalUser->forceFill([
+            'first_name' => 'Private',
+            'last_name' => 'Applicant',
+            'phone' => '+380997776655',
+            'telegram_contact' => '@private_applicant',
+            'telegram_user_id' => '9988776655',
+            'instagram_url' => 'https://instagram.com/private.applicant',
+        ])->save();
         $registrationStaff = $this->staff($account, [StudioPermission::ManageFestivalRegistrations]);
         $scheduleStaff = $this->staff($account, [StudioPermission::ManageFestivalSchedule]);
         $financeStaff = $this->staff($account, [StudioPermission::ManageFestivalFinance]);
@@ -256,6 +264,12 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->get(route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]))
             ->assertOk()
             ->assertSee(__('app.festival_application_review'))
+            ->assertSee('data-festival-applicant-contacts', false)
+            ->assertSee('Private Applicant')
+            ->assertSee('+380997776655')
+            ->assertSee('@private_applicant')
+            ->assertSee('https://instagram.com/private.applicant')
+            ->assertDontSee('9988776655')
             ->assertDontSee(__('app.festival_admission_revenue'));
         $this->actingAs($registrationStaff)
             ->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))
@@ -281,7 +295,12 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertOk()
             ->assertSee('Private participation charge')
             ->assertSee('1 500 ₴')
+            ->assertDontSee('data-festival-applicant-contacts', false)
             ->assertDontSee($portalUser->email)
+            ->assertDontSee('+380997776655')
+            ->assertDontSee('@private_applicant')
+            ->assertDontSee('https://instagram.com/private.applicant')
+            ->assertDontSee('9988776655')
             ->assertDontSee(__('app.festival_application_review'));
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))->assertForbidden();
         $this->actingAs($financeStaff)

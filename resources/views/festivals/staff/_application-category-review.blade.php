@@ -30,29 +30,62 @@
                 @endif
             </dl>
         </div>
-        @if($reassignmentCategories->isNotEmpty())
+        <div class="flex shrink-0 flex-wrap gap-2 self-start">
             <x-ui.button
                 type="button"
                 size="sm"
                 variant="secondary"
-                class="shrink-0 self-start"
                 aria-haspopup="dialog"
-                aria-controls="festival-category-modal-{{ $entry->id }}"
-                data-festival-category-modal-open
+                aria-controls="festival-category-requirements-modal-{{ $entry->id }}"
+                data-festival-application-modal-open
             >
-                <x-ui.icon name="refresh-cw" class="h-4 w-4" />
-                {{ __('app.festival_reassign_category') }}
+                <x-ui.icon name="file-text" class="h-4 w-4" />
+                {{ __('app.festival_category_requirements') }}
             </x-ui.button>
-        @endif
+            @if($reassignmentCategories->isNotEmpty())
+                <x-ui.button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    aria-haspopup="dialog"
+                    aria-controls="festival-category-modal-{{ $entry->id }}"
+                    data-festival-application-modal-open
+                    data-festival-category-modal-open
+                >
+                    <x-ui.icon name="refresh-cw" class="h-4 w-4" />
+                    {{ __('app.festival_reassign_category') }}
+                </x-ui.button>
+            @endif
+        </div>
     </div>
-    <div class="mt-4 border-t border-stone-200 pt-4">
-        <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_category_requirements') }}</h4>
-        @if($category->requirements_html)
-            <div class="prose prose-slate mt-2 max-w-none text-sm">{!! $category->requirements_html !!}</div>
-        @else
-            <p class="mt-2 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
-        @endif
+
+    <div
+        id="festival-category-requirements-modal-{{ $entry->id }}"
+        class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="festival-category-requirements-modal-title-{{ $entry->id }}"
+        data-festival-application-modal
+        data-festival-category-requirements-modal
+    >
+        <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6" data-festival-application-modal-panel>
+            <div class="flex items-start justify-between gap-4">
+                <h2 id="festival-category-requirements-modal-title-{{ $entry->id }}" class="text-xl font-semibold text-slate-950">{{ __('app.festival_category_requirements') }}</h2>
+                <button type="button" class="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 crm-focus" aria-label="{{ __('app.close') }}" data-festival-application-modal-close data-festival-application-modal-initial-focus>
+                    <x-ui.icon name="x" class="h-5 w-5" />
+                </button>
+            </div>
+            @if($category->requirements_html)
+                <div class="prose prose-slate mt-5 max-w-none text-sm">{!! $category->requirements_html !!}</div>
+            @else
+                <p class="mt-5 text-sm text-slate-500">{{ __('app.festival_category_requirements_none') }}</p>
+            @endif
+            <div class="mt-6 flex justify-end">
+                <x-ui.button type="button" variant="secondary" data-festival-application-modal-close>{{ __('app.close') }}</x-ui.button>
+            </div>
+        </div>
     </div>
+
     @if($reassignmentCategories->isNotEmpty())
         <div
             id="festival-category-modal-{{ $entry->id }}"
@@ -62,6 +95,7 @@
             aria-labelledby="festival-category-modal-title-{{ $entry->id }}"
             aria-describedby="festival-category-modal-copy-{{ $entry->id }}"
             data-festival-category-modal
+            data-festival-application-modal
             data-open="{{ (string) old('category_reassignment_form') === '1' ? 'true' : 'false' }}"
         >
             <div class="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6" data-festival-category-modal-panel>
@@ -70,7 +104,7 @@
                         <h2 id="festival-category-modal-title-{{ $entry->id }}" class="text-xl font-semibold text-slate-950">{{ __('app.festival_reassign_category') }}</h2>
                         <p id="festival-category-modal-copy-{{ $entry->id }}" class="mt-1 text-sm leading-6 text-slate-500">{{ __('app.festival_reassignment_copy') }}</p>
                     </div>
-                    <button type="button" class="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 crm-focus" aria-label="{{ __('app.close') }}" data-festival-category-modal-close>
+                    <button type="button" class="shrink-0 rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 crm-focus" aria-label="{{ __('app.close') }}" data-festival-application-modal-close data-festival-category-modal-close>
                         <x-ui.icon name="x" class="h-5 w-5" />
                     </button>
                 </div>
@@ -104,7 +138,7 @@
                         @endif
                     </label>
                     <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                        <x-ui.button type="button" variant="secondary" data-festival-category-modal-close>{{ __('app.cancel') }}</x-ui.button>
+                        <x-ui.button type="button" variant="secondary" data-festival-application-modal-close data-festival-category-modal-close>{{ __('app.cancel') }}</x-ui.button>
                         <x-ui.button type="submit">
                             <x-ui.icon name="refresh-cw" class="h-4 w-4" />
                             {{ __('app.festival_reassign_category') }}

@@ -4832,7 +4832,7 @@ function replaceFestivalApplicationFragment(fragmentHtml, fallbackFragment) {
     const categoryModalWasOpen = Boolean(target?.querySelector('[data-festival-category-modal]:not(.hidden)'));
 
     (target ?? fallbackFragment)?.replaceWith(replacement);
-    initFestivalApplicationCategoryModal(replacement);
+    initFestivalApplicationModals(replacement);
 
     if (categoryModalWasOpen) {
         document.body.classList.remove('overflow-hidden');
@@ -7945,16 +7945,16 @@ function initFestivalAnnouncementModal() {
     }
 }
 
-function initFestivalApplicationCategoryModal(root = document) {
-    if (document.documentElement.dataset.festivalCategoryModalEscapeReady !== 'true') {
-        document.documentElement.dataset.festivalCategoryModalEscapeReady = 'true';
+function initFestivalApplicationModals(root = document) {
+    if (document.documentElement.dataset.festivalApplicationModalEscapeReady !== 'true') {
+        document.documentElement.dataset.festivalApplicationModalEscapeReady = 'true';
         document.addEventListener('keydown', (event) => {
             if (event.key !== 'Escape') {
                 return;
             }
 
-            document.querySelector('[data-festival-category-modal]:not(.hidden)')
-                ?.querySelector('[data-festival-category-modal-close]')
+            document.querySelector('[data-festival-application-modal]:not(.hidden)')
+                ?.querySelector('[data-festival-application-modal-close]')
                 ?.click();
         });
     }
@@ -7965,65 +7965,73 @@ function initFestivalApplicationCategoryModal(root = document) {
     ];
 
     fragments.forEach((fragment) => {
-        const modal = fragment.querySelector('[data-festival-category-modal]');
-        const openButton = fragment.querySelector('[data-festival-category-modal-open]');
+        fragment.querySelectorAll('[data-festival-application-modal-open]').forEach((openButton) => {
+            const modalId = openButton.getAttribute('aria-controls');
+            const modal = modalId
+                ? fragment.querySelector('#' + window.CSS.escape(modalId))
+                : null;
 
-        if (!modal || !openButton || modal.dataset.festivalCategoryModalReady === 'true') {
-            return;
-        }
-
-        modal.dataset.festivalCategoryModalReady = 'true';
-        let opener = null;
-        const focusableElements = () => [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
-            .filter((element) => !element.closest('.hidden'));
-        const close = () => {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            document.body.classList.remove('overflow-hidden');
-            (opener?.isConnected ? opener : fragment.querySelector('[data-festival-category-modal-open]'))?.focus();
-            opener = null;
-        };
-        const open = (trigger = openButton) => {
-            opener = trigger;
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            document.body.classList.add('overflow-hidden');
-            window.requestAnimationFrame(() => {
-                const invalidControl = modal.querySelector('[aria-invalid="true"]');
-                (invalidControl ?? modal.querySelector('select:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled])'))?.focus();
-            });
-        };
-
-        openButton.addEventListener('click', () => open(openButton));
-        modal.querySelectorAll('[data-festival-category-modal-close]').forEach((button) => {
-            button.addEventListener('click', close);
-        });
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                close();
-            }
-        });
-        modal.addEventListener('keydown', (event) => {
-            if (event.key !== 'Tab') {
+            if (!modal || modal.dataset.festivalApplicationModalReady === 'true') {
                 return;
             }
 
-            const focusable = focusableElements();
-            const first = focusable[0];
-            const last = focusable.at(-1);
+            modal.dataset.festivalApplicationModalReady = 'true';
+            let opener = null;
+            const focusableElements = () => [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+                .filter((element) => !element.closest('.hidden'));
+            const close = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                document.body.classList.remove('overflow-hidden');
+                (opener?.isConnected ? opener : openButton)?.focus();
+                opener = null;
+            };
+            const open = (trigger = openButton) => {
+                opener = trigger;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                document.body.classList.add('overflow-hidden');
+                window.requestAnimationFrame(() => {
+                    const initialFocus = modal.querySelector('[aria-invalid="true"]')
+                        ?? modal.querySelector('[data-festival-application-modal-initial-focus]')
+                        ?? modal.querySelector('select:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled])')
+                        ?? focusableElements()[0];
 
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last?.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first?.focus();
+                    initialFocus?.focus();
+                });
+            };
+
+            openButton.addEventListener('click', () => open(openButton));
+            modal.querySelectorAll('[data-festival-application-modal-close]').forEach((button) => {
+                button.addEventListener('click', close);
+            });
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    close();
+                }
+            });
+            modal.addEventListener('keydown', (event) => {
+                if (event.key !== 'Tab') {
+                    return;
+                }
+
+                const focusable = focusableElements();
+                const first = focusable[0];
+                const last = focusable.at(-1);
+
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last?.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first?.focus();
+                }
+            });
+
+            if (modal.dataset.open === 'true') {
+                open(openButton);
             }
         });
-
-        if (modal.dataset.open === 'true') {
-            open(openButton);
-        }
     });
 }
 
@@ -10345,7 +10353,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalMediaDuplicates();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
-    initFestivalApplicationCategoryModal();
+    initFestivalApplicationModals();
     initFestivalApplicationPickerModal();
     initFestivalQuickProfileModal();
     initFestivalTeamModals();

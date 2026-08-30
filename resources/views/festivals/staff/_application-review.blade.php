@@ -5,6 +5,10 @@
 @endphp
 
 <div class="space-y-5">
+    @if($workspacePermissions['registrations'])
+        @include('festivals.staff._application-applicant-contacts', compact('account', 'edition', 'entry'))
+    @endif
+
     @include('festivals.staff._application-category-review', [
         'account' => $account,
         'edition' => $edition,

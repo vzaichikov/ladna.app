@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.159.0',
+                'date' => '2026-08-30',
+                'title' => 'Faster Festival applicant review',
+                'items' => ['Authorized Festival registration staff can now see the applicantʼs name, phone, email, Telegram, and Instagram together in one full-width contact block with direct links.', 'Category requirements now open from a compact action beside Change category, keeping the application review page shorter while preserving the complete guidance.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.158.0',
                 'date' => '2026-08-30',
                 'title' => 'AI music duplicate review for Festivals',
@@ -1409,6 +1416,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.159.0',
+                'date' => '2026-08-30',
+                'title' => 'Швидша перевірка заявок фестивалю',
+                'items' => ['Уповноважена команда реєстрації фестивалю тепер бачить імʼя, телефон, email, Telegram та Instagram заявника разом в одному повноширинному блоці з прямими посиланнями.', 'Вимоги категорії тепер відкриваються компактною дією поруч зі зміною категорії, тому сторінка перевірки стала коротшою без втрати повної інформації.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.158.0',
                 'date' => '2026-08-30',

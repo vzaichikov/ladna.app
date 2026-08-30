@@ -587,6 +587,15 @@ class FestivalRegistrationStepperTest extends TestCase
     {
         Queue::fake();
         [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $portalUser->update([
+            'first_name' => 'Async',
+            'last_name' => 'Applicant',
+            'phone' => '+380991112233',
+            'email' => 'async.applicant@example.test',
+            'telegram_contact' => '@async_applicant',
+            'instagram_url' => '@async.applicant',
+        ]);
+        $category->update(['requirements_html' => '<p>Category requirements sentinel.</p>']);
         $definition = $this->requirement($edition, $workflow, 'application', 'selection-video', 'url');
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
             $this->entry($account, $edition, $portalUser, $participant, $category, 'Async review entry'),
@@ -617,8 +626,17 @@ class FestivalRegistrationStepperTest extends TestCase
         $applicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]);
         $page = $this->actingAs($owner)->get($applicationUrl);
         $page->assertOk()
+            ->assertSee('data-festival-applicant-contacts', false)
+            ->assertSee('href="'.route('dashboard.accounts.festivals.users.edit', [$account, $edition, $portalUser]).'" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('href="tel:+380991112233" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('href="mailto:async.applicant@example.test" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('href="https://t.me/async_applicant" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('href="https://instagram.com/async.applicant" target="_blank" rel="noopener noreferrer"', false)
             ->assertSee('data-festival-application-fragment-key="category-'.$entry->id.'"', false)
             ->assertSee($targetCategory->name)
+            ->assertSee('aria-controls="festival-category-requirements-modal-'.$entry->id.'"', false)
+            ->assertSee('data-festival-category-requirements-modal', false)
+            ->assertSee('Category requirements sentinel.')
             ->assertSee('data-festival-category-modal-open', false)
             ->assertSee('id="festival-category-modal-'.$entry->id.'"', false)
             ->assertSee('data-festival-category-modal', false)
