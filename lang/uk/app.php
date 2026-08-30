@@ -5944,6 +5944,8 @@ return [
     'festival_full_confirm_copy' => 'Учасника буде прийнято лише після проходження всіх попередніх етапів і необхідних перевірок платежів.',
     'festival_full_confirm_blocked_title' => 'Заявка ще не готова до повного підтвердження',
     'festival_full_confirm_blocked_copy' => 'Виконайте всі наведені нижче перевірки перед повним підтвердженням заявки.',
+    'festival_full_confirm_refresh_failed_title' => 'Не вдалося оновити перевірки заявки',
+    'festival_full_confirm_refresh_failed_copy' => 'Не вдалося завантажити актуальний стан готовності. Закрийте це вікно та спробуйте ще раз.',
     'festival_final_confirmation_check_summary' => 'Підсумок',
     'festival_final_confirmation_check_qualification' => 'Кваліфікація',
     'festival_final_confirmation_check_payments' => 'Оплати',

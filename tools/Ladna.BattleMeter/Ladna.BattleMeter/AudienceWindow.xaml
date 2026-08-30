@@ -12,70 +12,232 @@
         </Grid.ColumnDefinitions>
 
         <Border x:Name="PanelA" Grid.Column="0" Background="{StaticResource PlumBrush}">
-            <Grid Margin="48,42">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock x:Name="NameA" Foreground="{StaticResource CreamBrush}" FontSize="52"
-                           FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
-                <Grid Grid.Row="1" Margin="0,30">
-                    <ProgressBar x:Name="MeterA" Orientation="Vertical" Minimum="0" Maximum="100" Value="0"
-                                 Width="150" Height="Auto" Foreground="{StaticResource SoftLavenderBrush}"
-                                 Background="#2B1731" BorderThickness="0" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="LevelA" Foreground="White" FontSize="28" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" Text="−∞ dBFS" />
+            <Grid ClipToBounds="True">
+                <Ellipse Width="700" Height="700" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                         Margin="-360,0,0,-360" Stroke="#38FFFFFF" StrokeThickness="4" />
+                <Ellipse Width="470" Height="470" HorizontalAlignment="Right" VerticalAlignment="Top"
+                         Margin="0,-240,-260,0" Fill="#12FFFFFF" Stroke="#24FFFFFF" StrokeThickness="3" />
+                <Grid Margin="54,42">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel>
+                        <TextBlock x:Name="NameA" Foreground="White" FontSize="56" FontWeight="Black"
+                                   TextAlignment="Center" TextWrapping="Wrap" />
+                        <Border Height="5" Width="110" CornerRadius="3" Background="{StaticResource SoftLavenderBrush}"
+                                HorizontalAlignment="Center" Margin="0,13,0,0" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" Margin="0,20">
+                        <Grid x:Name="WaveA" Width="540" Height="540" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed">
+                            <Ellipse x:Name="WaveRingA3" Width="510" Height="510" Stroke="#86FFFFFF"
+                                     StrokeThickness="5" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="WaveRingA2" Width="440" Height="440" Stroke="#BCC7B4D3"
+                                     StrokeThickness="8" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="WaveRingA1" Width="370" Height="370" Stroke="White"
+                                     StrokeThickness="11" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Border x:Name="WaveCoreA" Width="300" Height="300" CornerRadius="150"
+                                    Background="White" BorderBrush="{StaticResource SoftLavenderBrush}"
+                                    BorderThickness="10" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="LIVE" Foreground="{StaticResource PlumBrush}" FontSize="24"
+                                               FontWeight="Black" TextAlignment="Center" />
+                                    <TextBlock x:Name="LevelA" Foreground="{StaticResource PlumBrush}" FontSize="50"
+                                               FontWeight="Black" TextAlignment="Center" Text="−∞ dBFS" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border x:Name="MascotCardA" Background="White" BorderBrush="{StaticResource SoftLavenderBrush}"
+                                BorderThickness="4" CornerRadius="34" Padding="14" MaxWidth="470" MaxHeight="660"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                RenderTransformOrigin="0.5,0.58">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="1" ScaleY="1" />
+                                    <RotateTransform />
+                                    <TranslateTransform />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                            <Image Source="Assets/LadnaMascotShouting.png" Stretch="Uniform" />
+                        </Border>
+
+                        <Border x:Name="AcceptedCardA" Background="White" BorderBrush="{StaticResource SoftLavenderBrush}"
+                                BorderThickness="7" CornerRadius="34" Padding="34,25" MinWidth="390"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="AcceptedLabelA" Foreground="{StaticResource LavenderBrush}"
+                                           FontSize="24" FontWeight="Black" TextAlignment="Center" />
+                                <TextBlock x:Name="AcceptedLevelA" Foreground="{StaticResource PlumBrush}"
+                                           FontSize="56" FontWeight="Black" TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock x:Name="StatsA" Grid.Row="2" Foreground="White" FontSize="25"
+                               FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" MinHeight="72" />
                 </Grid>
-                <TextBlock x:Name="StatsA" Grid.Row="2" Foreground="{StaticResource CreamBrush}" FontSize="25"
-                           TextAlignment="Center" TextWrapping="Wrap" MinHeight="68" />
             </Grid>
         </Border>
 
-        <Border x:Name="PanelB" Grid.Column="1" Background="{StaticResource LavenderBrush}">
-            <Grid Margin="48,42">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock x:Name="NameB" Foreground="{StaticResource DarkPlumBrush}" FontSize="52"
-                           FontWeight="Bold" TextAlignment="Center" TextWrapping="Wrap" />
-                <Grid Grid.Row="1" Margin="0,30">
-                    <ProgressBar x:Name="MeterB" Orientation="Vertical" Minimum="0" Maximum="100" Value="0"
-                                 Width="150" Height="Auto" Foreground="{StaticResource CreamBrush}"
-                                 Background="#806B5688" BorderThickness="0" HorizontalAlignment="Center" />
-                    <TextBlock x:Name="LevelB" Foreground="{StaticResource DarkPlumBrush}" FontSize="28" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" Text="−∞ dBFS" />
+        <Border x:Name="PanelB" Grid.Column="1" Background="White">
+            <Grid ClipToBounds="True">
+                <Ellipse Width="700" Height="700" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                         Margin="0,0,-360,-360" Stroke="#303B223F" StrokeThickness="4" />
+                <Ellipse Width="470" Height="470" HorizontalAlignment="Left" VerticalAlignment="Top"
+                         Margin="-260,-240,0,0" Fill="#0FA78AB9" Stroke="#20A78AB9" StrokeThickness="3" />
+                <Grid Margin="54,42">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel>
+                        <TextBlock x:Name="NameB" Foreground="{StaticResource PlumBrush}" FontSize="56"
+                                   FontWeight="Black" TextAlignment="Center" TextWrapping="Wrap" />
+                        <Border Height="5" Width="110" CornerRadius="3" Background="{StaticResource PlumBrush}"
+                                HorizontalAlignment="Center" Margin="0,13,0,0" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" Margin="0,20">
+                        <Grid x:Name="WaveB" Width="540" Height="540" HorizontalAlignment="Center"
+                              VerticalAlignment="Center" Visibility="Collapsed">
+                            <Ellipse x:Name="WaveRingB3" Width="510" Height="510" Stroke="#803B223F"
+                                     StrokeThickness="5" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="WaveRingB2" Width="440" Height="440" Stroke="#B0A78AB9"
+                                     StrokeThickness="8" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Ellipse x:Name="WaveRingB1" Width="370" Height="370" Stroke="{StaticResource PlumBrush}"
+                                     StrokeThickness="11" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform><ScaleTransform /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Border x:Name="WaveCoreB" Width="300" Height="300" CornerRadius="150"
+                                    Background="{StaticResource PlumBrush}" BorderBrush="{StaticResource LavenderBrush}"
+                                    BorderThickness="10" RenderTransformOrigin="0.5,0.5">
+                                <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="LIVE" Foreground="White" FontSize="24"
+                                               FontWeight="Black" TextAlignment="Center" />
+                                    <TextBlock x:Name="LevelB" Foreground="White" FontSize="50" FontWeight="Black"
+                                               TextAlignment="Center" Text="−∞ dBFS" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border x:Name="MascotCardB" Background="White" BorderBrush="{StaticResource LavenderBrush}"
+                                BorderThickness="4" CornerRadius="34" Padding="14" MaxWidth="470" MaxHeight="660"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                RenderTransformOrigin="0.5,0.58">
+                            <Border.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleX="-1" ScaleY="1" />
+                                    <RotateTransform />
+                                    <TranslateTransform />
+                                </TransformGroup>
+                            </Border.RenderTransform>
+                            <Image Source="Assets/LadnaMascotShouting.png" Stretch="Uniform" />
+                        </Border>
+
+                        <Border x:Name="AcceptedCardB" Background="{StaticResource PlumBrush}"
+                                BorderBrush="{StaticResource LavenderBrush}" BorderThickness="7" CornerRadius="34"
+                                Padding="34,25" MinWidth="390" HorizontalAlignment="Center"
+                                VerticalAlignment="Center" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="AcceptedLabelB" Foreground="{StaticResource SoftLavenderBrush}"
+                                           FontSize="24" FontWeight="Black" TextAlignment="Center" />
+                                <TextBlock x:Name="AcceptedLevelB" Foreground="White" FontSize="56"
+                                           FontWeight="Black" TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock x:Name="StatsB" Grid.Row="2" Foreground="{StaticResource PlumBrush}" FontSize="25"
+                               FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" MinHeight="72" />
                 </Grid>
-                <TextBlock x:Name="StatsB" Grid.Row="2" Foreground="{StaticResource DarkPlumBrush}" FontSize="25"
-                           TextAlignment="Center" TextWrapping="Wrap" MinHeight="68" />
             </Grid>
         </Border>
+
+        <Border Grid.ColumnSpan="2" Width="8" HorizontalAlignment="Center" Background="{StaticResource LavenderBrush}" />
 
         <Border Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Top"
-                Margin="0,22,0,0" Background="#E6FAF8F5" CornerRadius="32" Padding="18,8">
+                Margin="0,21,0,0" Background="#F7FAF8F5" BorderBrush="{StaticResource SoftLavenderBrush}"
+                BorderThickness="2" CornerRadius="34" Padding="20,8" Panel.ZIndex="10">
             <StackPanel Orientation="Horizontal">
                 <views:BrandMark Width="38" Height="45" />
                 <TextBlock Text="LADNA BATTLE" Foreground="{StaticResource DarkPlumBrush}" FontSize="24"
-                           FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,0,0" />
+                           FontWeight="Black" VerticalAlignment="Center" Margin="9,0,0,0" />
             </StackPanel>
         </Border>
 
-        <Button x:Name="CloseAudienceButton" Grid.ColumnSpan="2" Panel.ZIndex="20"
+        <Border x:Name="ActionBanner" Grid.ColumnSpan="2" Panel.ZIndex="14"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="90,0,90,54"
+                MaxWidth="920" Background="#F7FAF8F5" BorderBrush="{StaticResource LavenderBrush}"
+                BorderThickness="3" CornerRadius="28" Padding="28,14" Visibility="Collapsed">
+            <TextBlock x:Name="ActionBannerText" Foreground="{StaticResource PlumBrush}" FontSize="36"
+                       FontWeight="Black" TextAlignment="Center" TextWrapping="Wrap" />
+        </Border>
+
+        <Border x:Name="CenterMessagePanel" Grid.ColumnSpan="2" Panel.ZIndex="18"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="80" MaxWidth="1080"
+                Background="#F7FAF8F5" BorderBrush="{StaticResource PlumBrush}" BorderThickness="4"
+                CornerRadius="32" Padding="48,34" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform><ScaleTransform x:Name="CenterMessageScale" /></Border.RenderTransform>
+            <StackPanel>
+                <TextBlock x:Name="CenterCaption" Foreground="{StaticResource LavenderBrush}" FontSize="29"
+                           FontWeight="Black" TextAlignment="Center" />
+                <TextBlock x:Name="CenterMessage" Foreground="{StaticResource PlumBrush}" FontSize="76"
+                           FontWeight="Black" TextAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid x:Name="CountdownPanel" Grid.ColumnSpan="2" Panel.ZIndex="30" Background="#772B1731"
+              Visibility="Collapsed">
+            <Grid Width="390" Height="390" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Rectangle Width="3" Height="430" Fill="#74FFFFFF" HorizontalAlignment="Center" />
+                <Rectangle Width="430" Height="3" Fill="#74FFFFFF" VerticalAlignment="Center" />
+                <Ellipse Width="340" Height="340" Fill="#F4FAF8F5" Stroke="White" StrokeThickness="7" />
+                <Path Data="M 195,195 L 195,30 A 165,165 0 0 1 360,195 Z"
+                      Fill="#62A78AB9" RenderTransformOrigin="0.5,0.5">
+                    <Path.RenderTransform><RotateTransform x:Name="CountdownSweepRotate" /></Path.RenderTransform>
+                </Path>
+                <Ellipse Width="300" Height="300" Stroke="{StaticResource PlumBrush}" StrokeThickness="6" />
+                <Ellipse Width="270" Height="270" Stroke="{StaticResource LavenderBrush}" StrokeThickness="4"
+                         StrokeDashArray="1.1,0.65" RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform><RotateTransform x:Name="CountdownRingRotate" /></Ellipse.RenderTransform>
+                </Ellipse>
+                <Ellipse Width="12" Height="12" Fill="#833B223F" Margin="56,74,0,0"
+                         HorizontalAlignment="Left" VerticalAlignment="Top" />
+                <Ellipse Width="8" Height="8" Fill="#62A78AB9" Margin="0,98,76,0"
+                         HorizontalAlignment="Right" VerticalAlignment="Top" />
+                <TextBlock x:Name="CountdownNumber" Foreground="{StaticResource PlumBrush}" FontSize="168"
+                           FontWeight="Black" TextAlignment="Center" VerticalAlignment="Center"
+                           RenderTransformOrigin="0.5,0.5">
+                    <TextBlock.RenderTransform><ScaleTransform x:Name="CountdownNumberScale" /></TextBlock.RenderTransform>
+                </TextBlock>
+            </Grid>
+            <TextBlock x:Name="CountdownCaption" Foreground="White" FontSize="31" FontWeight="Black"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,470,0,0" />
+        </Grid>
+
+        <Button x:Name="CloseAudienceButton" Grid.ColumnSpan="2" Panel.ZIndex="100"
                 HorizontalAlignment="Right" VerticalAlignment="Top" Margin="20"
                 Width="54" Height="54" Padding="0" Content="×" FontSize="30"
-                Background="#D92B1731" Foreground="{StaticResource CreamBrush}"
+                Background="#E62B1731" Foreground="White"
                 ToolTip="Close audience display" Click="CloseAudienceButton_OnClick" />
-
-        <Border x:Name="CenterMessagePanel" Grid.ColumnSpan="2" Background="#D92B1731"
-                VerticalAlignment="Center" Padding="40,30" Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="CenterCaption" Foreground="{StaticResource SoftLavenderBrush}" FontSize="28"
-                           FontWeight="SemiBold" TextAlignment="Center" />
-                <TextBlock x:Name="CenterMessage" Foreground="White" FontSize="82" FontWeight="Black"
-                           TextAlignment="Center" TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
     </Grid>
 </Window>

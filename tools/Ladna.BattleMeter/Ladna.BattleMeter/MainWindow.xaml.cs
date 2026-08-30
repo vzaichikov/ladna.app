@@ -320,6 +320,7 @@ public partial class MainWindow : Window
                 }
 
                 _session.Retake(side);
+                _audienceWindow?.ClearAcceptedCapture(side);
             }
 
             _session.BeginCountdown(side);
@@ -351,14 +352,14 @@ public partial class MainWindow : Window
                 }
 
                 _session.CompletePerformerCapture(capture);
-                _audienceWindow?.HideMessage();
+                _audienceWindow?.ShowAcceptedCapture(side, capture);
                 SetStatus($"{performerName}: {(_locale == "uk" ? "запис прийнято" : "capture accepted")} · {capture.RelativeDbfs:F1} dBFS.");
                 UpdateMeasurementSummary();
             }
             catch
             {
                 _session.CaptureFailed();
-                _audienceWindow?.HideMessage();
+                _audienceWindow?.RestoreAcceptedCaptures();
                 throw;
             }
         });
@@ -443,7 +444,7 @@ public partial class MainWindow : Window
         CancelCurrentOperation();
         _submission.Clear();
         _session.Retake(side);
-        _audienceWindow?.ClearMeasurements();
+        _audienceWindow?.ClearAcceptedCapture(side);
         UpdateMeasurementSummary();
         SetStatus(_locale == "uk" ? "Запис очищено. Запустіть перезапис." : "Capture cleared. Start the retake when ready.");
         UpdateControls();
@@ -549,6 +550,7 @@ public partial class MainWindow : Window
 
         _audienceWindow.SetLocale(_locale);
         _audienceWindow.SetMatch(MatchCombo.SelectedItem as BattleMatch);
+        _audienceWindow.SetAcceptedCaptures(_session.CaptureA, _session.CaptureB);
         AudienceDisplayService.PlaceFullscreen(_audienceWindow, display);
     }
 

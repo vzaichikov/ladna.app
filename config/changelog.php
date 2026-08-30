@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.162.0',
+                'date' => '2026-08-30',
+                'title' => 'Fresh Festival confirmations and a livelier Battle audience screen',
+                'items' => ['Festival staff now receive the latest readiness checks whenever they open Fully confirm, so reviews and payments completed on the same page no longer leave a stale blocker dialog.', 'The Windows Ladna Battle Meter audience screen now adds an animated 3–2–1 countdown, applause-responsive waves, clearer live and accepted readings, and the Ladna mascot cheering for each performer.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.161.0',
                 'date' => '2026-08-30',
                 'title' => 'Independent Festival field-review notifications',
@@ -1430,6 +1437,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.162.0',
+                'date' => '2026-08-30',
+                'title' => 'Актуальне підтвердження заявок і жвавіший екран глядацького шумоміра',
+                'items' => ['Команда фестивалю тепер отримує актуальні перевірки щоразу перед повним підтвердженням заявки, тому завершені на цій сторінці перевірки та оплати більше не залишають застаріле вікно з перешкодами.', 'Глядацький екран Windows-застосунку Ladna Battle Meter тепер має анімований відлік 3–2–1, хвилі в такт оплескам, виразніші поточні й прийняті показники та маскота Ladna, який підтримує кожного учасника.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.161.0',
                 'date' => '2026-08-30',

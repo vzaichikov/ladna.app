@@ -104,6 +104,7 @@ function closeDeleteConfirmation(modal) {
 
     if (acceptButton) {
         acceptButton.disabled = false;
+        acceptButton.hidden = false;
         acceptButton.classList.remove('hidden');
     }
 
@@ -10664,6 +10665,7 @@ document.addEventListener('DOMContentLoaded', () => {
         applyConfirmationIcon(confirmIcon, source.dataset.confirmIcon || form.dataset.confirmIcon || confirmIcon?.dataset.defaultIcon || 'trash-2');
 
         pendingConfirmationBlocked = (source.dataset.confirmBlocked || form.dataset.confirmBlocked) === 'true';
+        acceptButton.hidden = pendingConfirmationBlocked;
         acceptButton.classList.toggle('hidden', pendingConfirmationBlocked);
         cancelButton.textContent = pendingConfirmationBlocked
             ? source.dataset.confirmClose || form.dataset.confirmClose || cancelButton.dataset.defaultText || cancelButton.textContent
@@ -10728,6 +10730,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         syncConfirmationAcceptState();
     };
+    const applyConfirmationRefreshFailure = (form) => {
+        form.dataset.confirmTitle = form.dataset.confirmRefreshErrorTitle || form.dataset.confirmTitle;
+        form.dataset.confirmBody = form.dataset.confirmRefreshErrorCopy || form.dataset.confirmBody;
+        form.dataset.confirmIcon = 'triangle-alert';
+        form.dataset.confirmVariant = 'warning';
+        form.dataset.confirmBlocked = 'true';
+        delete form.dataset.confirmDetails;
+    };
+    const refreshConfirmationForm = async (form) => {
+        const response = await fetch(form.dataset.confirmRefreshUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                Accept: 'text/html',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Confirmation refresh failed with status ${response.status}.`);
+        }
+
+        const replacement = replaceFestivalApplicationFragment(await response.text(), form);
+
+        if (!(replacement instanceof HTMLFormElement)) {
+            throw new Error('Confirmation refresh returned an invalid fragment.');
+        }
+
+        return replacement;
+    };
 
     if (!modal || !cancelButton || !acceptButton) {
         return;
@@ -10742,7 +10775,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    document.addEventListener('submit', (event) => {
+    document.addEventListener('submit', async (event) => {
         if (event.defaultPrevented) {
             return;
         }
@@ -10764,11 +10797,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         event.preventDefault();
-        pendingDeleteForm = form;
-        pendingConfirmationSubmitter = submitter?.form === form ? submitter : null;
-        confirmationModalOpener = submitter ?? document.activeElement;
-        syncFestivalDecisionForm(form);
-        applyConfirmationCopy(form, pendingConfirmationSubmitter);
+        let confirmationForm = form;
+        let confirmationSubmitter = submitter?.form === form ? submitter : null;
+        let modalOpener = submitter ?? document.activeElement;
+
+        if (form.dataset.confirmRefreshUrl) {
+            if (form.dataset.confirmRefreshPending === 'true') {
+                return;
+            }
+
+            form.dataset.confirmRefreshPending = 'true';
+            setFormDisabled(form, true);
+
+            try {
+                confirmationForm = await refreshConfirmationForm(form);
+                confirmationSubmitter = confirmationForm.querySelector('button[type="submit"], input[type="submit"]');
+                modalOpener = confirmationSubmitter ?? modalOpener;
+            } catch {
+                applyConfirmationRefreshFailure(form);
+            } finally {
+                if (document.body.contains(form)) {
+                    delete form.dataset.confirmRefreshPending;
+                    setFormDisabled(form, false);
+                }
+            }
+        }
+
+        pendingDeleteForm = confirmationForm;
+        pendingConfirmationSubmitter = confirmationSubmitter;
+        confirmationModalOpener = modalOpener;
+        syncFestivalDecisionForm(confirmationForm);
+        applyConfirmationCopy(confirmationForm, pendingConfirmationSubmitter);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         document.body.classList.add('overflow-hidden');

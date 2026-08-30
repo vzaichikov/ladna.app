@@ -199,14 +199,21 @@ class FestivalApplicationDecisionTest extends TestCase
 
     public function test_application_decision_routes_enforce_permission_and_nested_tenancy(): void
     {
-        [$account, $edition, , $entry] = $this->festival();
+        [$account, $edition, $owner, $entry] = $this->festival();
         $unauthorized = User::factory()->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.applications.fully-confirm.preview', [$account, $edition, $entry]))
+            ->assertStatus(409);
 
         $this->actingAs($unauthorized)
             ->patch(route('dashboard.accounts.festivals.applications.fully-decline', [$account, $edition, $entry]), ['reason' => 'No access'])
             ->assertForbidden();
         $this->actingAs($unauthorized)
             ->patch(route('dashboard.accounts.festivals.applications.fully-confirm', [$account, $edition, $entry]))
+            ->assertForbidden();
+        $this->actingAs($unauthorized)
+            ->get(route('dashboard.accounts.festivals.applications.fully-confirm.preview', [$account, $edition, $entry]))
             ->assertForbidden();
 
         [$otherAccount, $otherEdition, $otherOwner] = $this->festival();
@@ -215,6 +222,9 @@ class FestivalApplicationDecisionTest extends TestCase
             ->assertNotFound();
         $this->actingAs($otherOwner)
             ->patch(route('dashboard.accounts.festivals.applications.fully-confirm', [$otherAccount, $otherEdition, $entry]))
+            ->assertNotFound();
+        $this->actingAs($otherOwner)
+            ->get(route('dashboard.accounts.festivals.applications.fully-confirm.preview', [$otherAccount, $otherEdition, $entry]))
             ->assertNotFound();
     }
 

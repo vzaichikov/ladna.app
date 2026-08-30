@@ -5906,6 +5906,8 @@ return [
     'festival_full_confirm_copy' => 'The participant will be accepted only after every previous step and payment has passed its required check.',
     'festival_full_confirm_blocked_title' => 'This application is not ready for full confirmation',
     'festival_full_confirm_blocked_copy' => 'Resolve every check below before fully confirming the application.',
+    'festival_full_confirm_refresh_failed_title' => 'Could not refresh the application checks',
+    'festival_full_confirm_refresh_failed_copy' => 'The current readiness status could not be loaded. Close this dialog and try again.',
     'festival_final_confirmation_check_summary' => 'Summary',
     'festival_final_confirmation_check_qualification' => 'Qualification',
     'festival_final_confirmation_check_payments' => 'Payments',

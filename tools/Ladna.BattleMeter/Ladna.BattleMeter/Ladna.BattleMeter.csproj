@@ -27,5 +27,6 @@
   <ItemGroup>
     <Resource Include="Assets\LadnaMark.svg" />
     <Resource Include="Assets\LadnaBattleMeter.ico" />
+    <Resource Include="Assets\LadnaMascotShouting.png" />
   </ItemGroup>
 </Project>

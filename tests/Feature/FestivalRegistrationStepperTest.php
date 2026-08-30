@@ -1620,9 +1620,11 @@ class FestivalRegistrationStepperTest extends TestCase
         $owner = User::factory()->create();
         $account->addOwner($owner);
         $applicationUrl = route('dashboard.accounts.festivals.applications.show', [$account, $edition, $entry]);
+        $confirmationPreviewUrl = route('dashboard.accounts.festivals.applications.fully-confirm.preview', [$account, $edition, $entry]);
 
         $blocked = $this->actingAs($owner, 'web')->get($applicationUrl);
         $blocked->assertOk()
+            ->assertSee('data-confirm-refresh-url="'.$confirmationPreviewUrl.'"', false)
             ->assertSee('data-confirm-blocked="true"', false)
             ->assertSee(__('app.festival_full_confirm_blocked_title'))
             ->assertSee($applicationStep->workflowStep->title)
@@ -1642,6 +1644,14 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertSee('125 ₴');
         $this->assertSame(2, substr_count($blocked->getContent(), 'data-festival-decision-form'));
 
+        $blockedPreview = $this->actingAs($owner, 'web')->get($confirmationPreviewUrl);
+        $blockedPreview->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertSee('data-festival-application-fragment-key="full-confirmation-'.$entry->id.'"', false)
+            ->assertSee('data-confirm-blocked="true"', false)
+            ->assertSee('data-confirm-details=', false);
+
         $this->actingAs($owner, 'web')
             ->from($applicationUrl)
             ->patch(route('dashboard.accounts.festivals.applications.fully-confirm', [$account, $edition, $entry]))
@@ -1656,6 +1666,12 @@ class FestivalRegistrationStepperTest extends TestCase
 
         $ready = $this->actingAs($owner, 'web')->get($applicationUrl);
         $ready->assertOk()
+            ->assertDontSee('data-confirm-blocked="true"', false)
+            ->assertSee(__('app.festival_full_confirm_title'));
+
+        $readyPreview = $this->actingAs($owner, 'web')->get($confirmationPreviewUrl);
+        $readyPreview->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
             ->assertDontSee('data-confirm-blocked="true"', false)
             ->assertSee(__('app.festival_full_confirm_title'));
 
