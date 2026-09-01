@@ -114,12 +114,13 @@ class ChargeAccountSubscription
                 orderId: $payment->order_id,
                 status: $callbackStatus,
                 gatewayStatus: $status,
-                amountCents: isset($response['finalAmount']) ? (int) $response['finalAmount'] : $payment->amount_cents,
+                amountCents: isset($response['amount']) ? (int) $response['amount'] : (isset($response['finalAmount']) ? (int) $response['finalAmount'] : $payment->amount_cents),
                 currency: isset($response['ccy']) ? PaymentAmounts::currencyFromIso4217($response['ccy']) : $payment->currency,
                 gatewayInvoiceId: $gatewayInvoiceId,
                 gatewayPaymentId: is_string($response['paymentId'] ?? null) ? $response['paymentId'] : null,
                 failureReason: is_string($response['failureReason'] ?? null) ? $response['failureReason'] : null,
-                paidAt: is_string($response['modifiedDate'] ?? null) ? Carbon::parse($response['modifiedDate']) : null,
+                paidAt: $status === 'success' && is_string($response['modifiedDate'] ?? null) ? Carbon::parse($response['modifiedDate']) : null,
+                modifiedAt: is_string($response['modifiedDate'] ?? null) ? Carbon::parse($response['modifiedDate']) : null,
                 payload: $response,
             ));
         }

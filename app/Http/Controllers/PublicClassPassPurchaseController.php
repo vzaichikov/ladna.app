@@ -85,6 +85,8 @@ class PublicClassPassPurchaseController extends Controller
                 $location,
             );
             $checkout = $startCustomerPurchasePayment->execute($purchase, $setting);
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             if ($purchase) {
                 $purchase->forceFill([

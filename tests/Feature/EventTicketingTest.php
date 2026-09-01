@@ -297,6 +297,50 @@ class EventTicketingTest extends TestCase
         Mail::assertQueued(TransactionalMail::class, 1);
     }
 
+    public function test_older_monopay_callback_cannot_regress_a_newer_event_failure(): void
+    {
+        $account = Account::factory()->create();
+        $event = Event::factory()->published()->for($account)->create();
+        $type = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 60000,
+            'inventory' => 10,
+        ]);
+        $order = app(CreateEventOrder::class)->execute($event, $this->payload($type->id, 1), 'uk');
+        $order->update(['provider' => IntegrationProvider::Monopay->value]);
+        $newerModifiedAt = now()->startOfSecond();
+
+        app(CompleteEventOrder::class)->execute($order, new PaymentCallbackResult(
+            orderId: $order->order_id,
+            status: PaymentCallbackStatus::Failed,
+            gatewayStatus: 'failure',
+            amountCents: $order->amount_cents,
+            currency: $order->currency,
+            failureReason: '3-D Secure interrupted by timeout',
+            modifiedAt: $newerModifiedAt,
+            payload: [
+                'status' => 'failure',
+                'modifiedDate' => $newerModifiedAt->toIso8601String(),
+            ],
+        ));
+        $completed = app(CompleteEventOrder::class)->execute($order, new PaymentCallbackResult(
+            orderId: $order->order_id,
+            status: PaymentCallbackStatus::Pending,
+            gatewayStatus: 'processing',
+            amountCents: $order->amount_cents,
+            currency: $order->currency,
+            modifiedAt: $newerModifiedAt->copy()->subMinute(),
+            payload: [
+                'status' => 'processing',
+                'modifiedDate' => $newerModifiedAt->copy()->subMinute()->toIso8601String(),
+            ],
+        ));
+
+        $this->assertSame(EventOrderStatus::Failed, $completed->status);
+        $this->assertSame('failure', $completed->gateway_status);
+        $this->assertSame('3-D Secure interrupted by timeout', $completed->failure_reason);
+        $this->assertSame('failure', $completed->last_callback_payload['status']);
+    }
+
     public function test_monopay_callback_requires_refund_when_event_no_longer_accepts_ticket_payments(): void
     {
         $account = Account::factory()->create();

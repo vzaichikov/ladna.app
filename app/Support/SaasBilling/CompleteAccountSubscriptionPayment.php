@@ -43,6 +43,10 @@ class CompleteAccountSubscriptionPayment
 
             $this->assertCallbackMatchesPayment($lockedPayment, $callback);
 
+            if ($callback->isOlderThan($lockedPayment->last_callback_payload)) {
+                return $lockedPayment;
+            }
+
             if ($callback->status === PaymentCallbackStatus::Paid) {
                 return $this->markPaid($lockedPayment, $callback);
             }

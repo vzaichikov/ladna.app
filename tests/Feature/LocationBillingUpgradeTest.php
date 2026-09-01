@@ -105,7 +105,8 @@ class LocationBillingUpgradeTest extends TestCase
         Http::fake(fn (Request $request) => Http::response([
             'invoiceId' => 'upgrade-invoice-failed',
             'status' => 'failure',
-            'finalAmount' => $request['amount'],
+            'amount' => $request['amount'],
+            'finalAmount' => 0,
             'ccy' => 980,
             'failureReason' => 'declined',
         ]));

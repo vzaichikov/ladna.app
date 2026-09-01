@@ -45,6 +45,8 @@ class IssueCustomerClassPass
         bool $isPaid = false,
         ?int $paidAmountCents = null,
         ?string $trialEligibilityOverrideReason = null,
+        ?Carbon $trialEligibilityAsOf = null,
+        ?CustomerPurchase $trialEligibilityOverridePurchase = null,
     ): CustomerClassPass {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
@@ -64,7 +66,7 @@ class IssueCustomerClassPass
             : null;
         $usesTrialEligibilityOverride = $trialEligibilityOverrideReason !== null;
         $normalTrialEligibility = $classPassPlan->is_trial
-            ? $this->trialClassPassEligibility->evaluate($account, $customer, $source)
+            ? $this->trialClassPassEligibility->evaluate($account, $customer, $source, $trialEligibilityAsOf)
             : null;
 
         if (! $classPassPlan->is_trial) {
@@ -93,6 +95,7 @@ class IssueCustomerClassPass
                 $source,
                 $issuedBy,
                 $trialEligibilityOverrideReason,
+                $trialEligibilityOverridePurchase,
             );
         }
 
@@ -113,7 +116,7 @@ class IssueCustomerClassPass
             ]);
         }
 
-        $classPass = DB::transaction(function () use ($account, $customer, $classPassPlan, $source, $issuedBy, $issuedLocation, $isPaid, $paidAmountCents, $priceCents, $snapshot, $purchasedAt, $totalValidityDays, $trialEligibilityOverrideReason, $usesTrialEligibilityOverride): CustomerClassPass {
+        $classPass = DB::transaction(function () use ($account, $customer, $classPassPlan, $source, $issuedBy, $issuedLocation, $isPaid, $paidAmountCents, $priceCents, $snapshot, $purchasedAt, $totalValidityDays, $trialEligibilityOverrideReason, $usesTrialEligibilityOverride, $trialEligibilityOverridePurchase): CustomerClassPass {
             if ($usesTrialEligibilityOverride) {
                 Customer::query()
                     ->whereBelongsTo($account)
@@ -138,6 +141,7 @@ class IssueCustomerClassPass
                     $source,
                     $issuedBy,
                     (string) $trialEligibilityOverrideReason,
+                    $trialEligibilityOverridePurchase,
                 );
             }
 
@@ -203,6 +207,7 @@ class IssueCustomerClassPass
         string $source,
         ?User $issuedBy,
         string $reason,
+        ?CustomerPurchase $overridePurchase,
     ): void {
         if (mb_strlen($reason) < 3 || mb_strlen($reason) > 2000) {
             throw ValidationException::withMessages([
@@ -210,20 +215,32 @@ class IssueCustomerClassPass
             ]);
         }
 
-        if (! $classPassPlan->is_trial || $source !== TrialClassPassEligibility::SourceManual) {
+        if (! $classPassPlan->is_trial) {
             throw ValidationException::withMessages([
                 'override_trial_eligibility' => __('app.trial_class_pass_override_unavailable'),
             ]);
         }
 
-        $override = $this->trialClassPassEligibility->evaluateManualOverride(
-            $account,
-            $customer,
-            $source,
-            actor: $issuedBy,
-        );
+        $available = match ($source) {
+            TrialClassPassEligibility::SourceManual => $this->trialClassPassEligibility->evaluateManualOverride(
+                $account,
+                $customer,
+                $source,
+                actor: $issuedBy,
+            )['available'],
+            TrialClassPassEligibility::SourceOnlinePayment => $issuedBy !== null
+                && $overridePurchase !== null
+                && $overridePurchase->class_pass_plan_id === $classPassPlan->id
+                && $this->trialClassPassEligibility->paidOnlineOverrideIsAvailable(
+                    $account,
+                    $customer,
+                    $overridePurchase,
+                    $issuedBy,
+                ),
+            default => false,
+        };
 
-        if (! $override['available']) {
+        if (! $available) {
             throw ValidationException::withMessages([
                 'override_trial_eligibility' => __('app.trial_class_pass_override_unavailable'),
             ]);

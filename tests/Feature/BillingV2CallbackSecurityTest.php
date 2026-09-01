@@ -63,12 +63,30 @@ class BillingV2CallbackSecurityTest extends TestCase
         Http::fake(['https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKey])]);
         $payment = $this->pendingPayment();
         $payload = $this->successfulPayload($payment);
-        $payload['finalAmount'] = $payment->amount_cents - 1;
+        $payload['amount'] = $payment->amount_cents - 1;
 
         $this->postSigned($privateKey, $payload)->assertBadRequest();
 
         $this->assertNotSame(AccountSubscriptionPaymentStatus::PaymentPaid, $payment->refresh()->status);
         $this->assertSame(SubscriptionStatus::Expired, $payment->subscription->refresh()->status);
+    }
+
+    public function test_signed_failure_with_zero_final_amount_uses_the_original_amount(): void
+    {
+        [$privateKey, $publicKey] = $this->ecdsaKeys();
+        $this->monopaySetting();
+        Http::fake(['https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKey])]);
+        $payment = $this->pendingPayment();
+        $payload = $this->successfulPayload($payment);
+        $payload['status'] = 'failure';
+        $payload['finalAmount'] = 0;
+        $payload['failureReason'] = '3-D Secure interrupted by timeout';
+
+        $this->postSigned($privateKey, $payload)->assertOk();
+
+        $this->assertSame(AccountSubscriptionPaymentStatus::PaymentFailed, $payment->refresh()->status);
+        $this->assertSame('3-D Secure interrupted by timeout', $payment->failure_reason);
+        $this->assertNull($payment->paid_at);
     }
 
     public function test_duplicate_valid_callback_is_idempotent(): void

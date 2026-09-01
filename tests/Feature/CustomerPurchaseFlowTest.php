@@ -6,12 +6,16 @@ use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
 use App\Models\Account;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Models\Room;
+use App\Models\ScheduledClass;
+use App\Models\Trainer;
 use App\Support\Payments\MonopayCheckoutSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
@@ -109,6 +113,41 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertSessionHasErrors('studio_rules_accepted');
 
         $this->assertSame(0, $customer->purchases()->count());
+    }
+
+    public function test_legacy_checkout_rejects_an_ineligible_trial_before_creating_payment(): void
+    {
+        [$account, $location, $plan, $customer] = $this->purchaseContext();
+        $plan->update(['is_trial' => true]);
+        $this->accountIntegration($account, IntegrationProvider::Monopay, [
+            'api_token' => 'mono-token',
+        ]);
+        $room = Room::factory()->for($account)->for($location)->create();
+        $trainer = Trainer::factory()->for($account)->create();
+        $scheduledClass = ScheduledClass::factory()
+            ->for($account)
+            ->for($location)
+            ->for($room)
+            ->for($plan->classTypes()->firstOrFail())
+            ->for($trainer)
+            ->create();
+        ClassBooking::factory()
+            ->for($account)
+            ->for($scheduledClass)
+            ->for($customer)
+            ->create();
+
+        Http::preventStrayRequests();
+
+        $this->actingAs($customer, 'customer')
+            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+                'studio_rules_accepted' => '1',
+                'provider' => IntegrationProvider::Monopay->value,
+            ])
+            ->assertSessionHasErrors('class_pass_plan_id');
+
+        $this->assertSame(0, $customer->purchases()->count());
+        Http::assertNothingSent();
     }
 
     public function test_liqpay_purchase_creates_payment_attempt_before_form_redirect(): void

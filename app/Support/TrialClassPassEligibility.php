@@ -39,12 +39,13 @@ class TrialClassPassEligibility
         Customer $customer,
         ClassPassPlan $classPassPlan,
         string $source,
+        ?Carbon $asOf = null,
     ): void {
         if (! $classPassPlan->is_trial) {
             return;
         }
 
-        if ($this->evaluate($account, $customer, $source)['status'] === 'eligible') {
+        if ($this->evaluate($account, $customer, $source, $asOf)['status'] === 'eligible') {
             return;
         }
 
@@ -198,6 +199,30 @@ class TrialClassPassEligibility
             'required_permissions' => $requiredPermissions,
             'requires_comment' => true,
         ];
+    }
+
+    public function paidOnlineOverrideIsAvailable(
+        Account $account,
+        Customer $customer,
+        CustomerPurchase $purchase,
+        User $actor,
+    ): bool {
+        return $purchase->account_id === $account->id
+            && $purchase->customer_id === $customer->id
+            && $purchase->provider === 'monopay'
+            && $purchase->payment_source === CustomerPurchase::SourceOnlineCheckout
+            && $purchase->trial_eligibility_validated_at === null
+            && $purchase->customer_class_pass_id === null
+            && $this->evaluate($account, $customer, self::SourceOnlinePayment)['status'] === 'ineligible'
+            && $this->classPassHistoryCount($account, $customer, null) === 0
+            && CustomerPurchase::query()
+                ->whereBelongsTo($account)
+                ->whereBelongsTo($customer)
+                ->whereKeyNot($purchase->id)
+                ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
+                ->doesntExist()
+            && $account->userCan($actor, StudioPermission::IssueCustomerClassPasses)
+            && $account->userCan($actor, StudioPermission::ManageCustomerClassPasses);
     }
 
     /**

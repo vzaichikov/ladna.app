@@ -9,11 +9,14 @@ use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\ScheduleKindRegistry;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class CreateCustomerPurchase
 {
+    public function __construct(private readonly TrialClassPassEligibility $trialEligibility) {}
+
     public function execute(
         Account $account,
         Customer $customer,
@@ -40,6 +43,17 @@ class CreateCustomerPurchase
             throw new InvalidArgumentException('Unsupported customer purchase provider.');
         }
 
+        $startedAt = now();
+        $trialEligibilityValidatedAt = $classPassPlan->is_trial ? $startedAt->copy() : null;
+
+        $this->trialEligibility->assertAvailable(
+            $account,
+            $customer,
+            $classPassPlan,
+            TrialClassPassEligibility::SourceOnlinePayment,
+            $trialEligibilityValidatedAt,
+        );
+
         return $account->customerPurchases()->create([
             'customer_id' => $customer->id,
             'location_id' => $location?->id,
@@ -56,7 +70,8 @@ class CreateCustomerPurchase
             'sessions_count' => $classPassPlan->sessions_count,
             'validity_days' => $classPassPlan->validity_days,
             'total_validity_days' => $classPassPlan->total_validity_days,
-            'started_at' => now(),
+            'started_at' => $startedAt,
+            'trial_eligibility_validated_at' => $trialEligibilityValidatedAt,
         ]);
     }
 

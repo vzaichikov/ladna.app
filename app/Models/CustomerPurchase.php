@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'paid_at', 'failed_at', 'expires_at'])]
+#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'trial_eligibility_validated_at', 'paid_at', 'failed_at', 'expires_at'])]
 #[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
 class CustomerPurchase extends Model
 {
@@ -53,6 +53,7 @@ class CustomerPurchase extends Model
             'gateway_checkout_payload' => 'encrypted:array',
             'last_callback_payload' => 'encrypted:array',
             'started_at' => 'datetime',
+            'trial_eligibility_validated_at' => 'datetime',
             'paid_at' => 'datetime',
             'failed_at' => 'datetime',
             'expires_at' => 'datetime',

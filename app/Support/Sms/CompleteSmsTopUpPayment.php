@@ -31,6 +31,10 @@ class CompleteSmsTopUpPayment
             $previousStatus = $payment->status;
             $this->assertCallbackMatchesPayment($payment, $callback);
 
+            if ($callback->isOlderThan($payment->last_callback_payload)) {
+                return $payment;
+            }
+
             if ($payment->status === SmsTopUpPaymentStatus::PaymentPaid && $callback->status === PaymentCallbackStatus::Paid) {
                 return $payment;
             }

@@ -25,6 +25,10 @@ class CompleteFestivalEditionPurchase
             $previousStatus = $purchase->status;
             $this->assertMatches($purchase, $callback);
 
+            if ($callback->isOlderThan($purchase->last_callback_payload)) {
+                return $purchase;
+            }
+
             if ($purchase->status === FestivalEditionPurchaseStatus::PaymentReversed) {
                 return $purchase;
             }

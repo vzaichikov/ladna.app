@@ -5,6 +5,7 @@ namespace App\Actions\Payments;
 use App\Actions\IssueCustomerClassPass;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\CustomerPurchase;
+use App\Models\User;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\InvalidPaymentCallbackException;
@@ -21,11 +22,15 @@ class CompleteCustomerPurchase
         private readonly FiscalReceiptService $fiscalReceipts,
     ) {}
 
-    public function execute(CustomerPurchase $purchase, PaymentCallbackResult $callback): CustomerPurchase
-    {
+    public function execute(
+        CustomerPurchase $purchase,
+        PaymentCallbackResult $callback,
+        ?User $trialExceptionActor = null,
+        ?string $trialExceptionReason = null,
+    ): CustomerPurchase {
         $previousStatus = null;
 
-        $completedPurchase = DB::transaction(function () use ($purchase, $callback, &$previousStatus): CustomerPurchase {
+        $completedPurchase = DB::transaction(function () use ($purchase, $callback, $trialExceptionActor, $trialExceptionReason, &$previousStatus): CustomerPurchase {
             $lockedPurchase = CustomerPurchase::query()
                 ->with(['account', 'customer', 'classPassPlan', 'customerClassPass', 'location'])
                 ->whereKey($purchase->id)
@@ -38,6 +43,10 @@ class CompleteCustomerPurchase
             }
 
             $this->assertCallbackMatchesPurchase($lockedPurchase, $callback);
+
+            if ($callback->isOlderThan($lockedPurchase->last_callback_payload)) {
+                return $lockedPurchase;
+            }
 
             if ($callback->status === PaymentCallbackStatus::Paid) {
                 if (! $lockedPurchase->classPassPlan) {
@@ -68,6 +77,10 @@ class CompleteCustomerPurchase
                         ],
                         issuedLocation: $lockedPurchase->location,
                         isPaid: true,
+                        issuedBy: $trialExceptionReason !== null ? $trialExceptionActor : null,
+                        trialEligibilityOverrideReason: $trialExceptionReason,
+                        trialEligibilityAsOf: $lockedPurchase->trial_eligibility_validated_at,
+                        trialEligibilityOverridePurchase: $trialExceptionReason !== null ? $lockedPurchase : null,
                     );
                 } else {
                     $customerClassPass->forceFill([

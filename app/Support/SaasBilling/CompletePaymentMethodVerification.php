@@ -48,6 +48,10 @@ class CompletePaymentMethodVerification
             throw new InvalidPaymentCallbackException('Card verification callback currency is invalid.');
         }
 
+        if ($callback->isOlderThan($paymentMethod->last_callback_payload)) {
+            return true;
+        }
+
         if ($paymentMethod->isActive()) {
             return true;
         }

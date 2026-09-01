@@ -37,6 +37,10 @@ class CompleteEventOrder
                 throw new InvalidPaymentCallbackException('Callback does not match event order.');
             }
 
+            if ($callback->isOlderThan($order->last_callback_payload)) {
+                return [$order, null];
+            }
+
             $isTerminal = $order->refunded_at !== null || in_array($order->status, [
                 EventOrderStatus::Paid,
                 EventOrderStatus::RefundRequired,

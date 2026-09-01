@@ -305,7 +305,8 @@ class MonopayTokenizedBillingTest extends TestCase
             'https://api.monobank.ua/api/merchant/wallet/payment' => Http::response([
                 'invoiceId' => 'renewal-3ds-invoice',
                 'status' => 'failure',
-                'finalAmount' => 90_000,
+                'amount' => 90_000,
+                'finalAmount' => 0,
                 'ccy' => 980,
                 'failureReason' => '3ds_required',
             ]),

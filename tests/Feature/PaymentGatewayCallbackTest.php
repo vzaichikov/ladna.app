@@ -287,6 +287,65 @@ class PaymentGatewayCallbackTest extends TestCase
         $this->assertSame(1, CustomerClassPass::whereBelongsTo($purchase->customer)->count());
     }
 
+    public function test_monopay_event_failure_uses_original_amount_when_final_amount_is_zero(): void
+    {
+        [$privateKey, $publicKeyBase64] = $this->ecdsaKeys();
+        $account = Account::factory()->create();
+        IntegrationSetting::create([
+            'scope_type' => IntegrationScope::Account->value,
+            'scope_id' => $account->id,
+            'account_id' => $account->id,
+            'provider' => IntegrationProvider::Monopay->value,
+            'category' => IntegrationCategory::Payment->value,
+            'is_enabled' => true,
+            'credentials' => ['api_token' => 'mono-token'],
+        ]);
+        $event = Event::factory()->published()->for($account)->create();
+        $ticketType = EventTicketType::factory()->for($account)->for($event)->create([
+            'price_cents' => 60000,
+            'inventory' => 10,
+        ]);
+        $order = app(CreateEventOrder::class)->execute($event, [
+            'buyer_name' => 'Event Buyer',
+            'buyer_email' => 'event-buyer@example.com',
+            'provider' => IntegrationProvider::Monopay->value,
+            'items' => [['ticket_type_id' => $ticketType->id, 'quantity' => 1]],
+            'accept_terms' => true,
+        ], 'uk');
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/pubkey' => Http::response(['key' => $publicKeyBase64]),
+        ]);
+        $body = (string) json_encode([
+            'invoiceId' => 'mono-event-invoice-1',
+            'status' => 'failure',
+            'amount' => 60000,
+            'finalAmount' => 0,
+            'ccy' => PaymentAmounts::iso4217NumericCode('UAH'),
+            'reference' => $order->order_id,
+            'modifiedDate' => now()->toIso8601String(),
+            'errCode' => '1045',
+            'failureReason' => '3-D Secure interrupted by timeout',
+        ], JSON_UNESCAPED_SLASHES);
+        openssl_sign($body, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+
+        $this->call(
+            'POST',
+            route('api.v1.event-payments.callbacks', IntegrationProvider::Monopay->value),
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_SIGN' => base64_encode($signature)],
+            $body,
+        )->assertOk();
+
+        $order->refresh();
+
+        $this->assertSame('failed', $order->status->value);
+        $this->assertSame('failure', $order->gateway_status);
+        $this->assertSame('3-D Secure interrupted by timeout', $order->failure_reason);
+        $this->assertSame(0, $order->tickets()->count());
+    }
+
     public function test_signed_amount_mismatch_is_rejected_without_issuing_pass(): void
     {
         [$account, $purchase] = $this->purchase(IntegrationProvider::Liqpay, [

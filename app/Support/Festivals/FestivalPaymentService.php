@@ -305,6 +305,11 @@ class FestivalPaymentService
         $completed = DB::transaction(function () use ($attempt, $callback, &$submitStepId, &$becamePaid): FestivalPaymentAttempt {
             $attempt = FestivalPaymentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($attempt->order_id, $attempt->amount_cents, $attempt->currency, $callback);
+
+            if ($callback->isOlderThan($attempt->last_callback_payload)) {
+                return $attempt->load(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep', 'allocations.charge']);
+            }
+
             if ($attempt->status === FestivalPaymentStatus::Paid) {
                 return $attempt->load(['charge.entry.portalUser', 'charge.entry.edition', 'charge.entryStep', 'allocations.charge']);
             }
@@ -455,6 +460,10 @@ class FestivalPaymentService
         [$completed, $transition] = DB::transaction(function () use ($order, $callback): array {
             $order = FestivalTicketOrder::query()->with(['items.admissionType', 'edition'])->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($order->order_id, $order->amount_cents, $order->currency, $callback);
+
+            if ($callback->isOlderThan($order->last_callback_payload)) {
+                return [$order, null];
+            }
 
             $isTerminal = $order->refunded_at !== null
                 || in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::Refunded], true)

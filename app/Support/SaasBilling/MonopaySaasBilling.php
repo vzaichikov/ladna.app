@@ -128,20 +128,23 @@ class MonopaySaasBilling
             }
         }
 
+        $modifiedAt = isset($payload['modifiedDate']) && is_string($payload['modifiedDate'])
+            ? Carbon::parse($payload['modifiedDate'])
+            : null;
+
         return new PaymentCallbackResult(
             orderId: (string) $orderId,
             status: $this->callbackStatus($status),
             gatewayStatus: $status,
-            amountCents: isset($payload['finalAmount']) ? (int) $payload['finalAmount'] : (isset($payload['amount']) ? (int) $payload['amount'] : null),
+            amountCents: isset($payload['amount']) ? (int) $payload['amount'] : (isset($payload['finalAmount']) ? (int) $payload['finalAmount'] : null),
             currency: isset($payload['ccy']) ? PaymentAmounts::currencyFromIso4217($payload['ccy']) : null,
             gatewayInvoiceId: is_string($payload['invoiceId'] ?? null) ? $payload['invoiceId'] : null,
             gatewayPaymentId: is_string($payload['paymentId'] ?? null) ? $payload['paymentId'] : null,
             failureReason: isset($payload['failureReason']) || isset($payload['errCode'])
                 ? (string) ($payload['failureReason'] ?? $payload['errCode'])
                 : null,
-            paidAt: isset($payload['modifiedDate']) && is_string($payload['modifiedDate'])
-                ? Carbon::parse($payload['modifiedDate'])
-                : null,
+            paidAt: $status === 'success' ? $modifiedAt : null,
+            modifiedAt: $modifiedAt,
             payload: $payload,
         );
     }

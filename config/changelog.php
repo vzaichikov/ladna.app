@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.163.1',
+                'date' => '2026-09-01',
+                'title' => 'Reliable Monobank payment completion',
+                'items' => ['Monobank processing and failed callbacks now use the original invoice amount and respect the providerʼs update time, so Event tickets and other payments no longer reject valid status updates or move backward when callbacks arrive out of order.', 'Trial class-pass eligibility is now secured before opening the payment page and honored when the confirmed payment returns. A guarded audited exception can recover an already charged legacy trial purchase without creating studio cash or hiding the responsible actor and reason.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.163.0',
                 'date' => '2026-08-30',
                 'title' => 'Custom Festival step-completion messages',
@@ -1444,6 +1451,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.163.1',
+                'date' => '2026-09-01',
+                'title' => 'Надійне завершення оплат Monobank',
+                'items' => ['Обробка та невдалі callback-и Monobank тепер використовують початкову суму рахунку й враховують час оновлення провайдера, тому квитки на події та інші оплати більше не відхиляють коректні статуси й не повертаються назад через інший порядок callback-ів.', 'Доступність пробного абонемента тепер перевіряється до відкриття сторінки оплати та зберігається до підтвердження платежу. Захищений виняток з аудитом дозволяє відновити вже списану стару оплату пробного абонемента без створення готівки студії та зі збереженням відповідального користувача й причини.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.163.0',
                 'date' => '2026-08-30',

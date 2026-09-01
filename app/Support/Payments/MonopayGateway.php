@@ -120,21 +120,47 @@ class MonopayGateway implements PaymentGateway
             throw new InvalidPaymentCallbackException('Invalid Monopay callback signature.');
         }
 
+        return $this->callbackResult($payload);
+    }
+
+    public function invoiceStatus(string $invoiceId, IntegrationSetting $setting): PaymentCallbackResult
+    {
+        $credentials = $setting->readableCredentials();
+        $response = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
+            ->acceptJson()
+            ->timeout(10)
+            ->connectTimeout(3)
+            ->retry([100, 300])
+            ->get(self::BASE_URL.'/api/merchant/invoice/status', ['invoiceId' => $invoiceId]);
+        $payload = $response->json();
+
+        if (! $response->successful() || ! is_array($payload)) {
+            throw new PaymentGatewayException('Monopay invoice status is unavailable.');
+        }
+
+        return $this->callbackResult($payload);
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function callbackResult(array $payload): PaymentCallbackResult
+    {
         $status = (string) ($payload['status'] ?? '');
+        $modifiedAt = isset($payload['modifiedDate']) && is_string($payload['modifiedDate'])
+            ? Carbon::parse($payload['modifiedDate'])
+            : null;
 
         return new PaymentCallbackResult(
             orderId: (string) ($payload['reference'] ?? ''),
             status: $this->callbackStatus($status),
             gatewayStatus: $status,
-            amountCents: isset($payload['finalAmount']) ? (int) $payload['finalAmount'] : (isset($payload['amount']) ? (int) $payload['amount'] : null),
+            amountCents: isset($payload['amount']) ? (int) $payload['amount'] : (isset($payload['finalAmount']) ? (int) $payload['finalAmount'] : null),
             currency: isset($payload['ccy']) ? PaymentAmounts::currencyFromIso4217($payload['ccy']) : null,
             gatewayInvoiceId: is_string($payload['invoiceId'] ?? null) ? $payload['invoiceId'] : null,
             failureReason: isset($payload['failureReason']) || isset($payload['errCode'])
                 ? (string) ($payload['failureReason'] ?? $payload['errCode'])
                 : null,
-            paidAt: isset($payload['modifiedDate']) && is_string($payload['modifiedDate'])
-                ? Carbon::parse($payload['modifiedDate'])
-                : null,
+            paidAt: $status === 'success' ? $modifiedAt : null,
+            modifiedAt: $modifiedAt,
             payload: $payload,
         );
     }
