@@ -51,6 +51,47 @@ class HelpPagesTest extends TestCase
             ->assertSee('індивідуальних занять і оренди залу', false);
     }
 
+    public function test_promotion_help_covers_checkout_rules_and_troubleshooting_for_every_domain(): void
+    {
+        $expectedCopy = [
+            'events' => [
+                'період дії у часовому поясі події',
+                'оплаті через QR-картку входу',
+                'покупець обовʼязково вказує email',
+                'Якщо код не працює',
+            ],
+            'festival-tickets-entrance' => [
+                'В одному оформленні можна використати лише один промокод',
+                'Для QR-оплати з промокодом email обовʼязковий',
+                'Якщо код не працює',
+            ],
+            'passes-prices' => [
+                'період дії у часовому поясі студії',
+                'Особистий ліміт зіставляє клієнта, email або телефон',
+                'В одному оформленні можна використати лише один промокод',
+                'Якщо код не працює',
+            ],
+        ];
+
+        foreach ($expectedCopy as $slug => $needles) {
+            $response = $this->get(route('help.show', $slug, false))->assertOk();
+
+            foreach ($needles as $needle) {
+                $response->assertSee($needle, false);
+            }
+        }
+
+        foreach ([
+            'як застосувати промокод через QR-картку входу' => 'events',
+            'чому промокод фестивалю не працює' => 'festival-tickets-entrance',
+            'чому промокод не працює на абонемент' => 'passes-prices',
+        ] as $question => $expectedSlug) {
+            $result = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame($expectedSlug, $result[0]['slug'] ?? null, $question);
+        }
+    }
+
     public function test_booking_help_explains_timely_cancellation_returns_session_for_customer_and_staff(): void
     {
         foreach (['schedule', 'customers-bookings'] as $slug) {
