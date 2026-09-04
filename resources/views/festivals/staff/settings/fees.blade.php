@@ -19,12 +19,21 @@
     </x-ui.filter-bar>
 
     <x-ui.panel padding="none" class="overflow-hidden">
+        <div class="hidden gap-3 border-b border-stone-100 px-5 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_170px_15rem] lg:items-center" data-festival-fee-header>
+            <div>{{ __('app.name') }}</div>
+            <div>{{ __('app.festival_registration_workflow_step') }}</div>
+            <div>{{ __('app.festival_amount', ['currency' => $account->default_currency]) }}</div>
+            <div>{{ __('app.festival_charge_due_days_after_approval') }}</div>
+            <div class="text-right">{{ __('app.actions') }}</div>
+        </div>
+
         @forelse ($fees as $fee)
             @php($globalIndex = ($fees->firstItem() ?? 1) + $loop->index)
-            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_auto] lg:items-center">
+            <div class="crm-row lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px_170px_15rem] lg:items-center">
                 <div><div class="flex flex-wrap items-center gap-2"><h2 class="font-semibold text-slate-950">{{ $fee->name }}</h2>@unless ($fee->is_active)<span class="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">{{ __('app.inactive') }}</span>@endunless</div><p class="mt-1 text-sm text-slate-500">{{ __('app.festival_charge_kind_'.$fee->kind) }}</p></div>
-                <p class="text-sm text-slate-500">{{ $fee->workflowStep?->workflow?->name }} · {{ $fee->workflowStep?->title }} · {{ $fee->category?->name ?? __('app.all') }}</p>
-                <strong class="text-sm text-slate-950">{{ \App\Support\MoneyFormatter::format($fee->amount_cents, $account->default_currency) }}</strong>
+                <div><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_registration_workflow_step') }}</p><p class="mt-1 text-sm text-slate-500 lg:mt-0">{{ $fee->workflowStep?->workflow?->name }} · {{ $fee->workflowStep?->title }} · {{ $fee->category?->name ?? __('app.all') }}</p></div>
+                <div><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_amount', ['currency' => $account->default_currency]) }}</p><strong class="mt-1 block text-sm text-slate-950 lg:mt-0">{{ \App\Support\MoneyFormatter::format($fee->amount_cents, $account->default_currency) }}</strong></div>
+                <div data-festival-fee-due-days="{{ $fee->due_days_after_approval }}"><p class="text-xs font-semibold uppercase tracking-wide text-slate-500 lg:hidden">{{ __('app.festival_charge_due_days_after_approval') }}</p><strong class="mt-1 block text-sm text-slate-950 lg:mt-0">{{ $fee->due_days_after_approval ?? '—' }}</strong></div>
                 <x-festivals.settings-actions :active="$fee->is_active" :toggle-route="route('dashboard.accounts.festivals.charge-definitions.toggle', [$account, $edition, $fee])" :move-route="route('dashboard.accounts.festivals.charge-definitions.move', [$account, $edition, $fee])" :edit-route="route('dashboard.accounts.festivals.charge-definitions.edit', [$account, $edition, $fee])" :show-ordering="! $hasFilters" :can-move-up="$globalIndex > 1" :can-move-down="$globalIndex < $fees->total()" />
             </div>
         @empty

@@ -108,6 +108,23 @@ class FestivalSettingsManagementTest extends TestCase
         $this->assertSame('dlya-uchasnykiv', FestivalContentSection::query()->where('festival_edition_id', $edition->id)->firstOrFail()->key);
     }
 
+    public function test_fee_list_shows_days_after_approval(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        FestivalChargeDefinition::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'name' => 'Approval-relative fee',
+            'due_policy' => 'approval_relative',
+            'due_days_after_approval' => 30,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]))
+            ->assertOk()
+            ->assertSee(__('app.festival_charge_due_days_after_approval'))
+            ->assertSee('data-festival-fee-due-days="30"', false);
+    }
+
     public function test_registration_field_form_groups_and_explains_settings_without_legacy_stage(): void
     {
         [$account, $edition, $owner] = $this->festival();
