@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\PromoCodeDiscountType;
 use Database\Factories\FestivalTicketOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -14,8 +15,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_portal_user_id', 'purchaser_festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
-#[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_promo_code_id', 'festival_portal_user_id', 'purchaser_festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'subtotal_cents', 'discount_cents', 'promo_email_hash', 'promo_phone_hash', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
+#[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash'])]
 class FestivalTicketOrder extends Model
 {
     /** @use HasFactory<FestivalTicketOrderFactory> */
@@ -29,6 +30,10 @@ class FestivalTicketOrder extends Model
             'source' => FestivalTicketOrderSource::class,
             'status' => FestivalTicketOrderStatus::class,
             'amount_cents' => 'integer',
+            'promo_discount_value' => 'integer',
+            'subtotal_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'promo_discount_type' => PromoCodeDiscountType::class,
             'access_token_encrypted' => 'encrypted',
             'gateway_checkout_payload' => 'array',
             'last_callback_payload' => 'array',
@@ -50,6 +55,11 @@ class FestivalTicketOrder extends Model
     public function edition(): BelongsTo
     {
         return $this->belongsTo(FestivalEdition::class, 'festival_edition_id');
+    }
+
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(FestivalPromoCode::class, 'festival_promo_code_id');
     }
 
     public function festivalEdition(): BelongsTo

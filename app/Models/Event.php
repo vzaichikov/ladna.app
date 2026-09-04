@@ -92,6 +92,16 @@ class Event extends Model
         return $this->hasMany(EventOrder::class);
     }
 
+    public function promoCodes(): HasMany
+    {
+        return $this->hasMany(EventPromoCode::class);
+    }
+
+    public function eventPromoCodes(): HasMany
+    {
+        return $this->promoCodes();
+    }
+
     public function orderItems(): HasMany
     {
         return $this->hasMany(EventOrderItem::class);

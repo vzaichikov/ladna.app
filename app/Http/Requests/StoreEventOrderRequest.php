@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Closure;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -28,6 +29,7 @@ class StoreEventOrderRequest extends FormRequest
             'buyer_email' => mb_strtolower(trim((string) $this->input('buyer_email'))),
             'buyer_email_confirmation' => mb_strtolower(trim((string) $this->input('buyer_email_confirmation'))),
             'buyer_phone' => $phone === '' ? null : ($normalizedPhone ?? $phone),
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')) ?: null,
         ]);
     }
 
@@ -48,6 +50,7 @@ class StoreEventOrderRequest extends FormRequest
                 },
             ],
             'provider' => ['nullable', 'string', Rule::in(['monopay', 'liqpay', 'wayforpay'])],
+            'promo_code' => ['nullable', 'string', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
             'items' => ['required', 'array', 'min:1', 'max:25'],
             'items.*' => ['required', 'integer', 'min:0', 'max:100'],
             'accept_terms' => ['accepted'],
@@ -99,6 +102,7 @@ class StoreEventOrderRequest extends FormRequest
             'buyer_email_confirmation' => __('app.email'),
             'buyer_phone' => __('app.phone'),
             'provider' => __('app.payment_provider'),
+            'promo_code' => __('app.promo_code'),
             'items' => __('app.event_tickets'),
             'items.*' => __('app.event_ticket_quantity'),
             'accept_terms' => __('app.event_terms_agreement'),

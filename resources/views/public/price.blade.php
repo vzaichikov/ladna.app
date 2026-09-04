@@ -183,7 +183,7 @@
                                                     @endforeach
                                                 </div>
                                                 <div class="mt-5">
-                                                    <x-ui.button :href="route('public.class-pass-plans.buy', [$account->slug, $location->slug, $classPassPlan->slug])" class="w-full">
+                                                    <x-ui.button :href="route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $classPassPlan->slug])" class="w-full">
                                                         <x-ui.icon name="credit-card" class="h-4 w-4" />
                                                         {{ __('app.buy') }}
                                                     </x-ui.button>

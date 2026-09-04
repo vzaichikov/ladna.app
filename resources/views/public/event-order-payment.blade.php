@@ -20,6 +20,10 @@
                 <div class="shrink-0 rounded-xl bg-slate-50 px-4 py-3 text-left sm:text-right">
                     <span class="block text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('app.total') }}</span>
                     <span class="mt-1 block text-lg font-semibold text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</span>
+                    @if ((int) ($order->discount_cents ?? 0) > 0)
+                        <span class="mt-1 block text-xs text-slate-500">{{ __('app.subtotal') }}: {{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }}</span>
+                        <span class="mt-1 block text-xs font-semibold text-emerald-700">{{ $order->promo_code }}: −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</span>
+                    @endif
                 </div>
             </div>
 

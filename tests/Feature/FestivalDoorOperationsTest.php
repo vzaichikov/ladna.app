@@ -25,8 +25,10 @@ use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
 use App\Models\StudioCashEntry;
 use App\Models\User;
+use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentGatewayRegistry;
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -350,6 +352,8 @@ class FestivalDoorOperationsTest extends TestCase
             app(RecordFestivalCashEntry::class),
             $gateways,
             app(FiscalReceiptService::class),
+            app(FestivalPromoCodePricing::class),
+            app(PromotionCodeNormalizer::class),
         );
     }
 }

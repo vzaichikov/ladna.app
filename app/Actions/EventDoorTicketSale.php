@@ -31,16 +31,17 @@ class EventDoorTicketSale
         private readonly PaymentGatewayRegistry $gateways,
         private readonly TransactionalMailDispatcher $mailDispatcher,
         private readonly FiscalReceiptService $fiscalReceipts,
+        private readonly ?ResolveEventPromotion $promotions = null,
     ) {}
 
     /** @param array<string, mixed> $input */
     public function execute(Account $account, Event $event, ?User $actor, array $input, string $mode, string $locale): EventOrder
     {
-        $provider = $mode === self::ModeCash ? 'entrance_cash' : (string) ($input['provider'] ?? '');
-
-        if ($mode === self::ModeCard) {
-            $this->assertProvider($account, $provider);
+        if ($actor !== null || $mode !== self::ModeCard) {
+            unset($input['promo_code']);
         }
+
+        $provider = $mode === self::ModeCash ? 'entrance_cash' : (string) ($input['provider'] ?? '');
 
         $order = DB::transaction(function () use ($account, $event, $actor, $input, $mode, $locale, $provider): EventOrder {
             $event = Event::query()->whereBelongsTo($account)->whereKey($event->id)->lockForUpdate()->firstOrFail();
@@ -77,14 +78,35 @@ class EventDoorTicketSale
                 throw ValidationException::withMessages(['ticket_type_id' => __('app.event_not_enough_capacity')]);
             }
 
-            $amount = $ticketType->price_cents;
+            if (filled($input['promo_code'] ?? null) && blank($input['guest_email'] ?? null)) {
+                throw ValidationException::withMessages(['guest_email' => __('validation.required', ['attribute' => __('app.email')])]);
+            }
+
+            $promotion = ($this->promotions ?? app(ResolveEventPromotion::class))->execute(
+                $event,
+                [$ticketType->id => $ticketType->price_cents],
+                $input['promo_code'] ?? null,
+                $input['guest_email'] ?? null,
+                null,
+                lockForUpdate: true,
+            );
+            $amount = $promotion->pricing->totalCents;
+
+            if ($mode === self::ModeCard && $amount > 0) {
+                $this->assertProvider($account, $provider);
+            }
+
             $isImmediatelyPaid = $mode === self::ModeCash || $amount === 0;
+            $storedProvider = $mode === self::ModeCash
+                ? 'entrance_cash'
+                : ($amount > 0 ? $provider : null);
             $accessToken = Str::random(64);
             $order = EventOrder::query()->create([
                 'account_id' => $account->id,
                 'event_id' => $event->id,
+                'event_promo_code_id' => $promotion->promoCode?->id,
                 'source' => EventOrderSource::Entrance,
-                'provider' => $isImmediatelyPaid ? 'entrance_cash' : $provider,
+                'provider' => $storedProvider,
                 'order_id' => $reference,
                 'status' => $isImmediatelyPaid ? EventOrderStatus::Paid : EventOrderStatus::Pending,
                 'buyer_name' => trim((string) $input['guest_name']),
@@ -93,6 +115,14 @@ class EventDoorTicketSale
                 'locale' => in_array($locale, ['en', 'uk'], true) ? $locale : 'uk',
                 'amount_cents' => $amount,
                 'currency' => strtoupper($event->currency),
+                'promo_name' => $promotion->promoCode?->name,
+                'promo_code' => $promotion->promoCode?->code,
+                'promo_discount_type' => $promotion->promoCode?->discount_type,
+                'promo_discount_value' => $promotion->promoCode?->discount_value,
+                'subtotal_cents' => $promotion->pricing->subtotalCents,
+                'discount_cents' => $promotion->pricing->discountCents,
+                'promo_email_hash' => $promotion->emailHash,
+                'promo_phone_hash' => $promotion->phoneHash,
                 'access_token_encrypted' => $accessToken,
                 'access_token_hash' => hash('sha256', $accessToken),
                 'expires_at' => $isImmediatelyPaid ? null : now()->addMinutes(30),
@@ -108,9 +138,12 @@ class EventDoorTicketSale
                 'ticket_type_name' => $ticketType->name,
                 'ticket_type_description' => $ticketType->description,
                 'price_tier' => 'regular',
-                'unit_price_cents' => $amount,
+                'unit_price_cents' => $ticketType->price_cents,
                 'quantity' => 1,
-                'total_cents' => $amount,
+                'total_cents' => $promotion->pricing->subtotalCents,
+                'subtotal_cents' => $promotion->pricing->subtotalCents,
+                'discount_cents' => $promotion->pricing->discountCents,
+                'final_total_cents' => $promotion->pricing->totalCents,
             ]);
 
             if ($isImmediatelyPaid) {
@@ -171,7 +204,8 @@ class EventDoorTicketSale
         if ($order->source !== EventOrderSource::Entrance
             || $order->buyer_name !== trim((string) $input['guest_name'])
             || (int) $item?->event_ticket_type_id !== (int) $input['ticket_type_id']
-            || ! in_array($order->provider, [$provider, 'entrance_cash'], true)) {
+            || mb_strtoupper((string) $order->promo_code) !== mb_strtoupper(trim((string) ($input['promo_code'] ?? '')))
+            || ! in_array($order->provider, [$provider, 'entrance_cash', null], true)) {
             throw ValidationException::withMessages(['idempotency_key' => __('app.entrance_request_conflict')]);
         }
     }

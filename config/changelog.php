@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.164.0',
+                'date' => '2026-09-04',
+                'title' => 'Promotion codes for tickets and class passes',
+                'items' => ['Studio owners and authorized Event and Festival teams can now create fixed or percentage promotion codes for selected Event tickets, Festival admission types, and class-pass plans, with active dates and total or per-customer limits.', 'Public checkout recalculates eligible prices before payment, supports fully discounted ticket and class-pass issuance, and preserves the original subtotal, discount, final amount, and promotion snapshot in customer and finance history.', 'Event and Festival Monobank checkout now opens directly on iPhone instead of relying on an embedded payment frame that iOS may block.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.163.1',
                 'date' => '2026-09-01',
                 'title' => 'Reliable Monobank payment completion',
@@ -1451,6 +1458,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.164.0',
+                'date' => '2026-09-04',
+                'title' => 'Промокоди для квитків і абонементів',
+                'items' => ['Власники студій та уповноважені команди Подій і Фестивалів тепер можуть створювати промокоди з фіксованою або відсотковою знижкою для вибраних квитків на Події, типів фестивального входу й планів абонементів, із датами дії та загальними або персональними лімітами.', 'Публічний checkout перераховує вартість доступних позицій до оплати, підтримує безкоштовну видачу повністю знижених квитків і абонементів та зберігає початкову суму, знижку, фінальну суму й знімок промокоду в історії клієнта та фінансів.', 'Checkout Monobank для Подій і Фестивалів тепер відкривається на iPhone напряму, а не покладається на вбудований платіжний фрейм, який iOS може блокувати.'],
+                'meta' => 'Очікує на коміт релізу.',
+            ],
             [
                 'version' => '0.163.1',
                 'date' => '2026-09-01',

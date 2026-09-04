@@ -28,23 +28,28 @@ class CustomerPurchaseFlowTest extends TestCase
     public function test_guest_returns_to_checkout_after_login_and_profile_completion(): void
     {
         [$account, $location, $plan] = $this->purchaseContext();
-        $buyUrl = route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]);
+        $checkoutUrl = route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plan->slug]);
 
-        $this->get($buyUrl)
-            ->assertRedirect(route('customer.studio.login', $account->slug))
-            ->assertSessionHas('url.intended', $buyUrl);
+        $this->get($checkoutUrl)
+            ->assertOk()
+            ->assertSee(route('customer.email.login', $account->slug), false)
+            ->assertSessionHas('url.intended', $checkoutUrl);
 
         $this->post(route('customer.email.login', $account->slug), [
             'customer_auth_method' => 'email',
             'email' => 'checkout@example.com',
             'password' => 'secret-password',
-        ])->assertRedirect(route('customer.profile.complete', $account->slug));
+        ])->assertRedirect($checkoutUrl);
+
+        $this->get($checkoutUrl)
+            ->assertOk()
+            ->assertSee(route('customer.profile.update', $account->slug), false);
 
         $this->put(route('customer.profile.update', $account->slug), [
             'name' => 'Checkout Client',
             'phone' => '+380501112244',
             'email' => 'checkout@example.com',
-        ])->assertRedirect($buyUrl);
+        ])->assertRedirect($checkoutUrl);
     }
 
     public function test_checkout_page_shows_configured_payment_buttons(): void
@@ -63,7 +68,7 @@ class CustomerPurchaseFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->get(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->get(route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plan->slug]))
             ->assertOk()
             ->assertSee($plan->name)
             ->assertSee('Pay by card')
@@ -86,12 +91,12 @@ class CustomerPurchaseFlowTest extends TestCase
             ->assertSee('value="monopay"', false)
             ->assertSee('name="studio_rules_accepted"', false)
             ->assertSee(route('public.studio-rules', $account->slug), false)
-            ->assertSee(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), false)
+            ->assertSee(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), false)
             ->assertSee(__('app.validity_days_after_first_class'))
             ->assertSee(__('app.total_validity_days'));
 
         $this->withSession(['locale' => 'uk'])
-            ->get(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->get(route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plan->slug]))
             ->assertOk()
             ->assertSee('Сплатити карткою');
     }
@@ -105,17 +110,17 @@ class CustomerPurchaseFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->from(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
-            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+            ->from(route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plan->slug]))
+            ->post(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), [
                 'provider' => IntegrationProvider::Liqpay->value,
             ])
-            ->assertRedirect(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plan->slug]))
+            ->assertRedirect(route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plan->slug]))
             ->assertSessionHasErrors('studio_rules_accepted');
 
         $this->assertSame(0, $customer->purchases()->count());
     }
 
-    public function test_legacy_checkout_rejects_an_ineligible_trial_before_creating_payment(): void
+    public function test_checkout_rejects_an_ineligible_trial_before_creating_payment(): void
     {
         [$account, $location, $plan, $customer] = $this->purchaseContext();
         $plan->update(['is_trial' => true]);
@@ -140,7 +145,7 @@ class CustomerPurchaseFlowTest extends TestCase
         Http::preventStrayRequests();
 
         $this->actingAs($customer, 'customer')
-            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+            ->post(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), [
                 'studio_rules_accepted' => '1',
                 'provider' => IntegrationProvider::Monopay->value,
             ])
@@ -159,7 +164,7 @@ class CustomerPurchaseFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+            ->post(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), [
                 'studio_rules_accepted' => '1',
                 'provider' => IntegrationProvider::Liqpay->value,
             ])
@@ -200,7 +205,7 @@ class CustomerPurchaseFlowTest extends TestCase
         ]);
 
         $this->actingAs($customer, 'customer')
-            ->post(route('public.class-pass-plans.purchase', [$account->slug, $location->slug, $plan->slug]), [
+            ->post(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), [
                 'studio_rules_accepted' => '1',
                 'provider' => IntegrationProvider::Monopay->value,
             ])

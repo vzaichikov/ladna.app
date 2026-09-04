@@ -93,6 +93,11 @@ class ClassPassPlan extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function studioPromoCodes(): BelongsToMany
+    {
+        return $this->belongsToMany(StudioPromoCode::class)->withTimestamps();
+    }
+
     public function isAvailableFor(ScheduledClass $scheduledClass, bool $requireActivePlan = true, bool $includeTimeWindow = true): bool
     {
         if (! $this->matchesScheduledClass($scheduledClass, $requireActivePlan)) {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -25,8 +26,9 @@ class StorePublicEntranceOrderRequest extends FormRequest
         return [
             'ticket_type_id' => ['required', 'integer', 'min:1'],
             'guest_name' => ['required', 'string', 'max:160'],
-            'guest_email' => ['nullable', 'email:rfc', 'max:255'],
-            'provider' => ['required', 'string', 'max:40'],
+            'guest_email' => ['nullable', 'required_with:promo_code', 'email:rfc', 'max:255'],
+            'provider' => ['nullable', 'string', 'max:40'],
+            'promo_code' => ['nullable', 'string', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
             'idempotency_key' => ['required', 'uuid'],
             'terms_accepted' => ['accepted'],
         ];
@@ -46,6 +48,7 @@ class StorePublicEntranceOrderRequest extends FormRequest
             'guest_name' => preg_replace('/\s+/u', ' ', trim($this->string('guest_name')->toString())),
             'guest_email' => $email === '' ? null : mb_strtolower($email),
             'provider' => trim($this->string('provider')->toString()),
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')) ?: null,
         ]);
     }
 }

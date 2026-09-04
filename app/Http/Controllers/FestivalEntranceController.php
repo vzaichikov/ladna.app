@@ -217,7 +217,7 @@ class FestivalEntranceController extends Controller
 
         if ($order->status === FestivalTicketOrderStatus::Pending && blank($order->gateway_checkout_payload)) {
             try {
-                $payments->startOrder($order);
+                $payments->startOrder($order, $request->userAgent());
             } catch (Throwable $exception) {
                 report($exception);
 

@@ -19,6 +19,7 @@ use App\Models\EventOrder;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalTicketOrder;
+use App\Models\FestivalTicketOrderItem;
 use App\Models\FiscalReceipt;
 use App\Models\IntegrationSetting;
 use App\Models\SmsTopUpPayment;
@@ -454,16 +455,63 @@ class FiscalReceiptService
     private function festivalTicketGoods(FestivalTicketOrder $order): array
     {
         $order->loadMissing('items');
+        $finalTotal = (int) $order->items->sum(fn ($item): int => (int) ($item->final_total_cents ?? $item->total_cents));
+        if ($finalTotal !== $order->amount_cents) {
+            throw new LogicException('Festival ticket item totals do not match the order amount.');
+        }
 
-        return $order->items->map(fn ($item): array => [
+        return $order->items
+            ->flatMap(function ($item) use ($order): array {
+                $quantity = (int) $item->quantity;
+                $lineTotal = (int) ($item->final_total_cents ?? $item->total_cents);
+                if ($quantity < 1 || $lineTotal === 0) {
+                    return [];
+                }
+
+                $basePrice = intdiv($lineTotal, $quantity);
+                $higherPriceQuantity = $lineTotal % $quantity;
+                $basePriceQuantity = $quantity - $higherPriceQuantity;
+                $groups = [];
+
+                if ($higherPriceQuantity > 0) {
+                    $groups[] = $this->festivalTicketGood(
+                        $order,
+                        $item,
+                        $basePrice + 1,
+                        $higherPriceQuantity,
+                        $basePriceQuantity > 0 ? 'a' : null,
+                    );
+                }
+                if ($basePriceQuantity > 0 && $basePrice > 0) {
+                    $groups[] = $this->festivalTicketGood(
+                        $order,
+                        $item,
+                        $basePrice,
+                        $basePriceQuantity,
+                        $higherPriceQuantity > 0 ? 'b' : null,
+                    );
+                }
+
+                return $groups;
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{good: array{code: string, name: string, price: int}, quantity: int, is_return: false}
+     */
+    private function festivalTicketGood(FestivalTicketOrder $order, FestivalTicketOrderItem $item, int $priceCents, int $quantity, ?string $suffix): array
+    {
+        return [
             'good' => [
-                'code' => $order->order_id.'-'.$item->id,
+                'code' => $order->order_id.'-'.$item->id.($suffix ? '-'.$suffix : ''),
                 'name' => Str::limit($item->admission_name, 128, ''),
-                'price' => $item->unit_price_cents,
+                'price' => $priceCents,
             ],
-            'quantity' => $item->quantity * 1000,
+            'quantity' => $quantity * 1000,
             'is_return' => false,
-        ])->values()->all();
+        ];
     }
 
     /**

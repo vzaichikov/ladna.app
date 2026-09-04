@@ -296,6 +296,55 @@ class EventCheckoutDeliveryTest extends TestCase
         $this->get($paymentUrl)->assertRedirect($returnUrl);
     }
 
+    public function test_events_monopay_v2_sends_iphone_checkout_directly_to_monopay(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'event-mono-iphone',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-iphone',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+            ->post(route('public.events.checkout', [$account->slug, $event->slug]), $this->paidEventPayload($ticketType))
+            ->assertRedirect('https://pay.monobank.ua/invoice/event-mono-iphone');
+
+        $order = EventOrder::query()->whereBelongsTo($account)->sole();
+        $this->assertSame('redirect', data_get($order->gateway_checkout_payload, '_launcher.type'));
+        $this->assertNull(data_get($order->gateway_checkout_payload, 'request.displayType'));
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && ! array_key_exists('displayType', $request->data()));
+    }
+
+    public function test_existing_event_iframe_invoice_redirects_when_opened_on_an_iphone(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'event-mono-existing-iframe',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-existing-iframe',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->post(
+            route('public.events.checkout', [$account->slug, $event->slug]),
+            $this->paidEventPayload($ticketType),
+        );
+        $order = EventOrder::query()->whereBelongsTo($account)->sole();
+        $this->assertSame('iframe', data_get($order->gateway_checkout_payload, '_launcher.type'));
+
+        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+            ->get(route('public.event-orders.payment', [$account->slug, $order->access_token_encrypted]))
+            ->assertRedirect('https://pay.monobank.ua/invoice/event-mono-existing-iframe');
+    }
+
     public function test_events_monopay_v2_rejects_an_untrusted_iframe_checkout_url(): void
     {
         app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
@@ -663,6 +712,11 @@ class EventCheckoutDeliveryTest extends TestCase
                 'client_secret' => 'event-google-secret',
             ],
         ]);
+    }
+
+    private function iphoneUserAgent(): string
+    {
+        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1';
     }
 
     /**

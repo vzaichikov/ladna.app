@@ -9,7 +9,6 @@ use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
-use InvalidArgumentException;
 
 class CompleteFreeCustomerPurchase
 {
@@ -23,17 +22,15 @@ class CompleteFreeCustomerPurchase
         Customer $customer,
         ClassPassPlan $classPassPlan,
         Location $location,
+        ?string $promoCode = null,
     ): CustomerPurchase {
-        if ($classPassPlan->price_cents !== 0) {
-            throw new InvalidArgumentException('Only zero-price class passes can use free checkout.');
-        }
-
         $purchase = $this->createCustomerPurchase->execute(
             $account,
             $customer,
             $classPassPlan,
             CustomerPurchase::ProviderFree,
             $location,
+            $promoCode,
         );
 
         return $this->completeCustomerPurchase->execute($purchase, new PaymentCallbackResult(

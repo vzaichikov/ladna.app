@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['account_id', 'event_id', 'event_order_id', 'event_ticket_type_id', 'ticket_type_name', 'ticket_type_description', 'price_tier', 'unit_price_cents', 'quantity', 'total_cents'])]
+#[Fillable(['account_id', 'event_id', 'event_order_id', 'event_ticket_type_id', 'ticket_type_name', 'ticket_type_description', 'price_tier', 'unit_price_cents', 'quantity', 'total_cents', 'subtotal_cents', 'discount_cents', 'final_total_cents'])]
 class EventOrderItem extends Model
 {
     /** @use HasFactory<EventOrderItemFactory> */
@@ -20,6 +20,9 @@ class EventOrderItem extends Model
             'unit_price_cents' => 'integer',
             'quantity' => 'integer',
             'total_cents' => 'integer',
+            'subtotal_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'final_total_cents' => 'integer',
         ];
     }
 

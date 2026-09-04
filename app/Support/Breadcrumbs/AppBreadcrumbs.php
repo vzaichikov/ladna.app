@@ -203,6 +203,28 @@ final class AppBreadcrumbs
                     'item' => $this->modelLabel($this->modelParameter($request, 'eventTicketType'), __('app.event_ticket_type')),
                 ])),
             ],
+            'dashboard.accounts.events.promo-codes.index' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.promo_codes')),
+            ],
+            'dashboard.accounts.events.promo-codes.create' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.promo_codes'), route('dashboard.accounts.events.promo-codes.index', [$account, $event])),
+                $this->item(__('app.promo_code_add')),
+            ],
+            'dashboard.accounts.events.promo-codes.edit' => [
+                ...$base,
+                $events,
+                $eventPage,
+                $this->item(__('app.promo_codes'), route('dashboard.accounts.events.promo-codes.index', [$account, $event])),
+                $this->item(__('app.breadcrumb_edit_item', [
+                    'item' => $this->modelLabel($this->modelParameter($request, 'eventPromoCode'), __('app.promo_code')),
+                ])),
+            ],
             'dashboard.accounts.events.tickets.index' => [
                 ...$base,
                 $events,
@@ -414,6 +436,24 @@ final class AppBreadcrumbs
             $admissionType = $this->modelParameter($request, 'festivalAdmissionType');
 
             return [...$base, $tickets, $this->item(__('app.breadcrumb_edit_item', ['item' => $this->modelLabel($admissionType, __('app.festival_ticket_type'))]))];
+        }
+
+        if (Str::startsWith($routeName, 'dashboard.accounts.festivals.promo-codes.')) {
+            $promoCodes = $this->item(__('app.promo_codes'), route('dashboard.accounts.festivals.promo-codes.index', [$account, $edition]));
+
+            if ($routeName === 'dashboard.accounts.festivals.promo-codes.index') {
+                return [...$base, $this->item(__('app.promo_codes'))];
+            }
+
+            if ($routeName === 'dashboard.accounts.festivals.promo-codes.create') {
+                return [...$base, $promoCodes, $this->item(__('app.promo_code_add'))];
+            }
+
+            $promoCode = $this->modelParameter($request, 'festivalPromoCode');
+
+            return [...$base, $promoCodes, $this->item(__('app.breadcrumb_edit_item', [
+                'item' => $this->modelLabel($promoCode, __('app.promo_code')),
+            ]))];
         }
 
         if ($routeName === 'dashboard.accounts.festivals.applications.media-report') {
@@ -1041,6 +1081,7 @@ final class AppBreadcrumbs
         return [
             'activity-directions' => ['label' => 'app.activity_directions', 'parameter' => 'activity_direction'],
             'class-pass-plans' => ['label' => 'app.class_pass_plans', 'parameter' => 'class_pass_plan'],
+            'promo-codes' => ['label' => 'app.promo_codes', 'parameter' => 'studioPromoCode'],
             'class-pass-segments' => ['label' => 'app.class_pass_segments', 'parameter' => 'class_pass_segment'],
             'class-types' => ['label' => 'app.class_types', 'parameter' => 'class_type'],
             'group-classes' => ['label' => 'app.group_classes', 'parameter' => 'class_type'],

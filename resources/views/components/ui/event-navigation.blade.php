@@ -17,6 +17,7 @@
         $items = [
             ['key' => 'details', 'label' => __('app.event_nav_details'), 'href' => route('dashboard.accounts.events.edit', [$account, $event])],
             ['key' => 'ticket-types', 'label' => __('app.event_ticket_types'), 'href' => route('dashboard.accounts.events.ticket-types.index', [$account, $event])],
+            ['key' => 'promo-codes', 'label' => __('app.promo_codes'), 'href' => route('dashboard.accounts.events.promo-codes.index', [$account, $event])],
             ['key' => 'tickets', 'label' => __('app.event_issued_tickets'), 'href' => route('dashboard.accounts.events.tickets.index', [$account, $event])],
             ['key' => 'orders', 'label' => __('app.event_orders'), 'href' => route('dashboard.accounts.events.orders.index', [$account, $event])],
         ];

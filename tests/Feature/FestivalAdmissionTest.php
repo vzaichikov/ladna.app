@@ -21,6 +21,7 @@ use App\Models\IntegrationSetting;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -474,6 +475,7 @@ class FestivalAdmissionTest extends TestCase
             $gateways,
             app(ResolveFestivalGuest::class),
             app(FestivalTelegramIdentityLinker::class),
+            app(FestivalPromoCodePricing::class),
         );
     }
 

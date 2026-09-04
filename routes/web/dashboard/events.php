@@ -3,6 +3,7 @@
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\EventEntranceController;
 use App\Http\Controllers\EventOrderController;
+use App\Http\Controllers\EventPromoCodeController;
 use App\Http\Controllers\EventScannerController;
 use App\Http\Controllers\EventTicketController;
 use App\Http\Controllers\EventTicketIssuanceController;
@@ -25,6 +26,12 @@ Route::post('accounts/{account}/events/{event:id}/ticket-types', [EventTicketTyp
 Route::get('accounts/{account}/events/{event:id}/ticket-types/{eventTicketType}/edit', [EventTicketTypeController::class, 'edit'])->scopeBindings()->name('accounts.events.ticket-types.edit');
 Route::put('accounts/{account}/events/{event:id}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'update'])->scopeBindings()->name('accounts.events.ticket-types.update');
 Route::delete('accounts/{account}/events/{event:id}/ticket-types/{eventTicketType}', [EventTicketTypeController::class, 'destroy'])->scopeBindings()->name('accounts.events.ticket-types.destroy');
+Route::get('accounts/{account}/events/{event:id}/promo-codes', [EventPromoCodeController::class, 'index'])->scopeBindings()->name('accounts.events.promo-codes.index');
+Route::get('accounts/{account}/events/{event:id}/promo-codes/create', [EventPromoCodeController::class, 'create'])->scopeBindings()->name('accounts.events.promo-codes.create');
+Route::post('accounts/{account}/events/{event:id}/promo-codes', [EventPromoCodeController::class, 'store'])->scopeBindings()->name('accounts.events.promo-codes.store');
+Route::get('accounts/{account}/events/{event:id}/promo-codes/{eventPromoCode}/edit', [EventPromoCodeController::class, 'edit'])->scopeBindings()->name('accounts.events.promo-codes.edit');
+Route::put('accounts/{account}/events/{event:id}/promo-codes/{eventPromoCode}', [EventPromoCodeController::class, 'update'])->scopeBindings()->name('accounts.events.promo-codes.update');
+Route::delete('accounts/{account}/events/{event:id}/promo-codes/{eventPromoCode}', [EventPromoCodeController::class, 'destroy'])->scopeBindings()->name('accounts.events.promo-codes.destroy');
 Route::get('accounts/{account}/events/{event:id}/tickets', [EventTicketController::class, 'index'])->scopeBindings()->name('accounts.events.tickets.index');
 Route::get('accounts/{account}/events/{event:id}/tickets/issue', [EventTicketIssuanceController::class, 'create'])->scopeBindings()->name('accounts.events.tickets.issue.create');
 Route::post('accounts/{account}/events/{event:id}/tickets/issue', [EventTicketIssuanceController::class, 'store'])->scopeBindings()->name('accounts.events.tickets.issue.store');

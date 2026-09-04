@@ -30,6 +30,7 @@ use App\Models\IntegrationSetting;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\InvalidPaymentCallbackException;
 use App\Support\Payments\MonopayCheckoutSettings;
+use App\Support\Payments\MonopayIframeCompatibility;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use App\Support\Payments\PaymentCheckout;
@@ -54,6 +55,7 @@ class FestivalPaymentService
         private readonly SubmitFestivalEntryStep $submitEntryStep,
         private readonly FestivalActivityRecorder $activity,
         private readonly MonopayCheckoutSettings $monopayCheckoutSettings,
+        private readonly MonopayIframeCompatibility $monopayIframeCompatibility,
         private readonly TicketPaymentTiming $ticketPaymentTiming,
     ) {}
 
@@ -237,7 +239,7 @@ class FestivalPaymentService
         }, 3);
     }
 
-    public function startOrder(FestivalTicketOrder $order): PaymentCheckout
+    public function startOrder(FestivalTicketOrder $order, ?string $userAgent = null): PaymentCheckout
     {
         $order->loadMissing(['account', 'edition']);
 
@@ -262,7 +264,8 @@ class FestivalPaymentService
                 callbackUrl: route('api.v1.festival-payments.callbacks', $gateway->provider()->value),
                 expiresAt: $timing['payment_expires_at'],
                 preferIframe: $gateway->provider() === IntegrationProvider::Monopay
-                    && $this->monopayCheckoutSettings->ticketIframeV2Enabled(),
+                    && $this->monopayCheckoutSettings->ticketIframeV2Enabled()
+                    && $this->monopayIframeCompatibility->allowsTicketIframe($userAgent),
                 validitySeconds: $timing['validity_seconds'],
             ), $setting);
             $payload = [

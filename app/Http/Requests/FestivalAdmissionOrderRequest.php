@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Support\PhoneNumberNormalizer;
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Closure;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -45,6 +46,7 @@ class FestivalAdmissionOrderRequest extends FormRequest
             'buyer_email' => mb_strtolower(trim((string) $this->input('buyer_email'))),
             'buyer_email_confirmation' => mb_strtolower(trim((string) $this->input('buyer_email_confirmation'))),
             'buyer_phone' => $phone === '' ? null : ($normalizedPhone ?? $phone),
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')) ?: null,
             'items' => $items,
         ]);
     }
@@ -66,6 +68,7 @@ class FestivalAdmissionOrderRequest extends FormRequest
                 },
             ],
             'provider' => ['nullable', 'string', Rule::in(['monopay', 'liqpay', 'wayforpay'])],
+            'promo_code' => ['nullable', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
             'items' => ['required', 'array', 'min:1', 'max:25'],
             'items.*.admission_type_id' => ['required', 'integer', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
@@ -102,6 +105,7 @@ class FestivalAdmissionOrderRequest extends FormRequest
             'buyer_email_confirmation' => __('app.email'),
             'buyer_phone' => __('app.phone'),
             'provider' => __('app.payment_provider'),
+            'promo_code' => __('app.promo_code'),
             'items' => __('app.festival_tickets'),
             'items.*.quantity' => __('app.event_ticket_quantity'),
             'terms' => __('app.festival_admission_terms'),

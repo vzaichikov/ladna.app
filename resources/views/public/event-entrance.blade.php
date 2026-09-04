@@ -15,4 +15,5 @@
     'ticketTypes' => $entranceTicketTypes,
     'paymentProviders' => $entranceProviders,
     'storeUrl' => route('public.events.entrance.store', [$account->slug, $event->slug]),
+    'promoQuoteUrl' => route('public.events.entrance.promo-codes.quote', [$account->slug, $event->slug]),
 ])

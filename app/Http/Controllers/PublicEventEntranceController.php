@@ -77,7 +77,7 @@ class PublicEventEntranceController extends Controller
             ->first(fn ($setting): bool => $setting->provider->value === $order->provider);
         abort_unless($setting, 422, __('app.payment_provider_unavailable'));
         try {
-            $checkout = $startPayment->execute($order, $setting);
+            $checkout = $startPayment->execute($order, $setting, $request->userAgent());
         } catch (Throwable $exception) {
             report($exception);
 

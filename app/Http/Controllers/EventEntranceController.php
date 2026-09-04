@@ -117,7 +117,7 @@ class EventEntranceController extends Controller
             }
 
             try {
-                $startPayment->execute($order, $setting);
+                $startPayment->execute($order, $setting, $request->userAgent());
             } catch (Throwable $exception) {
                 report($exception);
 

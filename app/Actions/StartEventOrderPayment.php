@@ -7,6 +7,7 @@ use App\Enums\IntegrationProvider;
 use App\Models\EventOrder;
 use App\Models\IntegrationSetting;
 use App\Support\Payments\MonopayCheckoutSettings;
+use App\Support\Payments\MonopayIframeCompatibility;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentCheckoutRequest;
 use App\Support\Payments\PaymentGatewayException;
@@ -19,10 +20,11 @@ class StartEventOrderPayment
     public function __construct(
         private readonly PaymentGatewayRegistry $gateways,
         private readonly MonopayCheckoutSettings $monopayCheckoutSettings,
+        private readonly MonopayIframeCompatibility $monopayIframeCompatibility,
         private readonly TicketPaymentTiming $timing,
     ) {}
 
-    public function execute(EventOrder $order, IntegrationSetting $setting): PaymentCheckout
+    public function execute(EventOrder $order, IntegrationSetting $setting, ?string $userAgent = null): PaymentCheckout
     {
         $order->loadMissing(['account', 'event']);
 
@@ -50,7 +52,8 @@ class StartEventOrderPayment
                 callbackUrl: route('api.v1.event-payments.callbacks', $gateway->provider()->value),
                 expiresAt: $timing['payment_expires_at'],
                 preferIframe: $gateway->provider() === IntegrationProvider::Monopay
-                    && $this->monopayCheckoutSettings->ticketIframeV2Enabled(),
+                    && $this->monopayCheckoutSettings->ticketIframeV2Enabled()
+                    && $this->monopayIframeCompatibility->allowsTicketIframe($userAgent),
                 validitySeconds: $timing['validity_seconds'],
             ), $setting);
             $payload = [

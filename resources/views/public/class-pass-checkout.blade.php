@@ -150,27 +150,56 @@
                                     {{ __('app.class_pass_checkout_free_action') }}
                                 </x-ui.button>
                             </form>
-                        @elseif ($paymentSettings->isEmpty())
-                            <div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                                {{ __('app.no_payment_methods_available') }}
-                            </div>
                         @else
-                            <form method="POST" action="{{ route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $classPassPlan->slug]) }}" class="mt-5 space-y-4">
+                            <form
+                                method="POST"
+                                action="{{ route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $classPassPlan->slug]) }}"
+                                class="mt-5 space-y-4"
+                                data-promo-quote-url="{{ $promoQuoteUrl }}"
+                            >
                                 @csrf
+                                <x-ui.promo-code-field id="class-pass-promo-code" />
+                                <dl class="hidden grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm" data-promo-summary>
+                                    <div data-promo-subtotal-row>
+                                        <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                                        <dd class="mt-1 font-semibold tabular-nums" data-promo-subtotal>—</dd>
+                                    </div>
+                                    <div class="text-right" data-promo-discount-row>
+                                        <dt class="text-slate-500">{{ __('app.promo_code_discount') }}</dt>
+                                        <dd class="mt-1 font-semibold tabular-nums text-emerald-700" data-promo-discount>—</dd>
+                                    </div>
+                                    <div class="col-span-2 border-t border-stone-200 pt-3 text-right">
+                                        <dt class="text-slate-500">{{ __('app.total') }}</dt>
+                                        <dd class="mt-1 text-lg font-semibold tabular-nums" data-promo-total>—</dd>
+                                    </div>
+                                </dl>
                                 @include('public._studio-rules-agreement')
-                                <div class="space-y-3">
-                                    @foreach ($paymentSettings as $setting)
-                                        @php
-                                            $provider = $setting->provider->value;
-                                            $label = config('integrations.providers.'.$provider.'.label', $provider);
-                                        @endphp
-                                        <x-ui.button type="submit" name="provider" value="{{ $provider }}" variant="success" size="lg" class="w-full justify-start px-3">
-                                            <x-ui.payment-brand :provider="$provider" :label="$label" presentation="card" class="w-full" />
-                                        </x-ui.button>
-                                    @endforeach
+                                <div class="hidden" data-promo-payment-free>
+                                    <x-ui.button type="submit" variant="success" size="lg" class="w-full justify-center">
+                                        {{ __('app.class_pass_checkout_free_action') }}
+                                    </x-ui.button>
+                                </div>
+                                <div data-promo-payment-paid>
+                                    @if ($paymentSettings->isEmpty())
+                                        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                                            {{ __('app.no_payment_methods_available') }}
+                                        </div>
+                                    @else
+                                        <div class="space-y-3">
+                                            @foreach ($paymentSettings as $setting)
+                                                @php
+                                                    $provider = $setting->provider->value;
+                                                    $label = config('integrations.providers.'.$provider.'.label', $provider);
+                                                @endphp
+                                                <x-ui.button type="submit" name="provider" value="{{ $provider }}" variant="success" size="lg" class="w-full justify-start px-3">
+                                                    <x-ui.payment-brand :provider="$provider" :label="$label" presentation="card" class="w-full" />
+                                                </x-ui.button>
+                                            @endforeach
+                                        </div>
+                                        <x-ui.accepted-card-brands class="mt-5" />
+                                    @endif
                                 </div>
                             </form>
-                            <x-ui.accepted-card-brands class="mt-5" />
                         @endif
                     @elseif ($stage === 'confirmation' && $purchase)
                         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_checkout_confirmation_title') }}</h2>
@@ -183,6 +212,23 @@
                                 <p class="mt-2 text-sm leading-6">{{ __('app.class_pass_checkout_pending_help') }}</p>
                             @endif
                         </div>
+
+                        @if ((int) ($purchase->discount_cents ?? 0) > 0)
+                            <dl class="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm">
+                                <div>
+                                    <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                                    <dd class="mt-1 font-semibold tabular-nums">{{ $formatMoney($purchase->subtotal_cents, $purchase->currency) }}</dd>
+                                </div>
+                                <div class="text-right">
+                                    <dt class="text-slate-500">{{ __('app.promo_code_discount') }} · {{ $purchase->promo_code }}</dt>
+                                    <dd class="mt-1 font-semibold tabular-nums text-emerald-700">−{{ $formatMoney($purchase->discount_cents, $purchase->currency) }}</dd>
+                                </div>
+                                <div class="col-span-2 border-t border-stone-200 pt-3 text-right">
+                                    <dt class="text-slate-500">{{ __('app.total') }}</dt>
+                                    <dd class="mt-1 text-lg font-semibold tabular-nums">{{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</dd>
+                                </div>
+                            </dl>
+                        @endif
 
                         @if (! $purchaseStatus->isFinal())
                             <div

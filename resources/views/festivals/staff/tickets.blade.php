@@ -7,6 +7,7 @@
     <x-ui.page-header :title="__('app.festival_tickets_title')" :copy="__('app.festival_tickets_copy')">
         <x-slot:actions>
             @if ($workspacePermissions['finance'])
+                <x-ui.button :href="route('dashboard.accounts.festivals.promo-codes.index', [$account, $edition])" variant="secondary"><x-ui.icon name="ticket" class="h-4 w-4" /> {{ __('app.promo_codes') }}</x-ui.button>
                 <x-ui.button :href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition])"><x-ui.icon name="ticket" class="h-4 w-4" /> {{ __('app.festival_issue_tickets') }}</x-ui.button>
             @endif
             @if ($workspacePermissions['ticket_check_in'] || (auth()->user()?->can('doorStaff', $account) ?? false))
@@ -95,7 +96,13 @@
                         @foreach ($refundRequiredOrders as $refundOrder)
                             <form method="POST" action="{{ route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $refundOrder]) }}" class="grid gap-3 rounded-xl bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)_auto] md:items-end">
                                 @csrf
-                                <div><strong class="font-mono text-sm">{{ $refundOrder->order_id }}</strong><p class="mt-1 text-sm text-slate-600">{{ $refundOrder->buyer_name }} · {{ \App\Support\MoneyFormatter::format($refundOrder->amount_cents, $refundOrder->currency) }}</p></div>
+                                <div>
+                                    <strong class="font-mono text-sm">{{ $refundOrder->order_id }}</strong>
+                                    <p class="mt-1 text-sm text-slate-600">{{ $refundOrder->buyer_name }} · {{ \App\Support\MoneyFormatter::format($refundOrder->amount_cents, $refundOrder->currency) }}</p>
+                                    @if ($refundOrder->discount_cents > 0)
+                                        <p class="mt-1 text-xs font-semibold text-emerald-700">{{ __('app.subtotal') }} {{ \App\Support\MoneyFormatter::format($refundOrder->subtotal_cents, $refundOrder->currency) }} · {{ $refundOrder->promo_code }} −{{ \App\Support\MoneyFormatter::format($refundOrder->discount_cents, $refundOrder->currency) }}</p>
+                                    @endif
+                                </div>
                                 <label><span class="crm-label">{{ __('app.refund_reason') }}</span><input name="reason" required maxlength="2000" class="crm-field"></label>
                                 <x-ui.button type="submit" variant="danger">{{ __('app.festival_record_refund') }}</x-ui.button>
                             </form>
@@ -120,7 +127,7 @@
                     <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm">
                         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="font-mono text-base text-slate-950">{{ $ticket->code }}</strong><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_ticket_status_'.$ticket->status->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800' }}">{{ __('app.festival_ticket_source_'.$order->source->value) }}</span><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $ticket->is_checked_in ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-100 text-stone-700' }}">{{ $ticket->is_checked_in ? __('app.festival_checked_in') : __('app.festival_not_checked_in') }}</span></div><h3 class="mt-3 text-lg font-semibold text-slate-950">{{ $ticket->holder_name ?: $order->buyer_name }}</h3><p class="mt-1 break-words text-sm text-slate-600">{{ $order->buyer_name }} · {{ $order->buyer_email }}@if($order->buyer_phone) · {{ $order->buyer_phone }}@endif</p></div>
-                            <div class="text-left xl:text-right"><strong class="text-lg text-slate-950">{{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? __('app.festival_complimentary') : \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong><p class="mt-1 text-xs text-slate-500">{{ ($order->issued_at ?: $order->paid_at)?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</p></div>
+                            <div class="text-left xl:text-right"><strong class="text-lg text-slate-950">{{ $order->source === \App\Enums\FestivalTicketOrderSource::Manual ? __('app.festival_complimentary') : \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong>@if($order->discount_cents > 0)<p class="mt-1 text-xs font-semibold text-emerald-700">{{ $order->promo_code }} · −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</p>@endif<p class="mt-1 text-xs text-slate-500">{{ ($order->issued_at ?: $order->paid_at)?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</p></div>
                         </div>
                         <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_ticket_type') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $ticket->orderItem->admission_name }}</dd></div>
@@ -193,6 +200,7 @@
                             </div>
                             <div class="lg:text-right">
                                 <strong class="text-lg text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong>
+                                @if ($order->discount_cents > 0)<p class="mt-1 text-xs font-semibold text-emerald-700">{{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }} · {{ $order->promo_code }} −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</p>@endif
                                 <p class="mt-1 text-xs text-slate-500">{{ config('integrations.providers.'.$order->provider.'.label', $order->provider ?: '—') }}</p>
                             </div>
                         </div>

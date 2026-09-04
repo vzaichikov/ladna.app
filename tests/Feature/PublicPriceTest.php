@@ -215,7 +215,7 @@ class PublicPriceTest extends TestCase
 
         $this->get(route('public.price', [$account->slug, $location->slug]))
             ->assertOk()
-            ->assertSee(route('public.class-pass-plans.buy', [$account->slug, $location->slug, $plans['group']->slug]), false)
+            ->assertSee(route('public.class-pass-plans.checkout', [$account->slug, $location->slug, $plans['group']->slug]), false)
             ->assertDontSee(__('app.without_class_pass_segment'))
             ->assertDontSee(__('app.morning_format'))
             ->assertDontSee(__('app.full_day'))

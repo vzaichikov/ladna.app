@@ -15,6 +15,7 @@ use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\Event;
+use App\Models\EventPromoCode;
 use App\Models\EventTicketType;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
@@ -30,6 +31,7 @@ use App\Models\FestivalMedia;
 use App\Models\FestivalNomination;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalPromoCode;
 use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
@@ -43,6 +45,7 @@ use App\Models\Room;
 use App\Models\SalaryModel;
 use App\Models\ScheduleSeries;
 use App\Models\ServiceRoom;
+use App\Models\StudioPromoCode;
 use App\Models\SubscriptionPlan;
 use App\Models\Trainer;
 use App\Models\User;
@@ -75,7 +78,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(215, $classifiedRouteNames);
+        $this->assertCount(225, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -99,9 +102,13 @@ class MultiLocationPageSmokeTest extends TestCase
             }
 
             foreach ($this->parameterizedHtmlRoutes() as $routeName => $fixtureKey) {
-                $parameters = $routeName === 'dashboard.accounts.events.ticket-types.edit'
-                    ? [$account, $fixtures['event'], $fixtures['event_ticket_type']]
-                    : [$account, $fixtures[$fixtureKey]];
+                if ($routeName === 'dashboard.accounts.events.ticket-types.edit') {
+                    $parameters = [$account, $fixtures['event'], $fixtures['event_ticket_type']];
+                } elseif ($routeName === 'dashboard.accounts.events.promo-codes.edit') {
+                    $parameters = [$account, $fixtures['event'], $fixtures['event_promo_code']];
+                } else {
+                    $parameters = [$account, $fixtures[$fixtureKey]];
+                }
 
                 $this->assertPageRenders(
                     route($routeName, $parameters),
@@ -184,6 +191,13 @@ class MultiLocationPageSmokeTest extends TestCase
             ->create(['issued_location_id' => $location->id]);
         $event = Event::factory()->published()->for($account)->create();
         $eventTicketType = EventTicketType::factory()->for($account)->for($event)->create();
+        $eventPromoCode = EventPromoCode::factory()->for($account)->for($event)->create();
+        $eventPromoCode->ticketTypes()->attach($eventTicketType, [
+            'account_id' => $account->id,
+            'event_id' => $event->id,
+        ]);
+        $studioPromoCode = StudioPromoCode::factory()->for($account)->create();
+        $studioPromoCode->classPassPlans()->attach($classPassPlan);
         $festivalSeries = FestivalSeries::factory()->for($account)->create();
         $festivalPackage = FestivalTariffPackage::factory()->create([
             'subscription_plan_id' => $subscriptionPlan->id,
@@ -198,6 +212,11 @@ class MultiLocationPageSmokeTest extends TestCase
         $festivalEdition = FestivalEdition::factory()->for($festivalSeries)->create(['account_id' => $account->id]);
         $festivalStage = FestivalStage::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalAdmissionType = FestivalAdmissionType::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalPromoCode = FestivalPromoCode::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+        ]);
+        $festivalPromoCode->admissionTypes()->attach($festivalAdmissionType);
         $festivalDirection = FestivalDirection::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalWorkflow = FestivalWorkflow::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
         $festivalWorkflowStep = FestivalWorkflowStep::factory()->for($festivalWorkflow, 'workflow')->create(['account_id' => $account->id]);
@@ -280,6 +299,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'customer_class_pass' => $customerClassPass,
             'customer' => $customer,
             'event' => $event,
+            'event_promo_code' => $eventPromoCode,
             'event_ticket_type' => $eventTicketType,
             'event_festival_staff_membership' => $eventFestivalStaffMembership,
             'festival_edition' => $festivalEdition,
@@ -295,6 +315,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'festival_nomination' => $festivalNomination,
             'festival_participant' => $festivalParticipant,
             'festival_portal_user' => $festivalPortalUser,
+            'festival_promo_code' => $festivalPromoCode,
             'festival_requirement' => $festivalRequirement,
             'festival_series' => $festivalSeries,
             'festival_judge_assignment' => $festivalJudgeAssignment,
@@ -314,6 +335,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'salary_model' => $salaryModel,
             'schedule_series' => $scheduleSeries,
             'service_room' => $serviceRoom,
+            'studio_promo_code' => $studioPromoCode,
         ];
     }
 
@@ -421,6 +443,8 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.payroll.index',
             'dashboard.accounts.private-lessons.create',
             'dashboard.accounts.private-lessons.index',
+            'dashboard.accounts.promo-codes.create',
+            'dashboard.accounts.promo-codes.index',
             'dashboard.accounts.qr-links.show',
             'dashboard.accounts.reports.earnings',
             'dashboard.accounts.reports.financial',
@@ -483,6 +507,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.customers.edit' => 'customer',
             'dashboard.accounts.event-festival-staff.edit' => 'event_festival_staff_membership',
             'dashboard.accounts.events.edit' => 'event',
+            'dashboard.accounts.events.promo-codes.index' => 'event',
+            'dashboard.accounts.events.promo-codes.create' => 'event',
+            'dashboard.accounts.events.promo-codes.edit' => 'event_promo_code',
             'dashboard.accounts.events.ticket-types.index' => 'event',
             'dashboard.accounts.events.ticket-types.create' => 'event',
             'dashboard.accounts.events.ticket-types.edit' => 'event_ticket_type',
@@ -495,6 +522,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.internal-classes.edit' => 'internal_class_type',
             'dashboard.accounts.locations.edit' => 'location',
             'dashboard.accounts.private-lessons.edit' => 'private_lesson_class_type',
+            'dashboard.accounts.promo-codes.edit' => 'studio_promo_code',
             'dashboard.accounts.reports.trainers.salary' => 'trainer',
             'dashboard.accounts.room-rentals.edit' => 'room_rental_class_type',
             'dashboard.accounts.rooms.edit' => 'room',
@@ -539,6 +567,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.judging.results.show' => 'festival_category',
             'dashboard.accounts.festivals.judging.results.table' => 'festival_category',
             'dashboard.accounts.festivals.online-stream.edit' => 'festival_edition',
+            'dashboard.accounts.festivals.promo-codes.index' => 'festival_edition',
+            'dashboard.accounts.festivals.promo-codes.create' => 'festival_edition',
+            'dashboard.accounts.festivals.promo-codes.edit' => 'festival_promo_code',
             'dashboard.accounts.festivals.program' => 'festival_edition',
             'dashboard.accounts.festivals.performances' => 'festival_edition',
             'dashboard.accounts.festivals.performances.show' => 'festival_entry',
@@ -610,6 +641,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.events.entrance.poster',
             'dashboard.accounts.events.entrance.search',
             'dashboard.accounts.festivals.attendance.data',
+            'dashboard.accounts.festivals.applications.fully-confirm.preview',
             'dashboard.accounts.festivals.entrance.poster',
             'dashboard.accounts.festivals.entrance.search',
             'dashboard.accounts.festivals.judging.score-sheets.participants.photo',

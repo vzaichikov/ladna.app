@@ -70,7 +70,7 @@ class FestivalAdmissionController extends Controller
         }
 
         try {
-            $checkout = $payments->startOrder($order);
+            $checkout = $payments->startOrder($order, $request->userAgent());
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);

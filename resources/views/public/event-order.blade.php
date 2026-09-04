@@ -98,6 +98,23 @@
                 @endif
             </header>
 
+            @if ((int) ($order->discount_cents ?? 0) > 0)
+                <dl class="mt-6 grid grid-cols-2 gap-3 rounded-2xl border border-stone-200 bg-white p-5 text-sm shadow-crm sm:p-6">
+                    <div>
+                        <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                        <dd class="mt-1 font-semibold tabular-nums">{{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }}</dd>
+                    </div>
+                    <div class="text-right">
+                        <dt class="text-slate-500">{{ __('app.promo_code_discount') }} · {{ $order->promo_code }}</dt>
+                        <dd class="mt-1 font-semibold tabular-nums text-emerald-700">−{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</dd>
+                    </div>
+                    <div class="col-span-2 border-t border-stone-200 pt-3 text-right">
+                        <dt class="text-slate-500">{{ __('app.total') }}</dt>
+                        <dd class="mt-1 text-lg font-semibold tabular-nums">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</dd>
+                    </div>
+                </dl>
+            @endif
+
             @if ($ticketsReady)
                 <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

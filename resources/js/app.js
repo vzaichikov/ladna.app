@@ -9380,6 +9380,209 @@ function initFieldHelp(root = document) {
     });
 }
 
+function initPromoCodeCheckouts(root = document) {
+    root.querySelectorAll('form[data-promo-quote-url]').forEach((form) => {
+        if (form.dataset.promoCodeReady === 'true') {
+            return;
+        }
+
+        const container = form.querySelector('[data-promo-code]');
+        const input = container?.querySelector('[data-promo-code-input]');
+        const hiddenInput = container?.querySelector('[data-promo-code-hidden]');
+        const applyButton = container?.querySelector('[data-promo-code-apply]');
+        const removeButton = container?.querySelector('[data-promo-code-remove]');
+        const result = container?.querySelector('[data-promo-code-result]');
+        const error = container?.querySelector('[data-promo-code-error]');
+
+        if (!container || !input || !hiddenInput || !applyButton || !removeButton || !result || !error) {
+            return;
+        }
+
+        form.dataset.promoCodeReady = 'true';
+        const summary = form.querySelector('[data-promo-summary]');
+        const subtotalRows = [...form.querySelectorAll('[data-promo-subtotal-row]')];
+        const discountRows = [...form.querySelectorAll('[data-promo-discount-row]')];
+        const subtotalOutputs = [...form.querySelectorAll('[data-promo-subtotal]')];
+        const discountOutputs = [...form.querySelectorAll('[data-promo-discount]')];
+        const totalOutputs = [...form.querySelectorAll('[data-promo-total]')];
+        const freePayment = form.querySelector('[data-promo-payment-free]');
+        const paidPayment = form.querySelector('[data-promo-payment-paid]');
+        const locale = form.dataset.locale || document.documentElement.lang || 'uk';
+        let requestController = null;
+        let requestSequence = 0;
+        let refreshTimer = null;
+
+        const formatMoney = (cents, currency) => {
+            try {
+                return new Intl.NumberFormat(locale, {
+                    style: 'currency',
+                    currency,
+                    currencyDisplay: 'symbol',
+                }).format(Number(cents || 0) / 100);
+            } catch {
+                return `${(Number(cents || 0) / 100).toFixed(2)} ${currency}`;
+            }
+        };
+        const notifyQuote = (quote) => {
+            form.promotionQuote = quote;
+            form.dispatchEvent(new CustomEvent('promo-code:quote', { detail: { quote } }));
+        };
+        const hideQuote = () => {
+            summary?.classList.add('hidden');
+            summary?.classList.remove('grid');
+            subtotalRows.forEach((row) => row.classList.add('hidden'));
+            discountRows.forEach((row) => row.classList.add('hidden'));
+            result.classList.add('hidden');
+            result.textContent = '';
+            freePayment?.classList.add('hidden');
+            paidPayment?.classList.remove('hidden');
+            notifyQuote(null);
+        };
+        const clearAppliedCode = ({ clearInput = true, showError = '' } = {}) => {
+            requestController?.abort();
+            window.clearTimeout(refreshTimer);
+            hiddenInput.value = '';
+
+            if (clearInput) {
+                input.value = '';
+            }
+
+            removeButton.classList.add('!hidden');
+            applyButton.classList.remove('!hidden');
+            error.textContent = showError;
+            error.classList.toggle('hidden', showError === '');
+            hideQuote();
+        };
+        const showQuote = (quote, normalizedCode) => {
+            const currency = String(quote.currency || form.dataset.currency || 'UAH').toUpperCase();
+            const promoName = quote.promo_name || quote.name || normalizedCode;
+            const successTemplate = container.dataset.promoCodeSuccess || ':name';
+
+            input.value = String(quote.promo_code || quote.code || normalizedCode).toUpperCase();
+            hiddenInput.value = input.value;
+            subtotalOutputs.forEach((output) => { output.textContent = formatMoney(quote.subtotal_cents, currency); });
+            discountOutputs.forEach((output) => { output.textContent = `−${formatMoney(quote.discount_cents, currency)}`; });
+            totalOutputs.forEach((output) => { output.textContent = formatMoney(quote.total_cents, currency); });
+            subtotalRows.forEach((row) => row.classList.remove('hidden'));
+            discountRows.forEach((row) => row.classList.remove('hidden'));
+            summary?.classList.remove('hidden');
+            summary?.classList.add('grid');
+            result.textContent = successTemplate.replace(':name', promoName);
+            result.classList.remove('hidden');
+            error.classList.add('hidden');
+            error.textContent = '';
+            applyButton.classList.add('!hidden');
+            removeButton.classList.remove('!hidden');
+            freePayment?.classList.toggle('hidden', quote.requires_payment !== false);
+            paidPayment?.classList.toggle('hidden', quote.requires_payment === false);
+            notifyQuote(quote);
+        };
+        const firstValidationError = (payload) => {
+            const errors = payload?.errors;
+
+            if (errors && typeof errors === 'object') {
+                const message = Object.values(errors).flat().find((value) => typeof value === 'string');
+
+                if (message) {
+                    return message;
+                }
+            }
+
+            return payload?.message || container.dataset.promoCodeGenericError || 'Unable to apply promo code.';
+        };
+        const requestQuote = async () => {
+            const normalizedCode = String(input.value || hiddenInput.value).trim().toUpperCase();
+
+            if (!normalizedCode) {
+                clearAppliedCode({ clearInput: false, showError: container.dataset.promoCodeRequired || '' });
+
+                return;
+            }
+
+            requestController?.abort();
+            requestController = new AbortController();
+            const sequence = ++requestSequence;
+            const payload = new FormData(form);
+            payload.set('promo_code', normalizedCode);
+            applyButton.disabled = true;
+            removeButton.disabled = true;
+
+            try {
+                const response = await fetch(form.dataset.promoQuoteUrl, {
+                    method: 'POST',
+                    body: payload,
+                    headers: { Accept: 'application/json' },
+                    signal: requestController.signal,
+                });
+                const quote = await response.json().catch(() => ({}));
+
+                if (sequence !== requestSequence) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    clearAppliedCode({ clearInput: false, showError: firstValidationError(quote) });
+
+                    return;
+                }
+
+                showQuote(quote, normalizedCode);
+            } catch (requestError) {
+                if (requestError.name !== 'AbortError' && sequence === requestSequence) {
+                    clearAppliedCode({ clearInput: false, showError: firstValidationError(null) });
+                }
+            } finally {
+                if (sequence === requestSequence) {
+                    applyButton.disabled = false;
+                    removeButton.disabled = false;
+                }
+            }
+        };
+        const scheduleRefresh = () => {
+            if (!hiddenInput.value) {
+                return;
+            }
+
+            window.clearTimeout(refreshTimer);
+            hideQuote();
+            refreshTimer = window.setTimeout(requestQuote, 180);
+        };
+
+        applyButton.addEventListener('click', requestQuote);
+        removeButton.addEventListener('click', () => clearAppliedCode());
+        input.addEventListener('input', () => {
+            input.value = input.value.toUpperCase();
+
+            if (input.value.trim() !== hiddenInput.value) {
+                clearAppliedCode({ clearInput: false });
+            }
+        });
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                requestQuote();
+            }
+        });
+        form.addEventListener('input', (event) => {
+            if (event.target !== input) {
+                scheduleRefresh();
+            }
+        });
+        form.addEventListener('change', (event) => {
+            if (event.target !== input) {
+                scheduleRefresh();
+            }
+        });
+        form.addEventListener('promotion-input-changed', scheduleRefresh);
+
+        if (hiddenInput.value) {
+            requestQuote();
+        } else {
+            hideQuote();
+        }
+    });
+}
+
 function initEventTicketCheckouts(root = document) {
     root.querySelectorAll('[data-event-ticket-checkout]').forEach((form) => {
         if (form.dataset.eventTicketCheckoutReady === 'true') {
@@ -9462,10 +9665,14 @@ function initEventTicketCheckouts(root = document) {
 
         const sync = () => {
             const quantity = totalQuantity();
-            const totalCents = counters.reduce(
+            const subtotalCents = counters.reduce(
                 (total, counter) => total + quantityFor(counter) * unitPriceFor(counter),
                 0,
             );
+            const promotionQuote = form.promotionQuote;
+            const totalCents = promotionQuote && Number(promotionQuote.subtotal_cents) === subtotalCents
+                ? Number(promotionQuote.total_cents)
+                : subtotalCents;
 
             counters.forEach((counter) => {
                 const input = counter.querySelector('[data-event-ticket-quantity]');
@@ -9536,6 +9743,7 @@ function initEventTicketCheckouts(root = document) {
 
                 input.value = String(Math.max(quantityFor(counter) - 1, 0));
                 sync();
+                form.dispatchEvent(new Event('promotion-input-changed'));
             });
 
             increment?.addEventListener('click', () => {
@@ -9546,6 +9754,7 @@ function initEventTicketCheckouts(root = document) {
                 clearConflictingCounters(counter);
                 input.value = String(quantityFor(counter) + 1);
                 sync();
+                form.dispatchEvent(new Event('promotion-input-changed'));
             });
         });
 
@@ -9570,6 +9779,7 @@ function initEventTicketCheckouts(root = document) {
             });
         }
 
+        form.addEventListener('promo-code:quote', sync);
         sync();
     });
 }
@@ -10369,6 +10579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventScanner();
     initEventForms();
     initEventTicketCheckouts();
+    initPromoCodeCheckouts();
     initEventMonopayIframes();
     initEventOrderReturnNavigation();
     initEventOrderPolling();

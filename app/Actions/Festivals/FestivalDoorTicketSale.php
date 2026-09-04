@@ -16,8 +16,10 @@ use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
 use App\Models\User;
+use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentGatewayRegistry;
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -34,16 +36,14 @@ class FestivalDoorTicketSale
         private readonly RecordFestivalCashEntry $cashEntries,
         private readonly PaymentGatewayRegistry $gateways,
         private readonly FiscalReceiptService $fiscalReceipts,
+        private readonly FestivalPromoCodePricing $promoCodePricing,
+        private readonly PromotionCodeNormalizer $promoCodes,
     ) {}
 
     /** @param array<string, mixed> $input */
     public function execute(Account $account, FestivalEdition $edition, ?User $actor, array $input, string $mode, string $locale): FestivalTicketOrder
     {
         $provider = $mode === self::ModeCash ? 'entrance_cash' : (string) ($input['provider'] ?? '');
-
-        if ($mode === self::ModeCard) {
-            $this->assertProvider($account, $provider);
-        }
 
         $reference = $this->reference((string) $input['idempotency_key']);
         $existing = FestivalTicketOrder::query()
@@ -113,25 +113,48 @@ class FestivalDoorTicketSale
                 throw ValidationException::withMessages(['ticket_type_id' => __('app.festival_admission_sold_out')]);
             }
 
-            $amount = $admissionType->price_cents;
+            $subtotal = $admissionType->price_cents;
+            $promotion = $this->promoCodePricing->resolve(
+                $edition,
+                $actor === null && $mode === self::ModeCard ? ($input['promo_code'] ?? null) : null,
+                [$admissionType->id => $subtotal],
+                [$admissionType->id],
+                $input['guest_email'] ?? null,
+                null,
+                [$guest->id],
+                lock: true,
+            );
+            $amount = $promotion->amounts->totalCents;
+            if ($mode === self::ModeCard && $amount > 0) {
+                $this->assertProvider($account, $provider);
+            }
             $isImmediatelyPaid = $mode === self::ModeCash || $amount === 0;
             $accessToken = Str::random(64);
             $order = FestivalTicketOrder::query()->create([
                 'account_id' => $account->id,
                 'festival_edition_id' => $edition->id,
+                'festival_promo_code_id' => $promotion->promoCode?->id,
                 'festival_portal_user_id' => $guest->id,
                 'source' => FestivalTicketOrderSource::Entrance,
                 'issued_by_user_id' => $actor?->id,
                 'issued_at' => $isImmediatelyPaid ? now() : null,
-                'provider' => $isImmediatelyPaid ? 'entrance_cash' : $provider,
+                'provider' => $mode === self::ModeCash ? 'entrance_cash' : ($amount > 0 ? $provider : null),
                 'order_id' => $reference,
                 'status' => $isImmediatelyPaid ? FestivalTicketOrderStatus::Paid : FestivalTicketOrderStatus::Pending,
                 'buyer_name' => trim((string) $input['guest_name']),
                 'buyer_email' => filled($input['guest_email'] ?? null) ? mb_strtolower(trim((string) $input['guest_email'])) : '',
                 'buyer_phone' => null,
                 'locale' => in_array($locale, ['en', 'uk'], true) ? $locale : 'uk',
+                'promo_name' => $promotion->promoCode?->name,
+                'promo_code' => $promotion->promoCode?->code,
+                'promo_discount_type' => $promotion->promoCode?->discount_type->value,
+                'promo_discount_value' => $promotion->promoCode?->discount_value,
+                'subtotal_cents' => $subtotal,
+                'discount_cents' => $promotion->amounts->discountCents,
+                'promo_email_hash' => $promotion->promoCode ? $promotion->emailHash : null,
+                'promo_phone_hash' => null,
                 'amount_cents' => $amount,
-                'currency' => strtoupper($edition->currency),
+                'currency' => strtoupper($account->default_currency),
                 'access_token_encrypted' => $accessToken,
                 'access_token_hash' => hash('sha256', $accessToken),
                 'expires_at' => $isImmediatelyPaid ? null : now()->addMinutes(30),
@@ -145,9 +168,12 @@ class FestivalDoorTicketSale
                 'admission_name' => $admissionType->name,
                 'admission_description' => $admissionType->description,
                 'price_tier' => 'regular',
-                'unit_price_cents' => $amount,
+                'unit_price_cents' => $subtotal,
                 'quantity' => 1,
-                'total_cents' => $amount,
+                'total_cents' => $subtotal,
+                'subtotal_cents' => $subtotal,
+                'discount_cents' => $promotion->amounts->discountCents,
+                'final_total_cents' => $amount,
             ]);
 
             if ($isImmediatelyPaid) {
@@ -202,11 +228,16 @@ class FestivalDoorTicketSale
     private function assertReplayMatches(FestivalTicketOrder $order, array $input, string $provider): void
     {
         $item = $order->items()->first();
+        $allowedProviders = [$provider, 'entrance_cash'];
+        if ($order->amount_cents === 0) {
+            $allowedProviders[] = null;
+        }
 
         if ($order->source !== FestivalTicketOrderSource::Entrance
             || $order->buyer_name !== trim((string) $input['guest_name'])
             || (int) $item?->festival_admission_type_id !== (int) $input['ticket_type_id']
-            || ! in_array($order->provider, [$provider, 'entrance_cash'], true)) {
+            || $order->promo_code !== ($this->promoCodes->normalize($input['promo_code'] ?? null) ?: null)
+            || ! in_array($order->provider, $allowedProviders, true)) {
             throw ValidationException::withMessages(['idempotency_key' => __('app.entrance_request_conflict')]);
         }
     }

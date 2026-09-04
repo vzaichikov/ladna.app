@@ -3,12 +3,20 @@
 namespace App\Http\Requests;
 
 use App\Enums\IntegrationProvider;
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StartPublicClassPassCheckoutRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')),
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -31,6 +39,7 @@ class StartPublicClassPassCheckoutRequest extends FormRequest
                 IntegrationProvider::Liqpay->value,
                 IntegrationProvider::Wayforpay->value,
             ])],
+            'promo_code' => ['nullable', 'string', 'min:3', 'max:64'],
         ];
     }
 

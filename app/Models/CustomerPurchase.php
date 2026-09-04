@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\PromoCodeDiscountType;
 use Database\Factories\CustomerPurchaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,8 +16,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'trial_eligibility_validated_at', 'paid_at', 'failed_at', 'expires_at'])]
-#[Hidden(['gateway_checkout_payload', 'last_callback_payload'])]
+#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'studio_promo_code_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'subtotal_cents', 'discount_cents', 'currency', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'promo_email_hash', 'promo_phone_hash', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'trial_eligibility_validated_at', 'paid_at', 'failed_at', 'expires_at'])]
+#[Hidden(['gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash'])]
 class CustomerPurchase extends Model
 {
     /** @use HasFactory<CustomerPurchaseFactory> */
@@ -40,6 +41,7 @@ class CustomerPurchase extends Model
         'status' => 'payment_started',
         'payment_source' => self::SourceOnlineCheckout,
         'currency' => 'UAH',
+        'discount_cents' => 0,
         'total_validity_days' => 180,
     ];
 
@@ -50,6 +52,11 @@ class CustomerPurchase extends Model
     {
         return [
             'status' => CustomerPurchaseStatus::class,
+            'amount_cents' => 'integer',
+            'subtotal_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'promo_discount_type' => PromoCodeDiscountType::class,
+            'promo_discount_value' => 'integer',
             'gateway_checkout_payload' => 'encrypted:array',
             'last_callback_payload' => 'encrypted:array',
             'started_at' => 'datetime',
@@ -94,6 +101,24 @@ class CustomerPurchase extends Model
             ->orderByDesc('id');
     }
 
+    public function scopeReservingPromotionUse(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query
+                ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
+                ->orWhere(function (Builder $query): void {
+                    $query
+                        ->whereIn('status', [
+                            CustomerPurchaseStatus::PaymentStarted->value,
+                            CustomerPurchaseStatus::PaymentPending->value,
+                        ])
+                        ->where(function (Builder $query): void {
+                            $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                        });
+                });
+        });
+    }
+
     public function effectiveOccurredAt(): ?Carbon
     {
         return $this->paid_at ?? $this->started_at ?? $this->created_at;
@@ -117,6 +142,11 @@ class CustomerPurchase extends Model
     public function classPassPlan(): BelongsTo
     {
         return $this->belongsTo(ClassPassPlan::class);
+    }
+
+    public function studioPromoCode(): BelongsTo
+    {
+        return $this->belongsTo(StudioPromoCode::class);
     }
 
     public function customerClassPass(): BelongsTo

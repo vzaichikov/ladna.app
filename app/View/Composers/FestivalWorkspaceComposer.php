@@ -166,7 +166,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
             request()->routeIs('dashboard.accounts.festivals.scanner*') => ($permissions['event_festival_staff'] ?? false) ? 'scanner' : 'tickets',
             request()->routeIs('dashboard.accounts.festivals.attendance*', 'dashboard.accounts.festivals.entrance.*') => 'entrance',
-            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*') => 'tickets',
+            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.promo-codes.*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.online-stream.*') => 'online-stream',
             request()->routeIs('dashboard.accounts.festivals.communication*') => 'communication',
             request()->routeIs('dashboard.accounts.festivals.settings.stages', 'dashboard.accounts.festivals.stages.*') => 'settings-stages',

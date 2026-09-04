@@ -548,6 +548,63 @@ class FiscalizationTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_discounted_festival_admission_goods_sum_exactly_to_the_final_payment(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $this->enableAccountFiscalization($account);
+        $edition = FestivalEdition::factory()
+            ->published()
+            ->for(FestivalSeries::factory()->for($account))
+            ->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'inventory' => 10,
+            'price_cents' => 3334,
+        ]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Paid->value,
+            'provider' => IntegrationProvider::Liqpay->value,
+            'subtotal_cents' => 10002,
+            'discount_cents' => 3335,
+            'amount_cents' => 6667,
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => 'Discounted floor',
+            'unit_price_cents' => 3334,
+            'quantity' => 3,
+            'total_cents' => 10002,
+            'subtotal_cents' => 10002,
+            'discount_cents' => 3335,
+            'final_total_cents' => 6667,
+        ]);
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-DISCOUNT-1');
+
+        $receipt = app(FiscalReceiptService::class)->fiscalizeFestivalTicketOrder($order);
+
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt?->status);
+        Http::assertSent(function ($request): bool {
+            if ($request->url() !== 'https://api.checkbox.ua/api/v1/receipts/sell') {
+                return false;
+            }
+
+            $goodsTotal = collect(data_get($request->data(), 'goods', []))->sum(
+                fn (array $item): int => intdiv(
+                    (int) data_get($item, 'good.price') * (int) data_get($item, 'quantity'),
+                    1000,
+                ),
+            );
+
+            return $goodsTotal === 6667
+                && data_get($request->data(), 'payments.0.value') === 6667
+                && data_get($request->data(), 'total_sum') === 6667;
+        });
+    }
+
     public function test_fiscalization_command_recovers_an_eligible_paid_festival_admission(): void
     {
         $account = Account::factory()->create(['enable_festivals' => true]);

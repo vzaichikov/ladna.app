@@ -77,6 +77,7 @@
                     data-locale="{{ str_replace('_', '-', app()->getLocale()) }}"
                     data-event-capacity="{{ $eventRemainingCapacity }}"
                     data-event-has-paid-ticket-options="{{ $hasPaidTicketOptions ? 'true' : 'false' }}"
+                    data-promo-quote-url="{{ route('public.events.promo-codes.quote', [$account->slug, $event->slug]) }}"
                 >
                     @csrf
                     <div class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">
@@ -209,7 +210,17 @@
                                 <dt class="text-slate-500">{{ __('app.total') }}</dt>
                                 <dd class="mt-1 text-lg font-semibold tabular-nums" data-event-selected-total>—</dd>
                             </div>
+                            <div class="hidden" data-promo-subtotal-row>
+                                <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                                <dd class="mt-1 font-semibold tabular-nums" data-promo-subtotal>—</dd>
+                            </div>
+                            <div class="hidden text-right" data-promo-discount-row>
+                                <dt class="text-slate-500">{{ __('app.promo_code_discount') }}</dt>
+                                <dd class="mt-1 font-semibold tabular-nums text-emerald-700" data-promo-discount>—</dd>
+                            </div>
                         </dl>
+
+                        <x-ui.promo-code-field id="event-promo-code" class="mt-5" />
 
                         <label class="mt-5 flex items-start gap-3 rounded-xl border border-stone-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
                             <input type="checkbox" name="accept_terms" value="1" required @checked(old('accept_terms', '1')) class="crm-checkbox mt-1">

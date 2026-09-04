@@ -109,6 +109,10 @@
                                 <p class="text-sm font-semibold text-brand-700">{{ $order->edition->title }}</p>
                                 <h2 class="mt-1 text-lg font-semibold">{{ $order->buyer_name }}</h2>
                                 <p class="mt-1 text-sm text-slate-500">{{ $order->buyer_email }} · {{ $order->order_id }} · {{ trans_choice('app.festival_friend_ticket_count', $order->tickets->count(), ['count' => $order->tickets->count()]) }}</p>
+                                <p class="mt-2 text-sm font-semibold text-slate-800">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</p>
+                                @if ($order->discount_cents > 0)
+                                    <p class="mt-1 text-xs font-semibold text-emerald-700">{{ __('app.subtotal') }} {{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }} · {{ $order->promo_code }} −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</p>
+                                @endif
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ __('app.festival_order_'.$order->status->value) }}</span>

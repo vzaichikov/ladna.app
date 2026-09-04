@@ -2,12 +2,20 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Promotions\PromotionCodeNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class EventGoogleEmailPrefillRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')) ?: null,
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -29,6 +37,7 @@ class EventGoogleEmailPrefillRequest extends FormRequest
             'buyer_email_confirmation' => ['nullable', 'string', 'max:255'],
             'buyer_phone' => ['nullable', 'string', 'max:50'],
             'provider' => ['nullable', 'string', Rule::in(['monopay', 'liqpay', 'wayforpay'])],
+            'promo_code' => ['nullable', 'string', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
             'items' => ['nullable', 'array', 'max:25'],
             'items.*' => ['nullable', 'integer', 'min:0', 'max:100'],
             'accept_terms' => ['sometimes', 'accepted'],
@@ -47,6 +56,7 @@ class EventGoogleEmailPrefillRequest extends FormRequest
                 'buyer_email_confirmation',
                 'buyer_phone',
                 'provider',
+                'promo_code',
                 'items',
                 'accept_terms',
             ])

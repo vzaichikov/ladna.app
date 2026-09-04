@@ -255,6 +255,16 @@ class FestivalEdition extends Model
         return $this->hasMany(FestivalAdmissionType::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function promoCodes(): HasMany
+    {
+        return $this->hasMany(FestivalPromoCode::class)->latest('id');
+    }
+
+    public function festivalPromoCodes(): HasMany
+    {
+        return $this->promoCodes();
+    }
+
     public function onlineStream(): HasOne
     {
         return $this->hasOne(FestivalOnlineStream::class);

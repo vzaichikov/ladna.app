@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['account_id', 'festival_edition_id', 'delivery_mode', 'festival_online_stream_id', 'name', 'description', 'inventory', 'price_cents', 'early_bird_price_cents', 'early_bird_ends_at', 'early_bird_quota', 'sales_starts_at', 'sales_ends_at', 'max_per_order', 'is_active', 'sort_order'])]
@@ -99,6 +100,11 @@ class FestivalAdmissionType extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(FestivalTicketOrderItem::class);
+    }
+
+    public function promoCodes(): BelongsToMany
+    {
+        return $this->belongsToMany(FestivalPromoCode::class);
     }
 
     public function onlineStream(): BelongsTo

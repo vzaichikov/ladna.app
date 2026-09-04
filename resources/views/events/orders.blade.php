@@ -100,6 +100,11 @@
                                 </td>
                                 <td class="px-5 py-4">
                                     <strong class="block text-base text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong>
+                                    @if ((int) ($order->discount_cents ?? 0) > 0)
+                                        <p class="mt-1 text-xs font-semibold text-emerald-700">
+                                            {{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }} · {{ $order->promo_code }} −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}
+                                        </p>
+                                    @endif
                                     <dl class="mt-2 space-y-1.5 break-words text-xs text-slate-500">
                                         <div>
                                             <dt class="inline font-semibold text-slate-700">{{ __('app.payment_provider') }}:</dt>

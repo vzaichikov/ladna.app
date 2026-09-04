@@ -18,6 +18,7 @@ use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTimelinePresenter;
 use App\Support\Payments\MonopayGateway;
+use App\Support\Payments\MonopayIframeCompatibility;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -162,8 +163,12 @@ class FestivalPublicController extends Controller
             ->withHeaders($this->privateHeaders());
     }
 
-    public function orderPayment(Request $request, string $accountSlug, string $accessToken): RedirectResponse|Response
-    {
+    public function orderPayment(
+        Request $request,
+        string $accountSlug,
+        string $accessToken,
+        MonopayIframeCompatibility $iframeCompatibility,
+    ): RedirectResponse|Response {
         $account = $this->account($request, $accountSlug);
         $order = $this->ticketOrder($account, $accessToken, ['edition']);
         $returnUrl = route('public.festival-orders.show', [$account->slug, $accessToken]);
@@ -189,6 +194,10 @@ class FestivalPublicController extends Controller
 
         $iframeCheckout = $this->iframeCheckoutData($order);
         abort_if($iframeCheckout === null, 404);
+
+        if (! $iframeCompatibility->allowsTicketIframe($request->userAgent())) {
+            return redirect()->away($iframeCheckout['page_url']);
+        }
 
         return response()
             ->view('festivals.public.order-payment', [

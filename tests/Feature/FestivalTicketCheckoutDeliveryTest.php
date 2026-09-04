@@ -214,6 +214,58 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
             && ! array_key_exists('displayType', $request->data()));
     }
 
+    public function test_festival_monopay_ticket_checkout_sends_iphone_directly_to_monopay(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $edition, $type, $guest] = $this->paidFestivalCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'festival-mono-iphone',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/festival-mono-iphone',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+            ->post(
+                route('public.festivals.admission.store', [$account->slug, $edition->slug]),
+                $this->festivalCheckoutPayload($guest, $type),
+            )
+            ->assertRedirect('https://pay.monobank.ua/invoice/festival-mono-iphone');
+
+        $order = FestivalTicketOrder::query()->whereBelongsTo($account)->sole();
+        $this->assertSame('redirect', data_get($order->gateway_checkout_payload, '_launcher.type'));
+        $this->assertNull(data_get($order->gateway_checkout_payload, 'request.displayType'));
+        Http::assertSent(fn (Request $request): bool => $request->url() === 'https://api.monobank.ua/api/merchant/invoice/create'
+            && ! array_key_exists('displayType', $request->data()));
+    }
+
+    public function test_existing_festival_iframe_invoice_redirects_when_opened_on_an_iphone(): void
+    {
+        app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
+        [$account, $edition, $type, $guest] = $this->paidFestivalCheckoutContext();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'festival-mono-existing-iframe',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/festival-mono-existing-iframe',
+                'status' => 'created',
+            ]),
+        ]);
+
+        $this->post(
+            route('public.festivals.admission.store', [$account->slug, $edition->slug]),
+            $this->festivalCheckoutPayload($guest, $type),
+        );
+        $order = FestivalTicketOrder::query()->whereBelongsTo($account)->sole();
+        $this->assertSame('iframe', data_get($order->gateway_checkout_payload, '_launcher.type'));
+
+        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+            ->get(route('public.festival-orders.payment', [$account->slug, $order->access_token_encrypted]))
+            ->assertRedirect('https://pay.monobank.ua/invoice/festival-mono-existing-iframe');
+    }
+
     public function test_festival_participant_charge_remains_redirected_when_ticket_iframe_is_enabled(): void
     {
         app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
@@ -437,6 +489,11 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
                 'client_secret' => 'festival-google-secret',
             ],
         ]);
+    }
+
+    private function iphoneUserAgent(): string
+    {
+        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1';
     }
 
     private function orderItem(FestivalTicketOrder $order, FestivalAdmissionType $type, int $quantity): FestivalTicketOrderItem

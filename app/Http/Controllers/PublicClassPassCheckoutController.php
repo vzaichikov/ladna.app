@@ -16,6 +16,7 @@ use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Payments\PaymentGatewayRegistry;
+use App\Support\Promotions\StudioPromoCodeService;
 use App\Support\PublicClassPassCheckoutContext;
 use App\Support\TrialClassPassEligibility;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,7 @@ class PublicClassPassCheckoutController extends Controller
         private readonly PaymentGatewayRegistry $gateways,
         private readonly CustomerAuthAvailability $authAvailability,
         private readonly TrialClassPassEligibility $trialEligibility,
+        private readonly StudioPromoCodeService $promoCodes,
     ) {}
 
     public function show(
@@ -72,6 +74,11 @@ class PublicClassPassCheckoutController extends Controller
                     $classPassPlan->slug,
                     $purchase,
                 ]) : null,
+                'promoQuoteUrl' => route('public.class-pass-plans.promo-code.quote', [
+                    $account->slug,
+                    $location->slug,
+                    $classPassPlan->slug,
+                ]),
             ])
             ->withHeaders($this->privateHeaders());
     }
@@ -104,8 +111,15 @@ class PublicClassPassCheckoutController extends Controller
             TrialClassPassEligibility::SourceOnlinePayment,
         );
 
-        if ($classPassPlan->price_cents === 0) {
-            $purchase = $completeFreeCustomerPurchase->execute($account, $customer, $classPassPlan, $location);
+        $promoCode = $request->validated('promo_code');
+        $promoCode = is_string($promoCode) && $promoCode !== '' ? $promoCode : null;
+        $promotion = $promoCode
+            ? $this->promoCodes->quote($account, $classPassPlan, $customer, $promoCode)
+            : null;
+        $finalAmountCents = $promotion ? $promotion['quote']->totalCents : (int) $classPassPlan->price_cents;
+
+        if ($finalAmountCents === 0) {
+            $purchase = $completeFreeCustomerPurchase->execute($account, $customer, $classPassPlan, $location, $promoCode);
             $this->checkoutContext->rememberPurchase($account, $location, $classPassPlan, $purchase);
 
             return redirect()->to((string) $this->checkoutContext->urlFor($account));
@@ -128,7 +142,7 @@ class PublicClassPassCheckoutController extends Controller
         $purchase = null;
 
         try {
-            $purchase = $createCustomerPurchase->execute($account, $customer, $classPassPlan, $provider, $location);
+            $purchase = $createCustomerPurchase->execute($account, $customer, $classPassPlan, $provider, $location, $promoCode);
             $this->checkoutContext->rememberPurchase($account, $location, $classPassPlan, $purchase);
             $checkout = $startCustomerPurchasePayment->execute(
                 $purchase,
@@ -140,6 +154,8 @@ class PublicClassPassCheckoutController extends Controller
                     $purchase,
                 ]),
             );
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (Throwable $exception) {
             if ($purchase) {
                 $purchase->forceFill([

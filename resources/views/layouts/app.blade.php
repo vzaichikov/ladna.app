@@ -301,6 +301,11 @@
             'href' => route('dashboard.accounts.class-pass-plans.index', $activeAccount),
             'active' => request()->routeIs('dashboard.accounts.class-pass-plans.*'),
         ], [
+            'label' => __('app.promo_codes'),
+            'icon' => 'ticket',
+            'href' => route('dashboard.accounts.promo-codes.index', $activeAccount),
+            'active' => request()->routeIs('dashboard.accounts.promo-codes.*'),
+        ], [
             'label' => __('app.class_pass_segments'),
             'icon' => 'class-pass-plans',
             'href' => route('dashboard.accounts.class-pass-segments.index', $activeAccount),

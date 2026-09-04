@@ -65,7 +65,7 @@ class CompleteCustomerPurchase
                         snapshot: [
                             'plan_name' => $lockedPurchase->plan_name,
                             'plan_slug' => $lockedPurchase->plan_slug,
-                            'price_cents' => $lockedPurchase->amount_cents,
+                            'price_cents' => $lockedPurchase->subtotal_cents ?? $lockedPurchase->amount_cents,
                             'currency' => $lockedPurchase->currency,
                             'sessions_count' => $lockedPurchase->sessions_count,
                             'validity_days' => $lockedPurchase->validity_days,
@@ -82,13 +82,14 @@ class CompleteCustomerPurchase
                         trialEligibilityAsOf: $lockedPurchase->trial_eligibility_validated_at,
                         trialEligibilityOverridePurchase: $trialExceptionReason !== null ? $lockedPurchase : null,
                     );
-                } else {
-                    $customerClassPass->forceFill([
-                        'is_paid' => true,
-                        'paid_amount_cents' => $lockedPurchase->amount_cents,
-                        'issued_location_id' => $customerClassPass->issued_location_id ?? $lockedPurchase->location_id,
-                    ])->save();
                 }
+
+                $customerClassPass->forceFill([
+                    'is_paid' => true,
+                    'price_cents' => $lockedPurchase->subtotal_cents ?? $lockedPurchase->amount_cents,
+                    'paid_amount_cents' => $lockedPurchase->amount_cents,
+                    'issued_location_id' => $customerClassPass->issued_location_id ?? $lockedPurchase->location_id,
+                ])->save();
 
                 $lockedPurchase->forceFill([
                     'customer_class_pass_id' => $customerClassPass->id,

@@ -382,6 +382,11 @@
                             <div class="min-w-0">
                                 <div class="break-words font-semibold text-slate-950">{{ $payment->customer?->name ?? __('app.not_set') }}</div>
                                 <div class="mt-1 break-words text-sm text-slate-500">{{ $payment->plan_name }}</div>
+                                @if ((int) ($payment->discount_cents ?? 0) > 0)
+                                    <div class="mt-1 text-xs font-semibold text-emerald-700">
+                                        {{ $payment->promo_code }} · {{ $formatMoney($payment->subtotal_cents, $payment->currency) }} −{{ $formatMoney($payment->discount_cents, $payment->currency) }}
+                                    </div>
+                                @endif
                             </div>
                             <div class="hidden min-w-0 text-sm text-slate-500 lg:block">
                                 <div>{{ $formatPaymentDate($payment) }}</div>

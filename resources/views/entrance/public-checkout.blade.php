@@ -26,7 +26,12 @@
                 {{ __('app.entrance_no_ticket_types_available') }}
             </div>
         @else
-        <form method="POST" action="{{ $storeUrl }}" class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">
+        <form
+            method="POST"
+            action="{{ $storeUrl }}"
+            class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7"
+            data-promo-quote-url="{{ $promoQuoteUrl }}"
+        >
             @csrf
             <input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
 
@@ -54,8 +59,26 @@
                 <label class="block">
                     <span class="crm-label">{{ __('app.email') }} <span class="font-normal text-slate-400">({{ __('app.optional') }})</span></span>
                     <input type="email" name="guest_email" value="{{ old('guest_email') }}" maxlength="255" autocomplete="email" class="crm-field min-h-12 text-base">
+                    <span class="crm-help mt-2 block">{{ __('app.promo_code_entrance_email_required') }}</span>
                 </label>
             </div>
+
+            <x-ui.promo-code-field id="entrance-promo-code" class="mt-5" />
+
+            <dl class="mt-5 hidden grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm" data-promo-summary>
+                <div data-promo-subtotal-row>
+                    <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                    <dd class="mt-1 font-semibold tabular-nums" data-promo-subtotal>—</dd>
+                </div>
+                <div class="text-right" data-promo-discount-row>
+                    <dt class="text-slate-500">{{ __('app.promo_code_discount') }}</dt>
+                    <dd class="mt-1 font-semibold tabular-nums text-emerald-700" data-promo-discount>—</dd>
+                </div>
+                <div class="col-span-2 border-t border-stone-200 pt-3 text-right">
+                    <dt class="text-slate-500">{{ __('app.total') }}</dt>
+                    <dd class="mt-1 text-lg font-semibold tabular-nums" data-promo-total>—</dd>
+                </div>
+            </dl>
 
             @if ($termsLabel ?? null)
                 <label class="mt-5 flex items-start gap-3 rounded-xl border border-stone-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
@@ -66,7 +89,14 @@
                 <input type="hidden" name="terms_accepted" value="1">
             @endif
 
-            <div class="mt-6 border-t border-stone-100 pt-6">
+            <div class="mt-6 hidden border-t border-stone-100 pt-6" data-promo-payment-free>
+                <x-ui.button type="submit" variant="success" size="lg" class="w-full min-h-14">
+                    <x-ui.icon name="ticket-check" class="h-5 w-5" />
+                    {{ __('app.event_get_tickets') }}
+                </x-ui.button>
+            </div>
+
+            <div class="mt-6 border-t border-stone-100 pt-6" data-promo-payment-paid>
                 <h2 class="text-lg font-semibold">{{ __('app.payment_method') }}</h2>
                 <div class="mt-3 grid gap-3">
                     @forelse ($paymentProviders as $provider)

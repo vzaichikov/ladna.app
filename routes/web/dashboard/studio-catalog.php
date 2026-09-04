@@ -10,6 +10,7 @@ use App\Http\Controllers\RoomCameraTestController;
 use App\Http\Controllers\RoomController;
 use App\Http\Controllers\RoomPeopleCounterMaskController;
 use App\Http\Controllers\ServiceRoomController;
+use App\Http\Controllers\StudioPromoCodeController;
 use App\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
@@ -94,6 +95,10 @@ Route::patch('accounts/{account}/class-pass-plans/reorder', [ClassPassPlanContro
 Route::post('accounts/{account}/class-pass-plans/{class_pass_plan}/copy', [ClassPassPlanController::class, 'copy'])
     ->name('accounts.class-pass-plans.copy');
 Route::resource('accounts.class-pass-plans', ClassPassPlanController::class)
+    ->except(['show'])
+    ->scoped();
+Route::resource('accounts.promo-codes', StudioPromoCodeController::class)
+    ->parameters(['promo-codes' => 'studioPromoCode'])
     ->except(['show'])
     ->scoped();
 Route::resource('accounts.class-pass-segments', ClassPassSegmentController::class)

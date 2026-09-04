@@ -46,7 +46,9 @@ class HelpPagesTest extends TestCase
             ->assertStatus(200)
             ->assertSee('Загальний строк дії', false)
             ->assertSee('Строк дії з першого заняття', false)
-            ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false);
+            ->assertSee('навіть тоді, коли заняття ще залишилися або клієнт ще не прийшов на перше заняття', false)
+            ->assertSee('Власниця студії відкриває Промокоди', false)
+            ->assertSee('індивідуальних занять і оренди залу', false);
     }
 
     public function test_booking_help_explains_timely_cancellation_returns_session_for_customer_and_staff(): void
@@ -81,6 +83,7 @@ class HelpPagesTest extends TestCase
             ->assertSee('Наявні записи не скасовуються автоматично', false)
             ->assertSee('Копіювати посилання', false)
             ->assertSee('Early bird', false)
+            ->assertSee('перейдіть у Промокоди', false)
             ->assertSee('30 хвилин', false)
             ->assertSee('один QR-код на кожне місце', false)
             ->assertSee('Надіслати повторно', false)
@@ -322,6 +325,7 @@ class HelpPagesTest extends TestCase
             ],
             'festival-tickets-entrance' => [
                 'без входу та OTP',
+                'Квитки та вхід → Промокоди',
                 'приватним посиланням із листа',
                 'Видати відсутні',
                 'Повторний запуск не дублює',

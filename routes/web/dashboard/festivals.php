@@ -26,6 +26,7 @@ use App\Http\Controllers\FestivalOnlineStreamController;
 use App\Http\Controllers\FestivalParticipantPhotoController;
 use App\Http\Controllers\FestivalPortalRosterController;
 use App\Http\Controllers\FestivalPortalUserController;
+use App\Http\Controllers\FestivalPromoCodeController;
 use App\Http\Controllers\FestivalRequirementController;
 use App\Http\Controllers\FestivalResultController;
 use App\Http\Controllers\FestivalResultTableController;
@@ -101,6 +102,9 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/online-stream/preview', [FestivalOnlineStreamController::class, 'preview'])->whereNumber('festivalEdition')->middleware('throttle:festival-stream-bootstrap')->name('online-stream.preview');
     Route::get('{festivalEdition:id}/admission-types/create', [FestivalAdmissionTypeController::class, 'create'])->whereNumber('festivalEdition')->name('admission-types.create');
     Route::get('{festivalEdition:id}/admission-types/{festivalAdmissionType}/edit', [FestivalAdmissionTypeController::class, 'edit'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.edit');
+    Route::get('{festivalEdition:id}/promo-codes', [FestivalPromoCodeController::class, 'index'])->whereNumber('festivalEdition')->name('promo-codes.index');
+    Route::get('{festivalEdition:id}/promo-codes/create', [FestivalPromoCodeController::class, 'create'])->whereNumber('festivalEdition')->name('promo-codes.create');
+    Route::get('{festivalEdition:id}/promo-codes/{festivalPromoCode}/edit', [FestivalPromoCodeController::class, 'edit'])->whereNumber('festivalEdition')->whereNumber('festivalPromoCode')->name('promo-codes.edit');
     Route::get('{festivalEdition:id}/communication', [FestivalWorkspaceController::class, 'communication'])->whereNumber('festivalEdition')->name('communication');
     Route::get('{festivalEdition:id}/communication/history', [FestivalWorkspaceController::class, 'communicationHistory'])->whereNumber('festivalEdition')->name('communication.history');
     Route::get('{festivalEdition:id}/communication/announcements', [FestivalWorkspaceController::class, 'communicationAnnouncements'])->whereNumber('festivalEdition')->name('communication.announcements');
@@ -195,6 +199,10 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::post('{festivalEdition:id}/admission-types', [FestivalAdmissionTypeController::class, 'store'])->whereNumber('festivalEdition')->name('admission-types.store');
     Route::put('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'update'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.update');
     Route::delete('{festivalEdition:id}/admission-types/{festivalAdmissionType}', [FestivalAdmissionTypeController::class, 'destroy'])->whereNumber('festivalEdition')->whereNumber('festivalAdmissionType')->name('admission-types.destroy');
+    Route::post('{festivalEdition:id}/promo-codes', [FestivalPromoCodeController::class, 'store'])->whereNumber('festivalEdition')->name('promo-codes.store');
+    Route::put('{festivalEdition:id}/promo-codes/{festivalPromoCode}', [FestivalPromoCodeController::class, 'update'])->whereNumber('festivalEdition')->whereNumber('festivalPromoCode')->name('promo-codes.update');
+    Route::patch('{festivalEdition:id}/promo-codes/{festivalPromoCode}/toggle', [FestivalPromoCodeController::class, 'toggle'])->whereNumber('festivalEdition')->whereNumber('festivalPromoCode')->name('promo-codes.toggle');
+    Route::delete('{festivalEdition:id}/promo-codes/{festivalPromoCode}', [FestivalPromoCodeController::class, 'destroy'])->whereNumber('festivalEdition')->whereNumber('festivalPromoCode')->name('promo-codes.destroy');
     Route::put('{festivalEdition:id}/online-stream', [FestivalOnlineStreamController::class, 'update'])->whereNumber('festivalEdition')->name('online-stream.update');
     Route::patch('{festivalEdition:id}/online-stream/start', [FestivalOnlineStreamController::class, 'start'])->whereNumber('festivalEdition')->name('online-stream.start');
     Route::patch('{festivalEdition:id}/online-stream/stop', [FestivalOnlineStreamController::class, 'stop'])->whereNumber('festivalEdition')->name('online-stream.stop');

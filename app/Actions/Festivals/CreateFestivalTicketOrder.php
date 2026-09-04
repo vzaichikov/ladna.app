@@ -16,6 +16,7 @@ use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
 use App\Models\TelegramChatAuthorization;
+use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class CreateFestivalTicketOrder
         private readonly PaymentGatewayRegistry $gateways,
         private readonly ResolveFestivalGuest $resolveGuest,
         private readonly FestivalTelegramIdentityLinker $telegramIdentityLinker,
+        private readonly FestivalPromoCodePricing $promoCodePricing,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -102,7 +104,7 @@ class CreateFestivalTicketOrder
             }
 
             $prepared = [];
-            $amount = 0;
+            $subtotal = 0;
             foreach ($types as $type) {
                 $quantity = (int) $requested[$type->id]['quantity'];
                 if (! $type->saleIsOpen() || $quantity > $type->max_per_order) {
@@ -119,7 +121,7 @@ class CreateFestivalTicketOrder
                     }
                 }
                 $total = $price['price_cents'] * $quantity;
-                $amount += $total;
+                $subtotal += $total;
                 $prepared[] = compact('type', 'quantity', 'price', 'total');
             }
 
@@ -178,6 +180,18 @@ class CreateFestivalTicketOrder
                 }
             }
 
+            $promotion = $this->promoCodePricing->resolve(
+                $edition,
+                $input['promo_code'] ?? null,
+                collect($prepared)->mapWithKeys(fn (array $row): array => [$row['type']->id => $row['total']])->all(),
+                $types->modelKeys(),
+                (string) $input['buyer_email'],
+                (string) $input['buyer_phone'],
+                array_filter([$portalUser->id, $purchaser?->id]),
+                lock: true,
+            );
+            $amount = $promotion->amounts->totalCents;
+
             $provider = filled($input['provider'] ?? null) ? (string) $input['provider'] : null;
             $setting = $provider ? $this->gateways->availableSettingsFor($edition->account)
                 ->first(fn (IntegrationSetting $candidate): bool => $candidate->provider->value === $provider) : null;
@@ -189,6 +203,7 @@ class CreateFestivalTicketOrder
             $order = FestivalTicketOrder::query()->create([
                 'account_id' => $edition->account_id,
                 'festival_edition_id' => $edition->id,
+                'festival_promo_code_id' => $promotion->promoCode?->id,
                 'festival_portal_user_id' => $portalUser->id,
                 'purchaser_festival_portal_user_id' => $purchaser?->id,
                 'source' => FestivalTicketOrderSource::Checkout,
@@ -198,6 +213,14 @@ class CreateFestivalTicketOrder
                 'buyer_email' => Str::lower(trim((string) $input['buyer_email'])),
                 'buyer_phone' => (string) $input['buyer_phone'],
                 'locale' => in_array(($input['locale'] ?? null), ['en', 'uk'], true) ? $input['locale'] : $edition->account->default_language,
+                'promo_name' => $promotion->promoCode?->name,
+                'promo_code' => $promotion->promoCode?->code,
+                'promo_discount_type' => $promotion->promoCode?->discount_type->value,
+                'promo_discount_value' => $promotion->promoCode?->discount_value,
+                'subtotal_cents' => $subtotal,
+                'discount_cents' => $promotion->amounts->discountCents,
+                'promo_email_hash' => $promotion->promoCode ? $promotion->emailHash : null,
+                'promo_phone_hash' => $promotion->promoCode ? $promotion->phoneHash : null,
                 'amount_cents' => $amount,
                 'currency' => strtoupper($edition->account->default_currency),
                 'access_token_encrypted' => $accessToken,
@@ -208,6 +231,7 @@ class CreateFestivalTicketOrder
             ]);
 
             foreach ($prepared as $row) {
+                $lineDiscount = (int) ($promotion->amounts->lineDiscounts[$row['type']->id] ?? 0);
                 $order->items()->create([
                     'account_id' => $edition->account_id,
                     'festival_admission_type_id' => $row['type']->id,
@@ -217,6 +241,9 @@ class CreateFestivalTicketOrder
                     'unit_price_cents' => $row['price']['price_cents'],
                     'quantity' => $row['quantity'],
                     'total_cents' => $row['total'],
+                    'subtotal_cents' => $row['total'],
+                    'discount_cents' => $lineDiscount,
+                    'final_total_cents' => $row['total'] - $lineDiscount,
                 ]);
             }
 

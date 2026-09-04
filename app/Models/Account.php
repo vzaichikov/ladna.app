@@ -629,6 +629,11 @@ class Account extends Model
         return $this->hasMany(ClassPassPlan::class);
     }
 
+    public function studioPromoCodes(): HasMany
+    {
+        return $this->hasMany(StudioPromoCode::class);
+    }
+
     public function classPassSegments(): HasMany
     {
         return $this->hasMany(ClassPassSegment::class);

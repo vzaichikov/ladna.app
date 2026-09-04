@@ -138,6 +138,26 @@
                 @endif
             </header>
 
+            <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">
+                <h2 class="text-lg font-semibold">{{ __('app.payment_details') }}</h2>
+                <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                    <div class="rounded-xl bg-slate-50 p-3">
+                        <dt class="text-slate-500">{{ __('app.subtotal') }}</dt>
+                        <dd class="mt-1 font-semibold">{{ \App\Support\MoneyFormatter::format($order->subtotal_cents ?? $order->amount_cents, $order->currency) }}</dd>
+                    </div>
+                    @if ($order->discount_cents > 0)
+                        <div class="rounded-xl bg-emerald-50 p-3">
+                            <dt class="text-emerald-700">{{ __('app.promo_code_discount') }} · {{ $order->promo_code }}</dt>
+                            <dd class="mt-1 font-semibold text-emerald-800">−{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</dd>
+                        </div>
+                    @endif
+                    <div class="rounded-xl bg-slate-950 p-3 text-white">
+                        <dt class="text-slate-300">{{ __('app.total') }}</dt>
+                        <dd class="mt-1 font-semibold">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</dd>
+                    </div>
+                </dl>
+            </section>
+
             @if ($ticketsReady)
                 <section class="mt-6 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-7">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

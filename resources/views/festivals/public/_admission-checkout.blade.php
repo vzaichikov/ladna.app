@@ -22,6 +22,7 @@
             data-locale="{{ str_replace('_', '-', app()->getLocale()) }}"
             data-event-capacity=""
             data-event-has-paid-ticket-options="{{ $hasPaidTicketOptions ? 'true' : 'false' }}"
+            data-promo-quote-url="{{ route('public.festivals.admission.promo-code', [$account->slug, $edition->slug]) }}"
         >
             @csrf
             @if ($festivalFriendPurchase ?? false)
@@ -140,7 +141,17 @@
                         <dt class="festival-muted">{{ __('app.total') }}</dt>
                         <dd class="mt-1 text-lg font-semibold tabular-nums" data-event-selected-total>—</dd>
                     </div>
+                    <div class="hidden" data-promo-subtotal-row>
+                        <dt class="festival-muted">{{ __('app.subtotal') }}</dt>
+                        <dd class="mt-1 font-semibold tabular-nums" data-promo-subtotal>—</dd>
+                    </div>
+                    <div class="hidden text-right" data-promo-discount-row>
+                        <dt class="festival-muted">{{ __('app.promo_code_discount') }}</dt>
+                        <dd class="mt-1 font-semibold tabular-nums text-emerald-700" data-promo-discount>—</dd>
+                    </div>
                 </dl>
+
+                <x-ui.promo-code-field id="festival-promo-code" :festival="true" class="mt-5" />
 
                 <label class="mt-5 flex items-start gap-3 rounded-xl border festival-border festival-page px-4 py-3 text-sm leading-6 festival-muted">
                     <input type="checkbox" name="terms" value="1" required @checked(old('terms', '1')) class="crm-checkbox mt-1">

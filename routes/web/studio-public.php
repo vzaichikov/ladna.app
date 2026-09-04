@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\PublicClassPassCheckoutController;
+use App\Http\Controllers\PublicClassPassPromoCodeController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
 use App\Http\Controllers\PublicEventCheckoutController;
 use App\Http\Controllers\PublicEventController;
 use App\Http\Controllers\PublicEventEntranceController;
+use App\Http\Controllers\PublicEventPromoCodeController;
 use App\Http\Controllers\PublicPriceController;
 use App\Http\Controllers\PublicScheduleController;
 use App\Http\Controllers\PublicStudioLandingController;
@@ -33,9 +35,15 @@ Route::get('/{accountSlug}/events/{eventSlug}/entrance', [PublicEventEntranceCon
 Route::post('/{accountSlug}/events/{eventSlug}/entrance', [PublicEventEntranceController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
     ->name('public.events.entrance.store');
+Route::post('/{accountSlug}/events/{eventSlug}/entrance/promo-code/quote', [PublicEventPromoCodeController::class, 'entrance'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
+    ->name('public.events.entrance.promo-codes.quote');
 Route::post('/{accountSlug}/events/{eventSlug}/checkout', [PublicEventCheckoutController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
     ->name('public.events.checkout');
+Route::post('/{accountSlug}/events/{eventSlug}/promo-code/quote', PublicEventPromoCodeController::class)
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:event-checkout'])
+    ->name('public.events.promo-codes.quote');
 Route::post('/{accountSlug}/events/{eventSlug}/checkout/google', [PublicEventCheckoutController::class, 'google'])
     ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
     ->name('public.events.checkout.google');
@@ -75,6 +83,9 @@ Route::post('/{accountSlug}/{locationSlug}/schedule/book', [PublicBookingControl
 Route::get('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}', [PublicClassPassCheckoutController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.class-pass-plans.checkout');
+Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/promo-code', PublicClassPassPromoCodeController::class)
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.class-pass-plans.promo-code.quote');
 Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}', [PublicClassPassCheckoutController::class, 'store'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
     ->name('public.class-pass-plans.checkout.store');

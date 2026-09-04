@@ -16,6 +16,7 @@ use App\Support\Events\EventGoogleEmailPrefill;
 use App\Support\Events\EventQrCode;
 use App\Support\Mail\TransactionalMailDispatcher;
 use App\Support\Payments\MonopayGateway;
+use App\Support\Payments\MonopayIframeCompatibility;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -66,7 +67,7 @@ class PublicEventCheckoutController extends Controller
         }
 
         try {
-            $checkout = $startPayment->execute($order, $setting);
+            $checkout = $startPayment->execute($order, $setting, $request->userAgent());
         } catch (Throwable $exception) {
             report($exception);
             throw ValidationException::withMessages(['provider' => __('app.payment_start_failed')]);
@@ -160,8 +161,12 @@ class PublicEventCheckoutController extends Controller
             ->withHeaders($this->privateHeaders());
     }
 
-    public function payment(string $accountSlug, string $accessToken): RedirectResponse|Response
-    {
+    public function payment(
+        Request $request,
+        string $accountSlug,
+        string $accessToken,
+        MonopayIframeCompatibility $iframeCompatibility,
+    ): RedirectResponse|Response {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
         $order = EventOrder::query()
             ->whereBelongsTo($account)
@@ -191,6 +196,10 @@ class PublicEventCheckoutController extends Controller
 
         $iframeCheckout = $this->iframeCheckoutData($order);
         abort_if($iframeCheckout === null, 404);
+
+        if (! $iframeCompatibility->allowsTicketIframe($request->userAgent())) {
+            return redirect()->away($iframeCheckout['page_url']);
+        }
 
         $statusUrl = route('public.event-orders.status', [$account->slug, $accessToken]);
 

@@ -367,6 +367,11 @@
                                 <div>
                                     <div class="font-semibold text-slate-950">{{ $purchase->plan_name }}</div>
                                     <div class="mt-1 text-sm text-slate-500">{{ $purchase->order_id }} &middot; {{ $currentProviderLabel }} &middot; {{ $formatMoney($purchase->amount_cents, $purchase->currency) }}</div>
+                                    @if ((int) ($purchase->discount_cents ?? 0) > 0)
+                                        <div class="mt-1 text-xs font-semibold text-emerald-700">
+                                            {{ $formatMoney($purchase->subtotal_cents, $purchase->currency) }} · {{ $purchase->promo_code }} −{{ $formatMoney($purchase->discount_cents, $purchase->currency) }}
+                                        </div>
+                                    @endif
                                 </div>
                                 <span class="{{ $statusClass }}">{{ __('app.'.$purchase->status->value) }}</span>
                             </div>

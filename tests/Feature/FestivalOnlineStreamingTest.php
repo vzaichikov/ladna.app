@@ -25,6 +25,7 @@ use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentCallbackResult;
@@ -966,6 +967,7 @@ class FestivalOnlineStreamingTest extends TestCase
             $gateways,
             app(ResolveFestivalGuest::class),
             app(FestivalTelegramIdentityLinker::class),
+            app(FestivalPromoCodePricing::class),
         );
     }
 
