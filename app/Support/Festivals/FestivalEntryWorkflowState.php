@@ -26,8 +26,9 @@ class FestivalEntryWorkflowState
     /**
      * @return Collection<int, array{step: FestivalEntryStep, available: bool, mutable: bool, locked_reason: string|null, requirement_mutability: array<int, bool>, requirement_completeness: array<int, bool>, due_at: array<int, CarbonInterface|null>, editable_until: array<int, CarbonInterface|null>, requirements_complete: bool, has_blocking_charges: bool}>
      */
-    public function forEntry(FestivalEntry $entry): Collection
+    public function forEntry(FestivalEntry $entry, ?CarbonInterface $at = null): Collection
     {
+        $at ??= now();
         $entry->loadMissing(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges']);
         $priorApproved = true;
         $states = collect();
@@ -50,11 +51,11 @@ class FestivalEntryWorkflowState
                 $lockedReason = __('app.festival_full_confirm_payments_incomplete');
             } elseif ($summary && ! $finalSummary && ! $qualificationSettled) {
                 $lockedReason = __('app.festival_full_confirm_qualification_incomplete');
-            } elseif ($step->workflowStep->opens_at?->isFuture()) {
+            } elseif ($step->workflowStep->opens_at?->greaterThan($at)) {
                 $lockedReason = __('app.festival_step_locked_until', ['date' => $step->workflowStep->opens_at->timezone($entry->edition->timezone)->format('d.m.Y H:i')]);
-            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->correction_due_at?->isPast()) {
+            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->correction_due_at?->lessThan($at)) {
                 $lockedReason = __('app.festival_step_correction_expired');
-            } elseif ($step->workflowStep->due_at?->isPast() && $step->status === FestivalEntryStepStatus::Draft) {
+            } elseif ($step->workflowStep->due_at?->lessThan($at) && $step->status === FestivalEntryStepStatus::Draft) {
                 $lockedReason = __('app.festival_step_deadline_expired');
             } elseif ($step->status === FestivalEntryStepStatus::Rejected) {
                 $lockedReason = __('app.festival_step_rejected');
@@ -102,10 +103,10 @@ class FestivalEntryWorkflowState
         return $states;
     }
 
-    public function assertMutable(FestivalEntry $entry, FestivalEntryStep $step): void
+    public function assertMutable(FestivalEntry $entry, FestivalEntryStep $step, ?CarbonInterface $at = null): void
     {
         abort_unless($step->festival_entry_id === $entry->id, 404);
-        $state = $this->forEntry($entry)->first(fn (array $state): bool => $state['step']->is($step));
+        $state = $this->forEntry($entry, $at)->first(fn (array $state): bool => $state['step']->is($step));
         abort_unless($state && $state['mutable'], 409, $state['locked_reason'] ?? __('app.festival_step_locked_previous'));
     }
 

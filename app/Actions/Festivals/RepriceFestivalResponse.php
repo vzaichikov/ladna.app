@@ -5,6 +5,7 @@ namespace App\Actions\Festivals;
 use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalRequirementInputType;
+use App\Enums\IntegrationProvider;
 use App\Models\FestivalCharge;
 use App\Models\FestivalEntryRequirement;
 use App\Models\FestivalPaymentAttempt;
@@ -31,19 +32,22 @@ class RepriceFestivalResponse
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
-            if ($charges->whereIn('status', [FestivalChargeStatus::PaymentPending, FestivalChargeStatus::PaidRequiresRefund])->isNotEmpty()) {
+            if ($charges->where('status', FestivalChargeStatus::PaidRequiresRefund)->isNotEmpty()) {
                 throw ValidationException::withMessages([
                     'value' => __('app.festival_payment_already_pending'),
                 ]);
             }
             if (FestivalPaymentAttempt::query()
                 ->where('status', FestivalPaymentStatus::Pending->value)
-                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->where(fn ($query) => $query->where('provider', IntegrationProvider::Monopay->value)->orWhereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->whereHas('allocations', fn ($query) => $query->whereIn('festival_charge_id', $charges->modelKeys()))
                 ->exists()) {
                 throw ValidationException::withMessages([
                     'value' => __('app.festival_payment_already_pending'),
                 ]);
+            }
+            foreach ($charges->where('status', FestivalChargeStatus::PaymentPending) as $charge) {
+                $charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
             }
             $currentCurrency = strtoupper($requirement->entry->account->default_currency);
             $paidCharges = $charges->where('status', FestivalChargeStatus::Paid);

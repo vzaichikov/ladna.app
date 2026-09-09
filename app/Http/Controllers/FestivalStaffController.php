@@ -15,6 +15,7 @@ use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
+use App\Enums\IntegrationProvider;
 use App\Http\Requests\FestivalChargeDefinitionRequest;
 use App\Http\Requests\FestivalEditionRequest;
 use App\Http\Requests\FestivalRequirementRequest;
@@ -444,7 +445,7 @@ class FestivalStaffController extends Controller
             $hasLiveAttempt = FestivalPaymentAttempt::query()
                 ->where('account_id', $account->id)
                 ->where('status', FestivalPaymentStatus::Pending->value)
-                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->where(fn ($query) => $query->where('provider', IntegrationProvider::Monopay->value)->orWhereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->whereHas('allocations', fn ($query) => $query->where('festival_charge_id', $festivalCharge->id))
                 ->orderBy('id')
                 ->lockForUpdate()

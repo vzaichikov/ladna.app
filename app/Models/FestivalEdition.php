@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalRegistrationStatus;
+use Carbon\CarbonInterface;
 use Database\Factories\FestivalEditionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,11 +52,13 @@ class FestivalEdition extends Model
         return $query->where('ends_at', '>=', now());
     }
 
-    public function registrationIsOpen(): bool
+    public function registrationIsOpen(?CarbonInterface $at = null): bool
     {
+        $at ??= now();
+
         return $this->registration_status === FestivalRegistrationStatus::Open
-            && (! $this->registration_opens_at || $this->registration_opens_at->isPast())
-            && (! $this->registration_closes_at || $this->registration_closes_at->isFuture())
+            && (! $this->registration_opens_at || $this->registration_opens_at->lessThan($at))
+            && (! $this->registration_closes_at || $this->registration_closes_at->greaterThan($at))
             && in_array($this->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true);
     }
 

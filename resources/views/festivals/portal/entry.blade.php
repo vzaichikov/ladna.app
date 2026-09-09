@@ -34,6 +34,25 @@
 
         @if (session('status'))<div class="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">{{ session('status') }}</div>@endif
 
+        @if ($entry->status === \App\Enums\FestivalEntryStatus::Withdrawn)
+            <section class="mt-5 rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950" data-festival-entry-recovery>
+                <h2 class="font-semibold">{{ __('app.festival_entry_status_withdrawn') }}</h2>
+                <p class="mt-2 text-sm">{{ __('app.festival_entry_withdrawn_payment_help') }}</p>
+                @if ($errors->any())
+                    <p class="mt-3 text-sm font-semibold text-rose-800" role="alert">{{ $errors->first() }}</p>
+                @endif
+                @if ($canRestoreEntry ?? false)
+                    <form method="POST" action="{{ route('festival.portal.entries.restore', [$account->slug, $entry]) }}" class="mt-4">
+                        @csrf
+                        <p class="mb-3 text-sm">{{ __('app.festival_entry_restore_help') }}</p>
+                        <x-ui.button type="submit" variant="success" size="lg">{{ __('app.festival_entry_restore') }}</x-ui.button>
+                    </form>
+                @else
+                    <p class="mt-3 text-sm">{{ __('app.festival_entry_restore_unavailable') }}</p>
+                @endif
+            </section>
+        @endif
+
         <section class="mt-7 rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
             <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ $directionName }}</p>
             <h2 class="mt-1 text-xl font-semibold text-slate-950">{{ $categoryName }}</h2>

@@ -6,12 +6,13 @@ use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalPaymentStatus;
 use App\Models\FestivalCharge;
 use App\Models\FestivalEntryStep;
+use App\Models\FestivalPaymentAttempt;
 use App\Models\FestivalPaymentAttemptCharge;
 use Illuminate\Support\Collection;
 
 class FestivalChargePaymentGroups
 {
-    /** @return Collection<int, array{key: string, charge: FestivalCharge, charges: Collection<int, FestivalCharge>, status: FestivalChargeStatus, amount_cents: int, currency: string, due_at: mixed}> */
+    /** @return Collection<int, array{key: string, charge: FestivalCharge, charges: Collection<int, FestivalCharge>, status: FestivalChargeStatus, amount_cents: int, currency: string, due_at: mixed, attempt: FestivalPaymentAttempt|null}> */
     public function forStep(FestivalEntryStep $step): Collection
     {
         $charges = $step->charges
@@ -24,7 +25,7 @@ class FestivalChargePaymentGroups
             ->where('status', FestivalChargeStatus::PaymentPending)
             ->reject(fn (FestivalCharge $charge): bool => $this->allocationsForCharge($charge)->contains(
                 fn (FestivalPaymentAttemptCharge $allocation): bool => $allocation->attempt?->status === FestivalPaymentStatus::Pending
-                    && ($allocation->attempt->expires_at === null || $allocation->attempt->expires_at->isFuture()),
+                    && ($allocation->attempt->provider === 'monopay' || $allocation->attempt->expires_at === null || $allocation->attempt->expires_at->isFuture()),
             ));
         $outstanding = $charges
             ->whereIn('status', [FestivalChargeStatus::Pending, FestivalChargeStatus::Failed])
@@ -53,6 +54,7 @@ class FestivalChargePaymentGroups
             $allocation = $this->allocationsForCharge($charge)
                 ->filter(fn (FestivalPaymentAttemptCharge $allocation): bool => $allocation->attempt?->status === $paymentStatus
                     && ($paymentStatus !== FestivalPaymentStatus::Pending
+                        || $allocation->attempt->provider === 'monopay'
                         || $allocation->attempt->expires_at === null
                         || $allocation->attempt->expires_at->isFuture()))
                 ->sortByDesc('festival_payment_attempt_id')
@@ -79,7 +81,7 @@ class FestivalChargePaymentGroups
 
     /**
      * @param  Collection<int, FestivalCharge>  $charges
-     * @return array{key: string, charge: FestivalCharge, charges: Collection<int, FestivalCharge>, status: FestivalChargeStatus, amount_cents: int, currency: string, due_at: mixed}
+     * @return array{key: string, charge: FestivalCharge, charges: Collection<int, FestivalCharge>, status: FestivalChargeStatus, amount_cents: int, currency: string, due_at: mixed, attempt: FestivalPaymentAttempt|null}
      */
     private function group(string $key, Collection $charges, FestivalChargeStatus $status, ?int $attemptId = null): array
     {
@@ -101,6 +103,8 @@ class FestivalChargePaymentGroups
                 : (int) $charges->sum('amount_cents'),
             'currency' => strtoupper($allocations->first()?->currency ?? $leadCharge->currency),
             'due_at' => $charges->whereNotNull('due_at')->min('due_at'),
+            'attempt' => $charges->flatMap(fn (FestivalCharge $charge): Collection => $this->allocationsForCharge($charge))
+                ->pluck('attempt')->filter()->sortByDesc('id')->first(),
         ];
     }
 

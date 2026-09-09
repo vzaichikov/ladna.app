@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.165.0',
+                'date' => '2026-09-09',
+                'title' => 'Festival payment recovery',
+                'items' => ['Festival participants can now check a waiting Monopay payment with the bank, reopen a valid checkout, and retry after an unpaid invoice expires or fails. Automatic checks also recover missed confirmations without creating duplicate payments.', 'Eligible withdrawn, unpaid application drafts can be restored to continue registration. Payments made on time can complete their step when bank confirmation arrives after the deadline, while current registration and review requirements still apply.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.164.0',
                 'date' => '2026-09-04',
                 'title' => 'Promotion codes for tickets and class passes',
@@ -1458,6 +1465,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.165.0',
+                'date' => '2026-09-09',
+                'title' => 'Відновлення оплати фестивальних заявок',
+                'items' => ['Учасниці фестивалю можуть перевірити стан очікуваної оплати Monopay у банку, знову відкрити дійсну сторінку оплати та повторити спробу після підтвердженої помилки або завершення строку неоплаченого рахунку. Автоматична перевірка також відновлює пропущені підтвердження без повторних платежів.', 'Відкликану неоплачену чернетку можна відновити, якщо вона відповідає чинним умовам реєстрації. Вчасна оплата завершує свій крок і тоді, коли підтвердження банку надійшло після дедлайну; чинні умови реєстрації та перевірки організатором залишаються обовʼязковими.'],
+                'meta' => 'Очікує коміту релізу.',
+            ],
             [
                 'version' => '0.164.0',
                 'date' => '2026-09-04',

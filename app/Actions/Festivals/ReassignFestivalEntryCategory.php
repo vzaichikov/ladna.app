@@ -7,6 +7,7 @@ use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
 use App\Enums\FestivalPaymentStatus;
 use App\Enums\FestivalQualificationStatus;
+use App\Enums\IntegrationProvider;
 use App\Models\FestivalBattleMatch;
 use App\Models\FestivalCategory;
 use App\Models\FestivalCharge;
@@ -92,17 +93,20 @@ class ReassignFestivalEntryCategory
             $participationCharges = $entry->charges->where('kind', 'participation');
             $protectedCharge = ! $applicantInitiated && $participationCharges->contains(function ($charge): bool {
                 $protectedStatus = in_array($charge->status, [
-                    FestivalChargeStatus::PaymentPending,
                     FestivalChargeStatus::Paid,
                     FestivalChargeStatus::PaidRequiresRefund,
                     FestivalChargeStatus::Refunded,
                 ], true);
-                $liveAttempt = $charge->allocatedPaymentAttempts()->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending && (! $attempt->expires_at || $attempt->expires_at->isFuture()));
+                $liveAttempt = $charge->allocatedPaymentAttempts()->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending
+                    && ($attempt->provider === IntegrationProvider::Monopay->value || ! $attempt->expires_at || $attempt->expires_at->isFuture()));
 
                 return $protectedStatus || $liveAttempt;
             });
             if ($protectedCharge) {
                 throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_reassignment_payment_started')]);
+            }
+            foreach ($participationCharges->where('status', FestivalChargeStatus::PaymentPending) as $charge) {
+                $charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
             }
 
             $this->rules->validateEntry(

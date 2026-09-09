@@ -22,6 +22,12 @@
     @php
         $allocatedPaymentAttempts = $charge->allocatedPaymentAttempts();
     @endphp
+    @if ($allocatedPaymentAttempts->contains(fn ($attempt) => $attempt->provider === 'monopay' && $attempt->status === \App\Enums\FestivalPaymentStatus::Pending))
+        <form method="POST" action="{{ route('dashboard.accounts.festivals.charges.check', [$account, $edition, $charge]) }}" class="mt-3">
+            @csrf
+            <x-ui.button type="submit" variant="secondary">{{ __('app.festival_payment_check') }}</x-ui.button>
+        </form>
+    @endif
     @if ($allocatedPaymentAttempts->isNotEmpty())
         <div class="mt-3 space-y-2">
             @foreach ($allocatedPaymentAttempts->sortByDesc('id') as $attempt)

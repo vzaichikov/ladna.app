@@ -3,6 +3,7 @@
 use App\Http\Controllers\FestivalAdmissionController;
 use App\Http\Controllers\FestivalAnnouncementController;
 use App\Http\Controllers\FestivalBattleVoteController;
+use App\Http\Controllers\FestivalChargeRecoveryController;
 use App\Http\Controllers\FestivalEntryController;
 use App\Http\Controllers\FestivalEntryStepController;
 use App\Http\Controllers\FestivalFileController;
@@ -111,10 +112,14 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
             Route::post('entries/{festivalEntry}/steps/{festivalEntryStep}/submit', [FestivalEntryStepController::class, 'submit'])->middleware(PreventReadOnlyDemoMutations::class)->name('entry-steps.submit');
             Route::post('entries/{festivalEntry}/steps/{festivalEntryStep}/requirements/{festivalEntryRequirement}/response', [FestivalEntryStepController::class, 'storeResponse'])->middleware(PreventReadOnlyDemoMutations::class)->name('entry-step-responses.store');
             Route::post('entries/{festivalEntry}/withdraw', [FestivalEntryController::class, 'withdraw'])->middleware(PreventReadOnlyDemoMutations::class)->name('entries.withdraw');
+            Route::post('entries/{festivalEntry}/restore', [FestivalEntryController::class, 'restore'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:6,1'])->name('entries.restore');
             Route::post('entries/{festivalEntry}/requirements/{festivalEntryRequirement}/submissions', [FestivalSubmissionController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('submissions.store');
             Route::get('submissions/{festivalSubmission}', [FestivalFileController::class, 'portalSubmission'])->name('submissions.download');
             Route::put('notification-preferences', [FestivalAnnouncementController::class, 'updatePreferences'])->middleware(PreventReadOnlyDemoMutations::class)->name('notification-preferences.update');
             Route::post('entries/{festivalEntry}/charges/{festivalCharge}/pay', [FestivalEntryController::class, 'payCharge'])->middleware(PreventReadOnlyDemoMutations::class)->name('charges.pay');
+            Route::get('entries/{festivalEntry}/charges/{festivalCharge}/status', [FestivalChargeRecoveryController::class, 'status'])->middleware('throttle:60,1')->name('charges.status');
+            Route::post('entries/{festivalEntry}/charges/{festivalCharge}/check', [FestivalChargeRecoveryController::class, 'check'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:6,1'])->name('charges.check');
+            Route::post('entries/{festivalEntry}/charges/{festivalCharge}/resume', [FestivalChargeRecoveryController::class, 'resume'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:6,1'])->name('charges.resume');
         });
 
         Route::prefix('judge')->name('judge.')->middleware([EnsureFestivalPortalRole::class.':judge', EnsureFestivalProfileComplete::class])->group(function (): void {

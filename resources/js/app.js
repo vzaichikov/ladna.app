@@ -1,4 +1,5 @@
 import { createIcons, icons } from 'lucide';
+import { initFestivalPaymentRecovery } from './festival-payment-recovery';
 import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
 import 'summernote/dist/summernote-lite.css';
@@ -10568,6 +10569,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFestivalApplicationPickerModal();
     initFestivalQuickProfileModal();
     initFestivalTeamModals();
+    initFestivalPaymentRecovery();
     initFestivalSceneTabs();
     initFestivalProgram();
     initFestivalTimeline();

@@ -6,6 +6,7 @@ use App\Actions\Festivals\FestivalActivityRecorder;
 use App\Actions\Festivals\InitializeFestivalEntryWorkflow;
 use App\Actions\Festivals\ReassignFestivalEntryCategory;
 use App\Actions\Festivals\RepriceFestivalEntryCharges;
+use App\Actions\Festivals\RestoreFestivalEntry;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalWorkflowStepType;
@@ -93,7 +94,10 @@ class FestivalEntryController extends Controller
         $paymentGroups = $selectedStep ? $chargePaymentGroups->forStep($selectedStep) : collect();
         $teamHelpers = $portalUser->helpers()->active()->orderBy('last_name')->orderBy('first_name')->orderBy('id')->get();
 
-        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements', 'paymentGroups', 'teamHelpers') + ['entry' => $festivalEntry]);
+        return view('festivals.portal.entry', compact('account', 'portalUser', 'festivalEntry', 'providers', 'workflowStates', 'selectedStep', 'postConfirmationRequirements', 'paymentGroups', 'teamHelpers') + [
+            'entry' => $festivalEntry,
+            'canRestoreEntry' => app(RestoreFestivalEntry::class)->eligible($festivalEntry),
+        ]);
     }
 
     public function edit(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalEntryWorkflowState $workflowState, ReassignFestivalEntryCategory $reassignCategory): View
@@ -172,6 +176,16 @@ class FestivalEntryController extends Controller
         }, 3);
 
         return back()->with('status', __('app.festival_entry_withdrawn'));
+    }
+
+    public function restore(Request $request, string $accountSlug, FestivalEntry $festivalEntry, RestoreFestivalEntry $restore): RedirectResponse
+    {
+        [, $portalUser] = $this->context($request, $accountSlug);
+        $this->assertEntry($festivalEntry, $portalUser);
+        $restore->execute($festivalEntry, $portalUser);
+
+        return redirect()->route('festival.portal.entries.show', [$accountSlug, $festivalEntry])
+            ->with('status', __('app.festival_entry_restored'));
     }
 
     public function payCharge(Request $request, string $accountSlug, FestivalEntry $festivalEntry, FestivalCharge $festivalCharge, FestivalPaymentService $payments, FestivalEntryWorkflowState $workflowState, FestivalEntryStepCompletion $completion): RedirectResponse|View

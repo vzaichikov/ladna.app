@@ -140,6 +140,15 @@ class ScheduledTaskRegistry
                 'single_server' => true,
             ],
             [
+                'key' => 'festival_payments_reconcile',
+                'command' => 'festival-payments:reconcile --limit=50',
+                'expression' => '*/5 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_five_minutes',
+                'description_key' => 'scheduled_task_festival_payments_reconcile_description',
+                'overlap_minutes' => 30,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'festival_notifications_dispatch',
                 'command' => 'festivals:dispatch-notifications --limit=100',
                 'expression' => '* * * * *',

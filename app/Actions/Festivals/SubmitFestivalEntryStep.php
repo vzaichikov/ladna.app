@@ -2,6 +2,7 @@
 
 namespace App\Actions\Festivals;
 
+use App\Enums\FestivalChargeStatus;
 use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
@@ -11,12 +12,14 @@ use App\Enums\FestivalWorkflowReviewEffect;
 use App\Enums\FestivalWorkflowReviewMode;
 use App\Enums\FestivalWorkflowStepType;
 use App\Models\FestivalCategory;
+use App\Models\FestivalCharge;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
 use App\Support\Festivals\FestivalEntryStepCompletion;
 use App\Support\Festivals\FestivalEntryWorkflowState;
 use App\Support\Festivals\FestivalRuleRegistry;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -33,11 +36,11 @@ class SubmitFestivalEntryStep
         private readonly ReserveFestivalEntryTrack $reserveTrack,
     ) {}
 
-    public function execute(FestivalEntry $entry, FestivalEntryStep $step): FestivalEntryStep
+    public function execute(FestivalEntry $entry, FestivalEntryStep $step, ?CarbonInterface $paymentReceivedAt = null): FestivalEntryStep
     {
         $completionNotificationToken = (string) Str::uuid();
 
-        return DB::transaction(function () use ($entry, $step, $completionNotificationToken): FestivalEntryStep {
+        return DB::transaction(function () use ($entry, $step, $completionNotificationToken, $paymentReceivedAt): FestivalEntryStep {
             $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $entry->festival_edition_id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
 
@@ -53,14 +56,21 @@ class SubmitFestivalEntryStep
             if ($step->workflowStep->type === FestivalWorkflowStepType::Summary) {
                 throw ValidationException::withMessages(['step' => __('app.festival_summary_organizer_confirmation_required')]);
             }
-            $this->workflowState->assertMutable($entry, $step);
+            if ($paymentReceivedAt !== null) {
+                $paymentReceivedAt = $step->charges
+                    ->where('status', FestivalChargeStatus::Paid)
+                    ->map(fn (FestivalCharge $charge): CarbonInterface => $charge->paid_at ?? now())
+                    ->push($paymentReceivedAt)
+                    ->max();
+            }
+            $this->workflowState->assertMutable($entry, $step, $paymentReceivedAt);
             $this->completion->assertRequirementsComplete($step);
             $this->completion->assertChargesComplete($step);
 
             $this->reserveTrack->execute($entry, $step);
 
             if ($step->workflowStep->type === FestivalWorkflowStepType::Application) {
-                $this->submitApplication($entry, $purchase);
+                $this->submitApplication($entry, $purchase, $paymentReceivedAt);
             }
 
             $postConfirmationReview = $entry->status === FestivalEntryStatus::ChangesPending;
@@ -96,10 +106,10 @@ class SubmitFestivalEntryStep
         }, 3);
     }
 
-    private function submitApplication(FestivalEntry $entry, ?FestivalEditionPurchase $purchase): void
+    private function submitApplication(FestivalEntry $entry, ?FestivalEditionPurchase $purchase, ?CarbonInterface $paymentReceivedAt = null): void
     {
         $firstSubmission = $entry->submitted_at === null;
-        $this->rules->validateEntry($entry->edition, $entry->category, $entry->participants, $firstSubmission, $entry->submitted_at ?? now());
+        $this->rules->validateEntry($entry->edition, $entry->category, $entry->participants, $firstSubmission, $entry->submitted_at ?? now(), registrationAt: $paymentReceivedAt);
 
         if ($firstSubmission) {
             $this->assertParticipantLimits($entry, $purchase);

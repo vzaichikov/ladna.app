@@ -12,15 +12,15 @@ use Illuminate\Validation\ValidationException;
 class FestivalRuleRegistry
 {
     /** @param Collection<int, FestivalParticipant> $participants */
-    public function validateEntry(FestivalEdition $edition, FestivalCategory $category, Collection $participants, bool $enforceRegistrationWindow = true, ?CarbonInterface $ageReference = null, bool $enforceAge = true): void
+    public function validateEntry(FestivalEdition $edition, FestivalCategory $category, Collection $participants, bool $enforceRegistrationWindow = true, ?CarbonInterface $ageReference = null, bool $enforceAge = true, ?CarbonInterface $registrationAt = null): void
     {
         abort_unless($category->account_id === $edition->account_id && $category->festival_edition_id === $edition->id, 404);
 
-        if ($enforceRegistrationWindow && ! $edition->registrationIsOpen()) {
+        if ($enforceRegistrationWindow && ! $edition->registrationIsOpen($registrationAt)) {
             throw ValidationException::withMessages(['edition' => __('app.festival_registration_not_open')]);
         }
 
-        if ($enforceRegistrationWindow && $category->registration_closes_at?->isPast()) {
+        if ($enforceRegistrationWindow && $category->registration_closes_at?->lessThan($registrationAt ?? now())) {
             throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_deadline_passed')]);
         }
 

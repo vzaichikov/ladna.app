@@ -10,6 +10,7 @@ use App\Http\Controllers\FestivalBattleVoteController;
 use App\Http\Controllers\FestivalBrandingController;
 use App\Http\Controllers\FestivalCategoryController;
 use App\Http\Controllers\FestivalChargeDefinitionController;
+use App\Http\Controllers\FestivalChargeRecoveryController;
 use App\Http\Controllers\FestivalContentSectionController;
 use App\Http\Controllers\FestivalDirectionController;
 use App\Http\Controllers\FestivalDocumentController;
@@ -216,6 +217,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::patch('{festivalEdition:id}/entries/{festivalEntry}/steps/{festivalEntryStep}/review', [FestivalEntryStepController::class, 'review'])->whereNumber('festivalEdition')->name('entry-steps.review');
     Route::patch('{festivalEdition:id}/requirements/{festivalEntryRequirement}/review', [FestivalStaffController::class, 'reviewRequirement'])->whereNumber('festivalEdition')->name('requirements.review');
     Route::patch('{festivalEdition:id}/charges/{festivalCharge}/manual-review', [FestivalStaffController::class, 'approveManualCharge'])->whereNumber('festivalEdition')->name('charges.manual-review');
+    Route::post('{festivalEdition:id}/charges/{festivalCharge}/check', [FestivalChargeRecoveryController::class, 'checkStaff'])->whereNumber('festivalEdition')->whereNumber('festivalCharge')->middleware('throttle:6,1')->name('charges.check');
     Route::post('{festivalEdition:id}/schedule', [FestivalScheduleController::class, 'store'])->whereNumber('festivalEdition')->name('schedule.store');
     Route::put('{festivalEdition:id}/schedule/{festivalScheduleSlot}', [FestivalScheduleController::class, 'update'])->whereNumber('festivalEdition')->name('schedule.update');
     Route::post('{festivalEdition:id}/program/scenes/{festivalStage}/generate', [FestivalScheduleController::class, 'generate'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('schedule.generate');

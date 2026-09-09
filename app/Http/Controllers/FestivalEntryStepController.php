@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\ReassignFestivalEntryCategory;
+use App\Actions\Festivals\RestoreFestivalEntry;
 use App\Actions\Festivals\ReviewFestivalEntryStep;
 use App\Actions\Festivals\StoreFestivalResponse;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
@@ -40,6 +41,7 @@ class FestivalEntryStepController extends Controller
             'account' => $account,
             'portalUser' => $portalUser,
             'entry' => $festivalEntry,
+            'canRestoreEntry' => app(RestoreFestivalEntry::class)->eligible($festivalEntry),
             'providers' => app(PaymentGatewayRegistry::class)->availableSettingsFor($account),
             'workflowStates' => $workflowStates,
             'selectedStep' => $selectedStep,
