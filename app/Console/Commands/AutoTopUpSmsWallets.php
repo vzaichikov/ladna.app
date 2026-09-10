@@ -46,10 +46,12 @@ class AutoTopUpSmsWallets extends Command
                     ->where('sms_sending_mode', SmsSendingMode::LadnaService->value))
                 ->whereHas('subscription.plan', fn (Builder $query): Builder => $query
                     ->where('sms_segment_price_cents', '>', 0)))
-            ->with('account')
-            ->orderBy('id')
-            ->limit($limit)
-            ->get();
+            ->with('account.subscription')
+            ->lazyById(100)
+            ->filter(fn (AccountSmsWallet $wallet): bool => $wallet->last_auto_top_up_failure_warning_at === null
+                || ! $wallet->hasInsufficientAutoTopUpMonthlyAllowance($wallet->account->timezone ?: config('app.timezone')))
+            ->take($limit)
+            ->collect();
 
         $payments = 0;
         $failures = 0;

@@ -314,7 +314,8 @@ class SmsTopUpPaymentTest extends TestCase
         $payment = app(SmsAutoTopUpService::class)->attempt($account);
 
         $this->assertNull($payment);
-        $this->assertNotNull($wallet->refresh()->auto_top_up_suspended_at);
+        $this->assertNull($wallet->refresh()->auto_top_up_suspended_at);
+        $this->assertNotNull($wallet->last_auto_top_up_failure_warning_at);
         $this->assertDatabaseCount('sms_top_up_payments', 0);
     }
 

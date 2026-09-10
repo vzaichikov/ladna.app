@@ -69,16 +69,19 @@ class SmsAutoTopUpService
         }
 
         $amountCents = max(0, $wallet->auto_top_up_target_cents - $spendableCents);
-        $remainingCapCents = max(
-            0,
-            $wallet->auto_top_up_monthly_cap_cents - $wallet->auto_top_up_monthly_spent_cents,
-        );
 
-        if ($amountCents === 0 || $amountCents > $remainingCapCents) {
-            $wallet->forceFill(['auto_top_up_suspended_at' => now()])->save();
+        if ($amountCents === 0) {
+            return null;
+        }
+
+        if ($wallet->hasInsufficientAutoTopUpMonthlyAllowance($account->timezone ?: config('app.timezone'))) {
             $this->notifier->automaticTopUpFailed($account, 'monthly_cap_exceeded');
 
             return null;
+        }
+
+        if ($wallet->last_auto_top_up_failure_warning_at !== null) {
+            $wallet->forceFill(['last_auto_top_up_failure_warning_at' => null])->save();
         }
 
         $inFlight = $this->inFlightPayment($account);

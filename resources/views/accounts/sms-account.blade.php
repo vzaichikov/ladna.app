@@ -55,6 +55,10 @@
         <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {{ __('app.sms_auto_top_up_suspended_warning') }}
         </div>
+    @elseif ($isLadnaMode && ($segmentPriceCents ?? 0) > 0 && $wallet->hasInsufficientAutoTopUpMonthlyAllowance($timezone))
+        <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {{ __('app.sms_auto_top_up_monthly_cap_warning') }}
+        </div>
     @elseif ($isLadnaMode && ($segmentPriceCents ?? 0) > 0 && $wallet->spendableBalanceCents() < $segmentPriceCents)
         <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {{ __('app.sms_low_credit_warning') }}

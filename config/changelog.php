@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.165.1',
+                'date' => '2026-09-10',
+                'title' => 'SMS auto top-up recovery',
+                'items' => ['SMS auto top-up now resumes when a new month begins in the studio’s time zone after reaching its monthly limit. Page and email notices explain the limit and how to continue sooner, while failed card payments remain paused for owner review.'],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.165.0',
                 'date' => '2026-09-09',
                 'title' => 'Festival payment recovery',
@@ -1465,6 +1472,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.165.1',
+                'date' => '2026-09-10',
+                'title' => 'Відновлення автопоповнення SMS',
+                'items' => ['Після досягнення місячного ліміту автопоповнення SMS відновлюється з початком нового місяця за часовим поясом студії. Попередження на сторінці та в email пояснюють ліміт і як продовжити раніше, а невдалі платежі карткою залишаються призупиненими до перевірки власницею.'],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.165.0',
                 'date' => '2026-09-09',

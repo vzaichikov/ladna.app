@@ -500,7 +500,9 @@ class TransactionalMailDispatcher
 
         $this->sendToAccountOwners($account, $scenario, function (User $user) use ($baseData, $scenario, $account): TransactionalMail {
             return new TransactionalMail(
-                subjectKey: $scenario->subjectKey(),
+                subjectKey: $scenario === EmailScenario::SmsAutoTopUpFailed && $baseData['reason'] === 'monthly_cap_exceeded'
+                    ? 'app.mail_subject_sms_auto_top_up_monthly_cap'
+                    : $scenario->subjectKey(),
                 contentView: $scenario->contentView(),
                 data: [
                     ...$baseData,

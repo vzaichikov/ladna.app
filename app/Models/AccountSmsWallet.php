@@ -70,4 +70,25 @@ class AccountSmsWallet extends Model
     {
         return max(0, $this->balance_cents - $this->reserved_cents);
     }
+
+    public function hasInsufficientAutoTopUpMonthlyAllowance(string $timezone): bool
+    {
+        if (
+            ! $this->auto_top_up_enabled
+            || $this->auto_top_up_threshold_cents === null
+            || $this->auto_top_up_target_cents === null
+            || $this->auto_top_up_monthly_cap_cents === null
+            || $this->spendableBalanceCents() >= $this->auto_top_up_threshold_cents
+        ) {
+            return false;
+        }
+
+        $period = now($timezone)->startOfMonth()->toDateString();
+        $spentCents = $this->auto_top_up_monthly_period?->toDateString() === $period
+            ? $this->auto_top_up_monthly_spent_cents
+            : 0;
+        $amountCents = max(0, $this->auto_top_up_target_cents - $this->spendableBalanceCents());
+
+        return $amountCents > max(0, $this->auto_top_up_monthly_cap_cents - $spentCents);
+    }
 }

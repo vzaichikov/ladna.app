@@ -277,6 +277,7 @@ class SmsWalletService
         if ($wallet->auto_top_up_monthly_period?->toDateString() !== $period) {
             $wallet->auto_top_up_monthly_period = $period;
             $wallet->auto_top_up_monthly_spent_cents = 0;
+            $wallet->last_auto_top_up_failure_warning_at = null;
         }
 
         $wallet->auto_top_up_monthly_spent_cents += $amountCents;
