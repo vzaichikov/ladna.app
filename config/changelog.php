@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.166.0',
+                'date' => '2026-09-10',
+                'title' => 'One private-lesson pass for several disciplines',
+                'items' => ['Individual-lesson passes can now cover several selected class formats, so clients can use one package across disciplines while the public price list keeps one offer per package.', 'Choose the covered formats in Class passes & prices. Existing selections, trainer and room restrictions stay in place; newly created formats are included only when an owner selects them.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.165.1',
                 'date' => '2026-09-10',
                 'title' => 'SMS auto top-up recovery',
@@ -1472,6 +1479,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.166.0',
+                'date' => '2026-09-10',
+                'title' => 'Один індивідуальний абонемент для кількох напрямів',
+                'items' => ['В одному абонементі на індивідуальні заняття тепер можна вибрати кілька форматів: клієнти користуються одним пакетом для різних напрямів, а в публічному прайсі залишається одна пропозиція на пакет.', 'Виберіть потрібні формати в розділі Абонементи і ціни. Наявні налаштування, обмеження за тренерами та залами зберігаються; нові формати потрапляють до абонемента лише після вибору власницею.'],
+                'meta' => 'Очікує релізного коміту.',
+            ],
             [
                 'version' => '0.165.1',
                 'date' => '2026-09-10',

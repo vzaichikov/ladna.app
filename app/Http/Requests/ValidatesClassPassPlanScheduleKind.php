@@ -45,7 +45,7 @@ trait ValidatesClassPassPlanScheduleKind
 
         $classTypeIds = $this->selectedClassTypeIds();
 
-        if ($scheduleKindValue !== ScheduleKind::GroupClass->value
+        if ($scheduleKindValue === ScheduleKind::RoomRental->value
             && $classTypeIds->count() !== 1
             && ! $validator->errors()->has('class_type_ids')) {
             $validator->errors()->add('class_type_ids', __('app.class_pass_plan_single_class_type_required'));

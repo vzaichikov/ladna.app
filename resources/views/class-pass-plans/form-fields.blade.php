@@ -101,12 +101,12 @@
         @php
             $scheduleKindClassTypes = $classTypesByScheduleKind->get($scheduleKindValue, collect());
             $isActiveClassTypeGroup = $selectedScheduleKind === $scheduleKindValue;
-            $isGroupClass = $scheduleKindValue === \App\Enums\ScheduleKind::GroupClass->value;
+            $allowsMultipleClassTypes = $scheduleKindValue !== \App\Enums\ScheduleKind::RoomRental->value;
         @endphp
         <div class="{{ $isActiveClassTypeGroup ? '' : 'hidden' }}" data-class-type-options="{{ $scheduleKindValue }}">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span class="crm-label">{{ __('app.class_types') }}</span>
-                @if ($isGroupClass)
+                @if ($allowsMultipleClassTypes)
                     <x-ui.button type="button" variant="secondary" size="sm" data-select-all-class-types>
                         {{ __('app.select_all') }}
                     </x-ui.button>
@@ -117,11 +117,11 @@
                     <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700" data-class-type-option data-activity-direction-id="{{ $classType->activity_direction_id }}">
                         <input
                             name="class_type_ids[]"
-                            type="{{ $isGroupClass ? 'checkbox' : 'radio' }}"
+                            type="{{ $allowsMultipleClassTypes ? 'checkbox' : 'radio' }}"
                             value="{{ $classType->id }}"
                             @checked(in_array($classType->id, $selectedClassTypeIds, true))
                             @disabled(! $isActiveClassTypeGroup)
-                            class="{{ $isGroupClass ? 'crm-checkbox' : 'h-4 w-4 border-stone-300 text-brand-600 focus:ring-brand-500' }}"
+                            class="{{ $allowsMultipleClassTypes ? 'crm-checkbox' : 'h-4 w-4 border-stone-300 text-brand-600 focus:ring-brand-500' }}"
                             data-class-type-checkbox
                         >
                         <span class="min-w-0">

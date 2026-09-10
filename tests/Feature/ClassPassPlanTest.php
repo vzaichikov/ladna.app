@@ -396,21 +396,41 @@ class ClassPassPlanTest extends TestCase
         $this->assertEqualsCanonicalizing([$firstClassType->id, $secondClassType->id], $classPassPlan->classTypes()->pluck('class_types.id')->all());
     }
 
-    public function test_private_and_rental_class_pass_plans_require_one_matching_class_type(): void
+    public function test_private_class_pass_plan_can_cover_formats_from_multiple_directions(): void
     {
         $owner = User::factory()->create();
         $account = Account::factory()->create(['default_currency' => 'UAH']);
         $account->addOwner($owner);
         $direction = ActivityDirection::factory()->for($account)->create();
-        $privateTypes = ClassType::factory()->for($account)->count(2)->create(['schedule_kind' => 'private_lesson']);
-        $rentalTypes = ClassType::factory()->for($account)->count(2)->create(['schedule_kind' => 'room_rental']);
+        $otherDirection = ActivityDirection::factory()->for($account)->create();
+        $firstType = ClassType::factory()->for($account)->for($direction, 'activityDirection')->create([
+            'schedule_kind' => 'private_lesson',
+        ]);
+        $secondType = ClassType::factory()->for($account)->for($otherDirection, 'activityDirection')->create([
+            'schedule_kind' => 'private_lesson',
+        ]);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.class-pass-plans.store', $account), $this->validPayload($direction, [
                 'schedule_kind' => 'private_lesson',
-                'class_type_ids' => $privateTypes->modelKeys(),
+                'class_type_ids' => [$firstType->id, $secondType->id],
             ]))
-            ->assertSessionHasErrors('class_type_ids');
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('dashboard.accounts.class-pass-plans.index', [$account, 'tab' => 'private_lesson']));
+
+        $classPassPlan = ClassPassPlan::whereBelongsTo($account)->where('slug', 'start')->firstOrFail();
+
+        $this->assertSame('private_lesson', $classPassPlan->schedule_kind->value);
+        $this->assertEqualsCanonicalizing([$firstType->id, $secondType->id], $classPassPlan->classTypes()->pluck('class_types.id')->all());
+    }
+
+    public function test_rental_class_pass_plans_require_one_matching_class_type(): void
+    {
+        $owner = User::factory()->create();
+        $account = Account::factory()->create(['default_currency' => 'UAH']);
+        $account->addOwner($owner);
+        $direction = ActivityDirection::factory()->for($account)->create();
+        $rentalTypes = ClassType::factory()->for($account)->count(2)->create(['schedule_kind' => 'room_rental']);
 
         $this->actingAs($owner)
             ->post(route('dashboard.accounts.class-pass-plans.store', $account), $this->validPayload($direction, [

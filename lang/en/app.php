@@ -2453,7 +2453,7 @@ return [
     'move_class_pass_up' => 'Move :name up',
     'move_class_pass_down' => 'Move :name down',
     'class_pass_plan_class_type_schedule_kind_mismatch' => 'Choose class formats that match the selected schedule format.',
-    'class_pass_plan_single_class_type_required' => 'Choose exactly one class format for private lessons and room rental.',
+    'class_pass_plan_single_class_type_required' => 'Choose exactly one class format for room rental.',
     'class_pass_plan_segment_schedule_kind_mismatch' => 'Choose a class pass segment for the selected schedule format.',
     'class_pass_plan_segment_direction_mismatch' => 'Choose class formats from the directions attached to the selected segment.',
     'class_pass_segment_created' => 'Class pass segment created.',

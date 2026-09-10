@@ -2453,7 +2453,7 @@ return [
     'move_class_pass_up' => 'Перемістити :name вище',
     'move_class_pass_down' => 'Перемістити :name нижче',
     'class_pass_plan_class_type_schedule_kind_mismatch' => 'Оберіть формати занять, що відповідають вибраному типу.',
-    'class_pass_plan_single_class_type_required' => 'Для індивідуальних занять і оренди оберіть рівно один формат.',
+    'class_pass_plan_single_class_type_required' => 'Для оренди оберіть рівно один формат.',
     'class_pass_plan_segment_schedule_kind_mismatch' => 'Оберіть сегмент абонементів для вибраного формату занять.',
     'class_pass_plan_segment_direction_mismatch' => 'Оберіть формати занять із напрямів, привʼязаних до вибраного сегмента.',
     'class_pass_segment_created' => 'Сегмент абонементів створено.',
