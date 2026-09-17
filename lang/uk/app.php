@@ -3078,6 +3078,8 @@ return [
     'photo' => 'Фото',
     'enable_staff_login' => 'Дозволити вхід у систему',
     'login_email' => 'Email для входу',
+    'trainer_password_requirements' => 'Щонайменше 6 символів.',
+    'create_new_password' => 'Створити новий пароль',
     'role' => 'Роль',
     'permissions' => 'Права',
     'trainer_card_sections' => 'Розділи картки тренера',

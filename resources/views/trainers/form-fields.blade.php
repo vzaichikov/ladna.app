@@ -207,11 +207,30 @@
                     <input name="user_email" type="email" value="{{ old('user_email', $trainer->user?->email ?? $trainer->email) }}" class="crm-field">
                     @error('user_email') <span class="crm-help">{{ $message }}</span> @enderror
                 </label>
-                <label class="block">
-                    <span class="crm-label">{{ __('app.password') }}</span>
-                    <input name="user_password" type="password" class="crm-field">
-                    @error('user_password') <span class="crm-help">{{ $message }}</span> @enderror
-                </label>
+                <div data-password-generator>
+                    <label for="trainer-user-password" class="crm-label">{{ __('app.password') }}</label>
+                    <input
+                        id="trainer-user-password"
+                        name="user_password"
+                        type="password"
+                        minlength="6"
+                        autocomplete="new-password"
+                        spellcheck="false"
+                        autocapitalize="none"
+                        aria-describedby="trainer-password-help{{ $errors->has('user_password') ? ' trainer-password-error' : '' }}"
+                        class="crm-field"
+                    >
+                    <p id="trainer-password-help" class="mt-1.5 text-sm text-slate-500">
+                        {{ __('app.trainer_password_requirements') }}
+                        @if ($trainer->user_id)
+                            {{ __('app.password_help') }}
+                        @endif
+                    </p>
+                    @error('user_password') <span id="trainer-password-error" class="crm-help">{{ $message }}</span> @enderror
+                    <x-ui.button type="button" variant="secondary" size="sm" class="mt-2" data-generate-password>
+                        {{ __('app.create_new_password') }}
+                    </x-ui.button>
+                </div>
             </div>
         </section>
 

@@ -3078,6 +3078,8 @@ return [
     'photo' => 'Photo',
     'enable_staff_login' => 'Enable system login',
     'login_email' => 'Login email',
+    'trainer_password_requirements' => 'At least 6 characters.',
+    'create_new_password' => 'Create new password',
     'role' => 'Role',
     'permissions' => 'Permissions',
     'trainer_card_sections' => 'Trainer card sections',

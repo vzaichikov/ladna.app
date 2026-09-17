@@ -1380,6 +1380,43 @@ function initCustomerAuthTabs(root = document) {
     });
 }
 
+function initPasswordGenerators(root = document) {
+    root.querySelectorAll('[data-password-generator]').forEach((container) => {
+        if (container.dataset.passwordGeneratorReady === 'true') {
+            return;
+        }
+
+        const input = container.querySelector('input');
+        const button = container.querySelector('[data-generate-password]');
+
+        if (!input || !button) {
+            return;
+        }
+
+        container.dataset.passwordGeneratorReady = 'true';
+
+        button.addEventListener('click', () => {
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let password;
+
+            do {
+                password = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+                    .filter((value) => value < 248)
+                    .slice(0, 12)
+                    .map((value) => alphabet[value % alphabet.length])
+                    .join('');
+            } while (password.length !== 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password));
+
+            input.value = password;
+            input.type = 'text';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.focus();
+            input.select();
+        });
+    });
+}
+
 function initTrainerFormTabs(root = document) {
     root.querySelectorAll('[data-trainer-form-tabs]').forEach((container) => {
         if (container.dataset.trainerFormTabsReady === 'true') {
@@ -10595,6 +10632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initStudioLoginPickers();
     initClassPassPreviews();
     initCustomerAuthTabs();
+    initPasswordGenerators();
     initTrainerFormTabs();
     initPublicPriceTabs();
     initClassPassPlanSorting();
