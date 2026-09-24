@@ -34,7 +34,7 @@ class ClassPassPlanController extends Controller
         $hasMultipleWorkingLocations = $workingLocationContext->locations($account)->count() > 1;
         $workingLocationId = $workingLocationContext->selectedLocationId($account);
         $classPassPlans = $account->classPassPlans()
-            ->with(['classPassSegment', 'classTypes', 'trainerTypes', 'rooms.location'])
+            ->with(['classPassSegment', 'classTypes.activityDirection', 'trainerTypes', 'rooms.location'])
             ->where('schedule_kind', $activeScheduleKindValue)
             ->when($workingLocationId, fn ($query, int $locationId) => $query->where(
                 fn ($query) => $query

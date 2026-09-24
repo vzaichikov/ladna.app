@@ -111,7 +111,7 @@
                             $untilTime = $classPassPlan->available_until_time ? substr((string) $classPassPlan->available_until_time, 0, 5) : null;
                         @endphp
                         <article
-                            class="crm-row transition xl:grid-cols-[auto_minmax(10rem,1.2fr)_4.5rem_minmax(5rem,0.65fr)_minmax(6rem,0.8fr)_minmax(5rem,0.85fr)_minmax(5rem,0.85fr)_minmax(5rem,0.8fr)_auto] xl:items-center"
+                            class="crm-row transition xl:grid-cols-[auto_minmax(10rem,1.2fr)_4.5rem_minmax(5rem,0.65fr)_minmax(6rem,0.8fr)_minmax(5rem,0.85fr)_minmax(5rem,0.8fr)_auto] xl:items-center"
                             role="listitem"
                             data-class-pass-sort-item
                             data-plan-id="{{ $classPassPlan->id }}"
@@ -186,13 +186,6 @@
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-2">
-                                @forelse ($classPassPlan->classTypes as $classType)
-                                    <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $classType->name }}</span>
-                                @empty
-                                    <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
-                                @endforelse
-                            </div>
-                            <div class="flex flex-wrap gap-2">
                                 @forelse ($classPassPlan->trainerTypes as $trainerType)
                                     <x-ui.trainer-type-badge :trainer-type="$trainerType" />
                                 @empty
@@ -220,6 +213,18 @@
                                     @method('DELETE')
                                     <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />
                                 </form>
+                            </div>
+                            <div class="flex flex-wrap gap-2 border-t border-slate-100 pt-3 xl:col-span-full" role="group" aria-label="{{ __('app.class_types') }}">
+                                @forelse ($classPassPlan->classTypes as $classType)
+                                    <span
+                                        class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600"
+                                        @if ($classType->activityDirection)
+                                            style="background-color: {{ $classType->activityDirection->colorAccent() }}; border-color: {{ $classType->activityDirection->colorAccent() }}; color: {{ $classType->activityDirection->colorText() }}"
+                                        @endif
+                                    >{{ $classType->name }}</span>
+                                @empty
+                                    <span class="text-sm text-slate-500">{{ __('app.not_set') }}</span>
+                                @endforelse
                             </div>
                         </article>
                     @endforeach

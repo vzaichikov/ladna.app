@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.167.0',
+                'date' => '2026-09-24',
+                'title' => 'Clearer class-pass lists',
+                'items' => ['Covered class types now appear in a full-width row beneath each class pass, with badges coloured by activity direction. The badges wrap on smaller screens, keeping pass details easier to scan.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.166.0',
                 'date' => '2026-09-10',
                 'title' => 'One private-lesson pass for several disciplines',
@@ -1479,6 +1486,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.167.0',
+                'date' => '2026-09-24',
+                'title' => 'Зручніший список абонементів',
+                'items' => ['Типи занять тепер розміщені окремим рядком на всю ширину під даними кожного абонемента та позначені кольорами напрямків. На вузьких екранах позначки переносяться, щоб список було легше переглядати.'],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.166.0',
                 'date' => '2026-09-10',
