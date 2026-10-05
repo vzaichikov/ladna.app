@@ -126,7 +126,7 @@ class FestivalRequirementRequest extends FormRequest
             'allowed_mime_types.*' => ['string', 'max:150'],
             'allowed_hosts' => ['sometimes', 'array'],
             'allowed_hosts.*' => ['string', 'max:255', 'regex:/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/'],
-            'max_size_kb' => ['required', 'integer', 'min:1', 'max:102400'],
+            'max_size_kb' => ['required', 'integer', 'min:1', 'max:'.FestivalRequirementDefinition::MaxFileSizeKb],
             'min_duration_seconds' => ['nullable', 'integer', 'min:1'],
             'max_duration_seconds' => ['nullable', 'integer', 'gte:min_duration_seconds'],
             'is_required' => ['sometimes', 'boolean'],

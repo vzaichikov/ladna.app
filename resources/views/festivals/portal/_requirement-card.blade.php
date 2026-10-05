@@ -35,7 +35,7 @@
             : (implode(', ', $definition->allowed_mime_types ?? []) ?: __('app.festival_upload_any_format'));
         $uploadConstraints = __('app.festival_upload_constraints', [
             'formats' => $fileFormats,
-            'size' => round(min($definition->max_size_kb, 102400) / 1024, 2),
+            'size' => round(min($definition->max_size_kb, \App\Models\FestivalRequirementDefinition::MaxFileSizeKb) / 1024, 2),
         ]);
         $fileAccept = implode(',', array_unique([...$fileExtensions, ...($definition->allowed_mime_types ?? [])]));
     }

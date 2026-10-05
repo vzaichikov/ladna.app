@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.167.2',
+                'date' => '2026-10-05',
+                'title' => 'Larger Festival video uploads',
+                'items' => ['Festival organizers can now allow file uploads up to 300 MB per field. Each field keeps its configured format and size restrictions, which participants see before uploading.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.167.1',
                 'date' => '2026-10-05',
                 'title' => 'Clearer Festival file uploads',
@@ -1493,6 +1500,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.167.2',
+                'date' => '2026-10-05',
+                'title' => 'Більші відеофайли для фестивалів',
+                'items' => ['Організатори фестивалів тепер можуть дозволяти файли розміром до 300 МБ для кожного поля. Поля зберігають налаштовані обмеження формату й розміру, які учасники бачать перед завантаженням.'],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.167.1',
                 'date' => '2026-10-05',

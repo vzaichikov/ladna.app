@@ -72,7 +72,7 @@ class FestivalSettingsManagementTest extends TestCase
             'name' => 'Кваліфікаційне відео',
             'pricing_mode' => 'none',
             'stage' => 'qualification',
-            'max_size_kb' => 51200,
+            'max_size_kb' => 307200,
             'allowed_extensions_text' => 'mp4, mov',
             'allowed_mime_types_text' => 'video/mp4, video/quicktime',
             'is_required' => 1,
@@ -80,7 +80,20 @@ class FestivalSettingsManagementTest extends TestCase
         ])->assertRedirect(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]));
         $registrationField = FestivalRequirementDefinition::query()->where('festival_edition_id', $edition->id)->where('code', 'kvalifikatsiyne-video')->firstOrFail();
         $this->assertSame(['mp4', 'mov'], $registrationField->allowed_extensions);
+        $this->assertSame(307200, $registrationField->max_size_kb);
         $this->assertSame('final', $registrationField->stage);
+
+        $this->actingAs($owner)->put(route('dashboard.accounts.festivals.requirements.update', [$account, $edition, $registrationField]), [
+            'festival_category_id' => $category->id,
+            'festival_workflow_step_id' => $applicationStep->id,
+            'type' => 'qualification_video',
+            'subject_scope' => 'entry',
+            'input_type' => 'file',
+            'name' => 'Кваліфікаційне відео',
+            'pricing_mode' => 'none',
+            'max_size_kb' => 307201,
+        ])->assertSessionHasErrors('max_size_kb');
+        $this->assertSame(307200, $registrationField->refresh()->max_size_kb);
 
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.settings.requirements', [$account, $edition]))

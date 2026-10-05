@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\FestivalRequirementDefinition;
 use Illuminate\Foundation\Http\FormRequest;
 
 class FestivalSubmissionRequest extends FormRequest
@@ -13,6 +14,6 @@ class FestivalSubmissionRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['file' => ['required', 'file', 'max:102400']];
+        return ['file' => ['required', 'file', 'max:'.FestivalRequirementDefinition::MaxFileSizeKb]];
     }
 }

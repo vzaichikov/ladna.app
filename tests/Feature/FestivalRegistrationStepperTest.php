@@ -442,6 +442,45 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertStatus(409);
     }
 
+    public function test_file_uploads_allow_300_megabytes_and_preserve_smaller_field_limits(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'background-video', 'file');
+        $definition->update([
+            'allowed_extensions' => ['mp4'],
+            'allowed_mime_types' => ['video/mp4'],
+            'max_size_kb' => 307200,
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Large video entry'),
+        );
+        $step = $this->step($entry, 'application');
+        $requirement = $step->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+        $uploadUrl = route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]);
+
+        $this->actingAs($portalUser, 'festival')
+            ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
+            ->assertOk()
+            ->assertSee(__('app.festival_upload_constraints', ['formats' => 'MP4', 'size' => 300]));
+        $this->postJson($uploadUrl, [
+            'file' => UploadedFile::fake()->create('background.mp4', 307200, 'video/mp4'),
+        ])->assertOk();
+        $submission = $requirement->submissions()->firstOrFail();
+        Storage::disk('local')->assertExists($submission->path);
+
+        $this->postJson($uploadUrl, [
+            'file' => UploadedFile::fake()->create('oversized.mp4', 307201, 'video/mp4'),
+        ])->assertUnprocessable()->assertJsonValidationErrors('file');
+        $definition->update(['max_size_kb' => 102400]);
+        $this->postJson($uploadUrl, [
+            'file' => UploadedFile::fake()->create('smaller-limit.mp4', 153600, 'video/mp4'),
+        ])->assertUnprocessable()->assertJsonPath('errors.file.0', __('app.festival_file_too_large'));
+        $this->assertSame(1, $requirement->submissions()->count());
+        $this->assertSame('background.mp4', $submission->refresh()->original_name);
+    }
+
     public function test_required_files_upload_asynchronously_and_cannot_be_accepted_or_advance_without_a_submission(): void
     {
         Queue::fake();
