@@ -453,6 +453,7 @@ class FestivalRegistrationStepperTest extends TestCase
             'name' => 'Performance music',
             'allowed_extensions' => ['mp3'],
             'allowed_mime_types' => [],
+            'max_size_kb' => 20480,
         ]);
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
             $this->entry($account, $edition, $portalUser, $participant, $category, 'File upload entry'),
@@ -497,6 +498,10 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertSee(route('festival.portal.submissions.store', [$account->slug, $entry, $fileRequirement]), false)
             ->assertSee('enctype="multipart/form-data"', false)
             ->assertSee('data-async-form', false)
+            ->assertSee('accept=".mp3"', false)
+            ->assertSee(__('app.festival_upload_constraints', ['formats' => 'MP3', 'size' => 20]))
+            ->assertSee(__('app.festival_upload_pending'))
+            ->assertSee(__('app.festival_upload_rejected'))
             ->assertSee('data-async-error-for="file"', false);
 
         $jsonHeaders = ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'];
@@ -505,6 +510,16 @@ class FestivalRegistrationStepperTest extends TestCase
             ->post($uploadUrl)
             ->assertUnprocessable()
             ->assertJsonValidationErrors('file');
+
+        $this->withHeaders($jsonHeaders)->post($uploadUrl, [
+            'file' => UploadedFile::fake()->create('performance.wav', 12, 'audio/wav'),
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.file.0', __('app.festival_file_type_invalid'));
+        $this->withHeaders($jsonHeaders)->post($uploadUrl, [
+            'file' => UploadedFile::fake()->create('performance.mp3', 20481, 'audio/mpeg'),
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.file.0', __('app.festival_file_too_large'));
+        $this->assertSame(0, $fileRequirement->submissions()->count());
 
         $uploaded = $this->withHeaders($jsonHeaders)->post($uploadUrl, [
             'file' => UploadedFile::fake()->create('performance.mp3', 12, 'audio/mpeg'),

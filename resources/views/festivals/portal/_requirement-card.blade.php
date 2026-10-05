@@ -28,6 +28,17 @@
         \App\Enums\FestivalRequirementStatus::Accepted => 'crm-status-active',
         \App\Enums\FestivalRequirementStatus::Waived => 'crm-status-muted',
     };
+    if ($inputType === \App\Enums\FestivalRequirementInputType::File) {
+        $fileExtensions = array_map(fn (string $extension): string => '.'.strtolower(ltrim($extension, '.')), $definition->allowed_extensions ?? []);
+        $fileFormats = $fileExtensions !== []
+            ? implode(', ', array_map(fn (string $extension): string => strtoupper(ltrim($extension, '.')), $fileExtensions))
+            : (implode(', ', $definition->allowed_mime_types ?? []) ?: __('app.festival_upload_any_format'));
+        $uploadConstraints = __('app.festival_upload_constraints', [
+            'formats' => $fileFormats,
+            'size' => round(min($definition->max_size_kb, 102400) / 1024, 2),
+        ]);
+        $fileAccept = implode(',', array_unique([...$fileExtensions, ...($definition->allowed_mime_types ?? [])]));
+    }
 @endphp
 
 <article
@@ -119,11 +130,21 @@
                 <div class="mt-3 flex justify-end"><x-ui.button type="submit">{{ __('app.save') }}</x-ui.button></div>
             </form>
         @elseif ($inputType === \App\Enums\FestivalRequirementInputType::File)
-            <form method="POST" enctype="multipart/form-data" action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}" data-async-form class="mt-4">
+            <form
+                method="POST"
+                enctype="multipart/form-data"
+                action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}"
+                data-async-form
+                data-festival-file-upload
+                data-upload-pending-message="{{ __('app.festival_upload_pending') }}"
+                data-upload-rejected-message="{{ __('app.festival_upload_rejected').' '.$uploadConstraints }}"
+                class="mt-4"
+            >
                 @csrf
-                <div data-async-form-status data-error-message="{{ __('app.async_request_failed') }}" class="hidden"></div>
+                <div data-async-form-status data-error-message="{{ __('app.async_request_failed') }}" role="status" aria-live="polite" class="hidden"></div>
+                <p id="festival-upload-constraints-{{ $requirement->id }}" class="mb-3 text-sm text-slate-600">{{ $uploadConstraints }}</p>
                 <div class="flex flex-col gap-2 sm:flex-row">
-                    <input type="file" name="file" @required($definition->is_required) class="crm-field">
+                    <input type="file" name="file" @if($fileAccept !== '') accept="{{ $fileAccept }}" @endif aria-describedby="festival-upload-constraints-{{ $requirement->id }}" @required($definition->is_required) class="crm-field">
                     <x-ui.button type="submit">{{ __('app.upload') }}</x-ui.button>
                 </div>
                 <div data-async-error-for="file">

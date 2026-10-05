@@ -4630,7 +4630,9 @@ function setAsyncStatus(message, type = 'success', form = null) {
     status.textContent = message;
     status.className = type === 'error'
         ? 'mb-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 shadow-xs'
-        : 'mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-xs';
+        : type === 'pending'
+            ? 'mb-6 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800 shadow-xs'
+            : 'mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 shadow-xs';
     status.classList.remove('hidden');
 }
 
@@ -5420,6 +5422,10 @@ async function submitAsyncForm(form) {
     clearAsyncFormErrors(form);
     setFormDisabled(form, true);
 
+    if (form.matches('[data-festival-file-upload]')) {
+        setAsyncStatus(form.dataset.uploadPendingMessage, 'pending', form);
+    }
+
     try {
         const response = await fetch(form.action, {
             method: form.method.toUpperCase(),
@@ -5431,7 +5437,7 @@ async function submitAsyncForm(form) {
             },
         });
 
-        const payload = await response.json().catch(() => ({}));
+        const payload = (await response.json().catch(() => ({}))) ?? {};
 
         if (response.ok) {
             if (form.matches('[data-confirm-delete], [data-confirm-action]')) {
@@ -5522,6 +5528,16 @@ async function submitAsyncForm(form) {
             }
 
             replaceScheduledClassCard(payload.card_html ?? '', fallbackCard);
+            return;
+        }
+
+        if (response.status === 422 && form.matches('[data-festival-file-upload]')) {
+            const errors = payload.errors && typeof payload.errors === 'object' && !Array.isArray(payload.errors)
+                ? payload.errors
+                : {};
+            renderAsyncFormErrors(form, errors);
+            const firstMessage = Object.values(errors).flat().find((message) => typeof message === 'string' && message);
+            setAsyncStatus([firstMessage, form.dataset.uploadRejectedMessage].filter(Boolean).join(' '), 'error', form);
             return;
         }
 

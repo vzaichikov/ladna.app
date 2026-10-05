@@ -123,6 +123,7 @@ class FestivalRegistrationWorkflowTest extends TestCase
 
     public function test_applicant_category_cards_are_grouped_by_direction_and_show_live_requirements(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-10 12:00', 'Europe/Kyiv')->utc());
         [$account, $edition, $portalUser] = $this->festival();
         $firstDirection = FestivalDirection::factory()->for($edition)->create([
             'account_id' => $account->id,

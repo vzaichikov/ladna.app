@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.167.1',
+                'date' => '2026-10-05',
+                'title' => 'Clearer Festival file uploads',
+                'items' => ['Festival file fields now show the allowed formats and size limit, confirm when an upload is in progress, and explain rejected uploads so participants can correct the file and retry.'],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.167.0',
                 'date' => '2026-09-24',
                 'title' => 'Clearer class-pass lists',
@@ -1486,6 +1493,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.167.1',
+                'date' => '2026-10-05',
+                'title' => 'Зрозуміліше завантаження файлів на фестивалі',
+                'items' => ['Поля файлів у заявках на фестиваль тепер показують дозволені формати й розмір, повідомляють про завантаження та пояснюють відхилення, щоб учасники могли виправити файл і спробувати повторно.'],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.167.0',
                 'date' => '2026-09-24',
