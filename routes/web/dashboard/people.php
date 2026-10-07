@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminCustomerLoginController;
 use App\Http\Controllers\CustomerBulkTransferController;
+use App\Http\Controllers\CustomerCartController;
 use App\Http\Controllers\CustomerClassPassController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerSearchController;
@@ -66,6 +67,12 @@ Route::post('accounts/{account}/customers/import', [CustomerBulkTransferControll
     ->name('accounts.customers.import');
 Route::post('accounts/{account}/customers/{customer}/admin-login', [AdminCustomerLoginController::class, 'store'])
     ->name('accounts.customers.admin-login.store');
+Route::post('accounts/{account}/customers/{customer}/cart/quote', [CustomerCartController::class, 'quote'])
+    ->name('accounts.customers.cart.quote');
+Route::post('accounts/{account}/customers/{customer}/cart/checkout', [CustomerCartController::class, 'checkout'])
+    ->name('accounts.customers.cart.checkout');
+Route::get('accounts/{account}/customers/{customer}/cart/purchases/{customerPurchase}', [CustomerCartController::class, 'status'])
+    ->name('accounts.customers.cart.status');
 Route::resource('accounts.customers', CustomerController::class)
     ->except(['show'])
     ->scoped();

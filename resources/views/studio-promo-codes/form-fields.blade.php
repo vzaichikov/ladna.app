@@ -7,6 +7,7 @@
     }
     $selectedPlanIds = collect($selectedPlanIds)->map(fn ($id) => (int) $id)->all();
     $discountType = old('discount_type', $studioPromoCode->discount_type?->value ?? 'percent');
+    $isQuantityDiscount = $discountType === \App\Enums\PromoCodeDiscountType::BuyXGetY->value;
     $discountAmount = old('discount_amount', $studioPromoCode->exists
         ? ($studioPromoCode->discount_type === \App\Enums\PromoCodeDiscountType::Fixed
             ? \App\Support\Payments\PaymentAmounts::centsToDecimalString($studioPromoCode->discount_value)
@@ -36,15 +37,32 @@
         <select name="discount_type" required class="crm-field">
             <option value="percent" @selected($discountType === 'percent')>{{ __('app.discount_type_percent') }}</option>
             <option value="fixed" @selected($discountType === 'fixed')>{{ __('app.discount_type_fixed') }}</option>
+            <option value="buy_x_get_y" @selected($isQuantityDiscount)>{{ __('app.discount_type_buy_x_get_y') }}</option>
         </select>
         @error('discount_type') <span class="crm-help">{{ $message }}</span> @enderror
     </label>
-    <label class="block">
+    <label class="block" data-studio-promo-amount @if ($isQuantityDiscount) hidden @endif>
         <span class="crm-label">{{ __('app.discount_amount') }}</span>
-        <input name="discount_amount" value="{{ $discountAmount }}" inputmode="decimal" required class="crm-field">
+        <input name="discount_amount" value="{{ $discountAmount }}" inputmode="decimal" required @disabled($isQuantityDiscount) class="crm-field">
         <span class="crm-help">{{ __('app.discount_amount_help', ['currency' => $account->default_currency]) }}</span>
         @error('discount_amount') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
     </label>
+</div>
+
+<div data-studio-promo-quantity-only @if (! $isQuantityDiscount) hidden @endif>
+    <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+            <span class="crm-label">{{ __('app.promo_code_buy_quantity') }}</span>
+            <input name="buy_quantity" type="number" min="1" max="4294967295" step="1" value="{{ old('buy_quantity', $studioPromoCode->buy_quantity ?? 9) }}" required @disabled(! $isQuantityDiscount) class="crm-field">
+            @error('buy_quantity') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
+        </label>
+        <label class="block">
+            <span class="crm-label">{{ __('app.promo_code_free_quantity') }}</span>
+            <input name="free_quantity" type="number" min="1" max="4294967295" step="1" value="{{ old('free_quantity', $studioPromoCode->free_quantity ?? 1) }}" required @disabled(! $isQuantityDiscount) class="crm-field">
+            @error('free_quantity') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
+        </label>
+    </div>
+    <p class="crm-help">{{ __('app.promo_code_quantity_help') }}</p>
 </div>
 
 <div class="grid gap-4 sm:grid-cols-2">
@@ -84,8 +102,11 @@
                 <h2 class="text-sm font-semibold text-slate-950">{{ __('app.'.(\App\Support\ScheduleKindRegistry::all()[$scheduleKind]['title_key'] ?? $scheduleKind)) }}</h2>
                 <div class="mt-3 grid gap-2 sm:grid-cols-2">
                     @foreach ($plans as $plan)
-                        <label class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
-                            <input name="class_pass_plan_ids[]" type="checkbox" value="{{ $plan->id }}" @checked(in_array($plan->id, $selectedPlanIds, true)) class="crm-checkbox">
+                        @php
+                            $quantityUnavailable = $plan->is_trial || ! $plan->is_active || ! $account->hasScheduleKindEnabled($plan->schedule_kind);
+                        @endphp
+                        <label data-studio-promo-plan data-quantity-unavailable="{{ $quantityUnavailable ? '1' : '0' }}" @if ($isQuantityDiscount && $quantityUnavailable) hidden @endif class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                            <input name="class_pass_plan_ids[]" type="checkbox" value="{{ $plan->id }}" @checked(in_array($plan->id, $selectedPlanIds, true)) @disabled($isQuantityDiscount && $quantityUnavailable) class="crm-checkbox">
                             <span>{{ $plan->name }} · {{ \App\Support\MoneyFormatter::format($plan->price_cents, $plan->currency) }}</span>
                         </label>
                     @endforeach

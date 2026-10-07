@@ -57,6 +57,7 @@ class StudioPromoCodeRequest extends FormRequest
             'code' => ['required', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/', $uniqueCode],
             'discount_type' => ['required', new Enum(PromoCodeDiscountType::class)],
             'discount_amount' => [
+                'exclude_if:discount_type,buy_x_get_y',
                 'required',
                 Rule::when(
                     $this->input('discount_type') === PromoCodeDiscountType::Fixed->value,
@@ -64,6 +65,8 @@ class StudioPromoCodeRequest extends FormRequest
                     ['integer', 'min:1', 'max:100'],
                 ),
             ],
+            'buy_quantity' => ['exclude_unless:discount_type,buy_x_get_y', 'required', 'integer', 'min:1', 'max:4294967295'],
+            'free_quantity' => ['exclude_unless:discount_type,buy_x_get_y', 'required', 'integer', 'min:1', 'max:4294967295'],
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
             'ends_at' => ['required', 'date_format:Y-m-d\TH:i', 'after:starts_at'],
             'max_total_uses' => ['nullable', 'integer', 'min:1', 'max:100000000'],
@@ -88,11 +91,21 @@ class StudioPromoCodeRequest extends FormRequest
                 return;
             }
 
+            if ($validator->errors()->has('class_pass_plan_ids.*')) {
+                $validator->errors()->add('class_pass_plan_ids', __('app.promo_code_invalid_plans'));
+
+                return;
+            }
+
             $selectedCount = ClassPassPlan::query()
                 ->whereBelongsTo($account)
                 ->whereIn('id', $this->input('class_pass_plan_ids', []))
                 ->where('currency', $account->default_currency)
                 ->whereIn('schedule_kind', ScheduleKindRegistry::classPassEligibleValues())
+                ->when($this->input('discount_type') === PromoCodeDiscountType::BuyXGetY->value, fn ($query) => $query
+                    ->where('is_trial', false)
+                    ->where('is_active', true)
+                    ->whereIn('schedule_kind', $account->enabledScheduleKindValues()))
                 ->count();
 
             if ($selectedCount !== count(array_unique($this->input('class_pass_plan_ids', [])))) {

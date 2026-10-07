@@ -20,6 +20,17 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.168.0',
+                'date' => '2026-10-07',
+                'title' => 'Customer carts and free class-pass promotions',
+                'items' => [
+                    'Authorized studio staff can now sell several class passes from a customer cart, apply a promotion code, and accept cash, a confirmed card transfer, or one combined online payment through a QR code.',
+                    'Studio owners can configure Buy X, Get Y free promotions for selected class-pass plans. A Buy 9, Get 1 free offer issues ten separate passes for the price of nine.',
+                    'Cart payments appear once in financial reports, with details for each purchased pass and refunds allocated to the selected passes.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.167.2',
                 'date' => '2026-10-05',
                 'title' => 'Larger Festival video uploads',
@@ -1500,6 +1511,17 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.168.0',
+                'date' => '2026-10-07',
+                'title' => 'Кошик клієнта та акції з безкоштовними абонементами',
+                'items' => [
+                    'Працівники студії з відповідними правами тепер можуть продавати кілька абонементів через кошик клієнта, застосовувати промокод і приймати готівку, підтверджений переказ на картку або один спільний онлайн-платіж через QR-код.',
+                    'Власники студій можуть налаштовувати акції «Купи X, отримай Y безкоштовно» для вибраних планів абонементів. Акція «Купи 9, отримай 1 безкоштовно» видає десять окремих абонементів за ціною дев’яти.',
+                    'Оплата кошика враховується у фінансових звітах один раз із деталями кожного придбаного абонемента, а повернення коштів прив’язуються до вибраних абонементів.',
+                ],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.167.2',
                 'date' => '2026-10-05',

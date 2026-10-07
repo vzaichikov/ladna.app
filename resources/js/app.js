@@ -9,6 +9,8 @@ import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
 import { initFestivalTelegramMiniApp } from './festival-telegram-mini-app';
 import { initFestivalMediaDuplicates } from './festival-media-duplicates';
+import { initCustomerCart, initCustomerCartPayment } from './customer-cart';
+import { initStudioPromoCodes } from './studio-promo-codes';
 
 let pendingDeleteForm = null;
 let pendingConfirmationSubmitter = null;
@@ -2934,7 +2936,80 @@ function initPaymentRefundModal() {
     const cashLocationWrapper = modal.querySelector('[data-payment-refund-cash-location]');
     const cashLocationSelect = modal.querySelector('[data-payment-refund-cash-location-select]');
     const reasonInput = modal.querySelector('[data-payment-refund-reason]');
+    const itemsWrapper = modal.querySelector('[data-payment-refund-items]');
+    const itemsList = modal.querySelector('[data-payment-refund-items-list]');
     let currentCurrency = '';
+
+    const syncItemTotal = () => {
+        if (!amountInput || !itemsList || itemsWrapper?.classList.contains('hidden')) {
+            return;
+        }
+
+        let total = 0;
+        itemsList.querySelectorAll('[data-payment-refund-item]').forEach((row) => {
+            const selected = row.querySelector('[data-payment-refund-item-select]');
+            const itemId = row.querySelector('[data-payment-refund-item-id]');
+            const itemAmount = row.querySelector('[data-payment-refund-item-amount]');
+            const isSelected = selected?.checked && !selected.disabled;
+
+            if (itemId) {
+                itemId.disabled = !isSelected;
+            }
+
+            if (itemAmount) {
+                itemAmount.disabled = !isSelected;
+                itemAmount.required = isSelected;
+
+                if (isSelected && /^\d+(\.\d{1,2})?$/.test(itemAmount.value)) {
+                    const [whole, fraction = ''] = itemAmount.value.split('.');
+                    total += Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+                }
+            }
+        });
+        amountInput.value = (total / 100).toFixed(2);
+    };
+
+    const fillItems = (button, restoreOldInput) => {
+        if (!itemsWrapper || !itemsList || !amountInput) {
+            return;
+        }
+
+        const template = document.querySelector(`template[data-payment-refund-items-template="${CSS.escape(button.dataset.paymentId || '')}"]`);
+        itemsWrapper.classList.toggle('hidden', !template);
+        amountInput.readOnly = Boolean(template);
+        itemsList.replaceChildren();
+
+        if (!template) {
+            return;
+        }
+
+        itemsList.append(template.content.cloneNode(true));
+        let oldItems = [];
+
+        if (restoreOldInput) {
+            try {
+                oldItems = Object.values(JSON.parse(modal.dataset.oldItems || '[]'));
+            } catch {
+                oldItems = [];
+            }
+        }
+
+        itemsList.querySelectorAll('[data-payment-refund-item]').forEach((row) => {
+            const selected = row.querySelector('[data-payment-refund-item-select]');
+            const itemId = row.querySelector('[data-payment-refund-item-id]');
+            const itemAmount = row.querySelector('[data-payment-refund-item-amount]');
+            const oldItem = oldItems.find((item) => String(item.customer_purchase_item_id) === itemId?.value);
+
+            if (oldItem && selected && itemAmount && !selected.disabled) {
+                selected.checked = true;
+                itemAmount.value = oldItem.amount ?? '';
+            }
+
+            selected?.addEventListener('change', syncItemTotal);
+            itemAmount?.addEventListener('input', syncItemTotal);
+        });
+        syncItemTotal();
+    };
 
     const syncCashLocation = () => {
         const isCash = methodSelect?.value === 'cash';
@@ -2987,10 +3062,11 @@ function initPaymentRefundModal() {
         modal.querySelector('[data-payment-refund-idempotency-key]').value = restoreOldInput && modal.dataset.oldIdempotencyKey
             ? modal.dataset.oldIdempotencyKey
             : button.dataset.idempotencyKey || '';
+        fillItems(button, restoreOldInput);
         syncCashLocation();
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-        amountInput?.focus();
+        (itemsList?.querySelector('[data-payment-refund-item-select]:not(:disabled)') || amountInput)?.focus();
     };
 
     document.querySelectorAll('[data-payment-refund-open]').forEach((button) => {
@@ -10611,6 +10687,9 @@ function initFestivalNominationAssignments(root = document.querySelector('[data-
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initCustomerCart();
+    initCustomerCartPayment();
+    initStudioPromoCodes();
     initFestivalTelegramMiniApp();
     initEventAttendance();
     initEntranceOperations();

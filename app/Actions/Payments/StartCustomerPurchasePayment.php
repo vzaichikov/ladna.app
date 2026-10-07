@@ -31,6 +31,7 @@ class StartCustomerPurchasePayment
             returnUrl: $returnUrl ?? route('customer.purchases.return', [$purchase->account->slug, $purchase]),
             callbackUrl: route('api.v1.payments.callbacks', $gateway->provider()->value),
             expiresAt: $purchase->expires_at ?? now()->addHour(),
+            retryInvoiceCreation: ! $purchase->hasItems(),
         ), $setting);
 
         $payload = $checkout->gatewayPayload;

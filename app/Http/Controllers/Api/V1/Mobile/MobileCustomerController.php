@@ -45,6 +45,7 @@ class MobileCustomerController extends Controller
         $session = $this->customerSession($request);
         $passes = $session->customer->customerClassPasses()
             ->where('account_id', $session->account_id)
+            ->with('purchaseItem')
             ->latest('id')
             ->limit(50)
             ->get();

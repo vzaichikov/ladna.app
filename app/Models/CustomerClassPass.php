@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 #[Fillable(['account_id', 'customer_id', 'class_pass_plan_id', 'code', 'source', 'issued_location_id', 'is_paid', 'issued_by_actor_user_id', 'issued_by_actor_trainer_id', 'issued_by_actor_name', 'issued_by_actor_email', 'issued_by_actor_role', 'status', 'plan_name', 'plan_slug', 'price_cents', 'paid_amount_cents', 'currency', 'sessions_count', 'validity_days', 'total_validity_days', 'available_from_time', 'available_until_time', 'allows_any_time', 'any_time_addon_price_cents', 'reserved_sessions_count', 'used_sessions_count', 'purchased_at', 'opened_at', 'expires_at', 'usable_until_at', 'closed_at', 'frozen_at', 'is_active'])]
@@ -83,7 +84,14 @@ class CustomerClassPass extends Model
         return $query
             ->where('is_paid', false)
             ->where('status', '!=', CustomerClassPassStatus::Cancelled->value)
-            ->whereColumn('paid_amount_cents', '<', 'price_cents');
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereHas('purchaseItem', fn (Builder $query): Builder => $query
+                        ->whereColumn('customer_class_passes.paid_amount_cents', '<', 'customer_purchase_items.amount_cents'))
+                    ->orWhere(fn (Builder $query): Builder => $query
+                        ->whereDoesntHave('purchaseItem')
+                        ->whereColumn('paid_amount_cents', '<', 'price_cents'));
+            });
     }
 
     public function scopeFreezed(Builder $query): Builder
@@ -121,6 +129,11 @@ class CustomerClassPass extends Model
         return $this->hasMany(CustomerPurchase::class);
     }
 
+    public function purchaseItem(): HasOne
+    {
+        return $this->hasOne(CustomerPurchaseItem::class);
+    }
+
     public function adjustments(): HasMany
     {
         return $this->hasMany(CustomerClassPassAdjustment::class);
@@ -138,12 +151,19 @@ class CustomerClassPass extends Model
 
     public function paidAmountCents(): int
     {
-        return max(0, min((int) $this->paid_amount_cents, (int) $this->price_cents));
+        return max(0, min((int) $this->paid_amount_cents, $this->payableAmountCents()));
+    }
+
+    public function payableAmountCents(): int
+    {
+        $this->loadMissing('purchaseItem');
+
+        return max(0, (int) ($this->purchaseItem?->amount_cents ?? $this->price_cents));
     }
 
     public function remainingPaymentCents(): int
     {
-        return max(0, (int) $this->price_cents - $this->paidAmountCents());
+        return max(0, $this->payableAmountCents() - $this->paidAmountCents());
     }
 
     public function hasOutstandingBalance(): bool

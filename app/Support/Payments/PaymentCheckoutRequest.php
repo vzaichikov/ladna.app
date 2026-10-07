@@ -20,5 +20,6 @@ class PaymentCheckoutRequest
         public readonly Carbon $expiresAt,
         public readonly bool $preferIframe = false,
         public readonly ?int $validitySeconds = null,
+        public readonly bool $retryInvoiceCreation = true,
     ) {}
 }

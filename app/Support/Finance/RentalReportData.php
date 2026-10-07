@@ -50,7 +50,7 @@ class RentalReportData
                     ])
                     ->with([
                         'customer',
-                        'classPassReservation.customerClassPass',
+                        'classPassReservation.customerClassPass.purchaseItem',
                         'manualCashPayment.refunds',
                     ])
                     ->orderBy('id'),
@@ -91,6 +91,7 @@ class RentalReportData
         $paid = [];
         $refunded = [];
         $reservation = $booking->activeClassPassReservation();
+        $isSettledFreeCartPass = false;
 
         if ($reservation) {
             $reservation->loadMissing('customerClassPass');
@@ -98,6 +99,15 @@ class RentalReportData
             $currency = strtoupper((string) ($customerClassPass?->currency ?? 'UAH'));
             $accruedAmount = $this->sessionValueResolver->amountCents($reservation, $positions);
             $position = (int) $positions->get($reservation->id, 0);
+
+            if ($accruedAmount !== null && $customerClassPass?->purchaseItem) {
+                $accruedAmount = $this->allocatedAmount(
+                    $customerClassPass->payableAmountCents(),
+                    (int) $customerClassPass->sessions_count,
+                    $position,
+                );
+                $isSettledFreeCartPass = $customerClassPass->is_paid && $customerClassPass->payableAmountCents() === 0;
+            }
 
             if ($accruedAmount !== null) {
                 $accrued[$currency] = ($accrued[$currency] ?? 0) + $accruedAmount;
@@ -145,7 +155,9 @@ class RentalReportData
             'paid_by_currency' => collect($paid)->sortKeys()->all(),
             'refunded_by_currency' => collect($refunded)->filter()->sortKeys()->all(),
             'debt_by_currency' => $debt,
-            'status' => $this->status($accrued, $paid, $refunded, $debt),
+            'status' => $isSettledFreeCartPass && array_sum($debt) === 0
+                ? 'paid'
+                : $this->status($accrued, $paid, $refunded, $debt),
         ];
     }
 

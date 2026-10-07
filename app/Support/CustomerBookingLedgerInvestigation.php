@@ -145,6 +145,7 @@ class CustomerBookingLedgerInvestigation
                 'classPassPlan.classTypes',
                 'classPassPlan.trainerTypes',
                 'classPassPlan.rooms',
+                'purchaseItem',
             ])
             ->select([
                 'id',

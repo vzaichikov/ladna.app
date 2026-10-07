@@ -102,6 +102,7 @@ class StudioClassScheduleDetails
                             'customer:id,account_id,name',
                             'classPassReservation:id,account_id,class_booking_id,customer_class_pass_id,status',
                             'classPassReservation.customerClassPass:id,account_id,customer_id,code,plan_name,status,is_paid,price_cents,paid_amount_cents,sessions_count,reserved_sessions_count,used_sessions_count',
+                            'classPassReservation.customerClassPass.purchaseItem',
                         ])
                         ->orderBy('id');
                 },

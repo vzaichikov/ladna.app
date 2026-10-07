@@ -58,13 +58,15 @@ class MonopayGateway implements PaymentGateway
             $payload['displayType'] = 'iframe';
         }
 
-        $response = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
+        $request = Http::withHeaders(['X-Token' => (string) $credentials['api_token']])
             ->acceptJson()
             ->asJson()
             ->timeout(10)
-            ->connectTimeout(3)
-            ->retry([100, 300])
-            ->post(self::BASE_URL.'/api/merchant/invoice/create', $payload);
+            ->connectTimeout(3);
+        if ($checkout->retryInvoiceCreation) {
+            $request->retry([100, 300]);
+        }
+        $response = $request->post(self::BASE_URL.'/api/merchant/invoice/create', $payload);
 
         if (! $response->successful() || ! is_string($response->json('pageUrl'))) {
             throw new PaymentGatewayException('Monopay invoice creation failed.');

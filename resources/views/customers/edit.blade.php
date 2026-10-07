@@ -35,6 +35,10 @@
         $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
         $canIssueCustomerClassPasses = auth()->user()?->can('issueCustomerClassPasses', $account) ?? false;
         $canManageCustomerClassPasses = auth()->user()?->can('manageCustomerClassPasses', $account) ?? false;
+        $cartCanCheckout ??= (auth()->user()?->can('manageClients', $account) ?? false)
+            && $canIssueCustomerClassPasses
+            && (auth()->user()?->can('recordCustomerPayments', $account) ?? false);
+        $cartPendingPurchases ??= collect();
         $canLoginAsCustomer = $account->isOwnedBy(auth()->user());
         $classPassBackfillPreview ??= null;
         $locations ??= collect();
@@ -57,15 +61,23 @@
             <h1 class="crm-page-title">{{ __('app.edit') }} {{ $customer->name }}</h1>
             <p class="crm-page-copy">{{ $account->name }}</p>
         </div>
-        @if ($canLoginAsCustomer)
-            <form method="POST" action="{{ route('dashboard.accounts.customers.admin-login.store', [$account, $customer]) }}">
-                @csrf
-                <x-ui.button type="submit" variant="secondary">
-                    <x-ui.icon name="log-in" class="h-4 w-4" />
-                    {{ __('app.login_as_customer') }}
+        <div class="flex flex-wrap gap-3">
+            @if ($cartCanCheckout)
+                <x-ui.button type="button" data-customer-cart-open aria-haspopup="dialog" aria-controls="customer-cart-modal">
+                    <x-ui.icon name="shopping-cart" class="h-4 w-4" />
+                    {{ __('app.customer_cart') }}
                 </x-ui.button>
-            </form>
-        @endif
+            @endif
+            @if ($canLoginAsCustomer)
+                <form method="POST" action="{{ route('dashboard.accounts.customers.admin-login.store', [$account, $customer]) }}">
+                    @csrf
+                    <x-ui.button type="submit" variant="secondary">
+                        <x-ui.icon name="log-in" class="h-4 w-4" />
+                        {{ __('app.login_as_customer') }}
+                    </x-ui.button>
+                </form>
+            @endif
+        </div>
     </div>
 
     <div class="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -184,6 +196,36 @@
         </div>
 
         <div class="space-y-6">
+            @if ($cartCanCheckout && $cartPendingPurchases->isNotEmpty())
+                <x-ui.panel>
+                    <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_cart_pending_purchases') }}</h2>
+                    <p class="mt-1 text-sm text-slate-500">{{ __('app.customer_cart_pending_purchases_help') }}</p>
+                    <div class="mt-4 space-y-3">
+                        @foreach ($cartPendingPurchases as $cartPendingPurchase)
+                            <div class="crm-row flex flex-col gap-3 rounded-lg border border-stone-200 p-4 sm:flex-row sm:items-center sm:justify-between" data-customer-cart-pending-purchase="{{ $cartPendingPurchase->id }}">
+                                <div>
+                                    <div class="font-semibold text-slate-950">{{ $formatMoney($cartPendingPurchase->amount_cents, $cartPendingPurchase->currency) }}</div>
+                                    <div class="mt-1 text-sm text-slate-500">{{ __('app.class_pass_checkout_status_'.$cartPendingPurchase->status->value) }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">{{ \App\Support\DateTimePresenter::formatInTimezone($cartPendingPurchase->started_at ?? $cartPendingPurchase->created_at, $account->timezone ?? config('app.timezone')) }}</div>
+                                </div>
+                                <x-ui.button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    data-customer-cart-resume
+                                    data-status-url="{{ route('dashboard.accounts.customers.cart.status', [$account, $customer, $cartPendingPurchase]) }}"
+                                    aria-haspopup="dialog"
+                                    aria-controls="customer-cart-modal"
+                                >
+                                    <x-ui.icon name="qr-code" class="h-4 w-4" />
+                                    {{ __('app.customer_cart_resume_payment') }}
+                                </x-ui.button>
+                            </div>
+                        @endforeach
+                    </div>
+                </x-ui.panel>
+            @endif
+
             <x-ui.panel padding="none" class="overflow-hidden">
                 <div class="flex flex-col gap-3 border-b border-stone-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <h2 class="text-lg font-semibold text-slate-950">{{ __('app.customer_class_passes_panel') }}</h2>
@@ -312,6 +354,10 @@
             </x-ui.panel>
         </div>
     </div>
+
+    @if ($cartCanCheckout)
+        @include('customers._cart')
+    @endif
 
     @if ($classPassBackfillPreview)
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="class-pass-backfill-title">

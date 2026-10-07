@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'name', 'code', 'discount_type', 'discount_value', 'currency', 'starts_at', 'ends_at', 'max_total_uses', 'max_uses_per_identity', 'is_active'])]
+#[Fillable(['account_id', 'name', 'code', 'discount_type', 'discount_value', 'buy_quantity', 'free_quantity', 'currency', 'starts_at', 'ends_at', 'max_total_uses', 'max_uses_per_identity', 'is_active'])]
 class StudioPromoCode extends Model
 {
     /** @use HasFactory<StudioPromoCodeFactory> */
@@ -30,6 +30,8 @@ class StudioPromoCode extends Model
         return [
             'discount_type' => PromoCodeDiscountType::class,
             'discount_value' => 'integer',
+            'buy_quantity' => 'integer',
+            'free_quantity' => 'integer',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'max_total_uses' => 'integer',

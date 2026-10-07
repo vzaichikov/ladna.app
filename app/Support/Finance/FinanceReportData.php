@@ -34,7 +34,7 @@ class FinanceReportData
             ->withinEffectiveDateRange($startsAt, $endsAt)
             ->where('status', CustomerPurchaseStatus::PaymentPaid->value)
             ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId))
-            ->with(['customer:id,name', 'location:id,name'])
+            ->with(['customer:id,name', 'location:id,name', 'items'])
             ->get();
         $eventPayments = EventOrder::query()
             ->whereBelongsTo($account)
@@ -116,7 +116,9 @@ class FinanceReportData
                     ->map(fn (CustomerPurchase $purchase): array => [
                         'occurred_at' => $purchase->effectiveOccurredAt(),
                         'label' => $purchase->customer?->name ?? $purchase->plan_name,
-                        'details' => $purchase->plan_name,
+                        'details' => $purchase->items->isNotEmpty()
+                            ? $purchase->items->groupBy('plan_name')->map(fn (Collection $items, string $planName): string => $planName.' × '.$items->count())->implode(', ')
+                            : $purchase->plan_name,
                         'location_id' => $purchase->location_id,
                         'location' => $purchase->location?->name,
                         'amount_cents' => (int) $purchase->amount_cents,

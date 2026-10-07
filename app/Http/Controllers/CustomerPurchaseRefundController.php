@@ -34,6 +34,7 @@ class CustomerPurchaseRefundController extends Controller
             $request->user(),
             (string) $request->validated('reason'),
             (string) $request->validated('idempotency_key'),
+            $request->itemAllocations(),
         );
         $receipt = $fiscalReceiptService->fiscalizeCustomerPurchaseRefund($refund);
         $message = $receipt?->status === FiscalReceiptStatus::Failed

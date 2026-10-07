@@ -3,8 +3,10 @@
 namespace App\Actions\Payments;
 
 use App\Actions\IssueCustomerClassPass;
+use App\Actions\RecordStudioCashEntry;
 use App\Enums\CustomerPurchaseStatus;
 use App\Models\CustomerPurchase;
+use App\Models\StudioCashEntry;
 use App\Models\User;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Mail\TransactionalMailDispatcher;
@@ -20,6 +22,7 @@ class CompleteCustomerPurchase
         private readonly IssueCustomerClassPass $issueCustomerClassPass,
         private readonly TransactionalMailDispatcher $mailDispatcher,
         private readonly FiscalReceiptService $fiscalReceipts,
+        private readonly RecordStudioCashEntry $cashEntries,
     ) {}
 
     public function execute(
@@ -32,23 +35,26 @@ class CompleteCustomerPurchase
 
         $completedPurchase = DB::transaction(function () use ($purchase, $callback, $trialExceptionActor, $trialExceptionReason, &$previousStatus): CustomerPurchase {
             $lockedPurchase = CustomerPurchase::query()
-                ->with(['account', 'customer', 'classPassPlan', 'customerClassPass', 'location'])
+                ->with(['account', 'customer', 'classPassPlan', 'customerClassPass', 'location', 'actor', 'items.classPassPlan', 'items.customerClassPass'])
                 ->whereKey($purchase->id)
                 ->lockForUpdate()
                 ->firstOrFail();
             $previousStatus = $lockedPurchase->getRawOriginal('status');
 
+            $this->assertCallbackMatchesPurchase($lockedPurchase, $callback);
+
             if ($lockedPurchase->isPaid()) {
                 return $lockedPurchase;
             }
-
-            $this->assertCallbackMatchesPurchase($lockedPurchase, $callback);
 
             if ($callback->isOlderThan($lockedPurchase->last_callback_payload)) {
                 return $lockedPurchase;
             }
 
             if ($callback->status === PaymentCallbackStatus::Paid) {
+                if ($lockedPurchase->items->isNotEmpty()) {
+                    return $this->completeCart($lockedPurchase, $callback);
+                }
                 if (! $lockedPurchase->classPassPlan) {
                     throw new InvalidPaymentCallbackException('Class pass plan is no longer available.');
                 }
@@ -120,29 +126,91 @@ class CompleteCustomerPurchase
             return $lockedPurchase->refresh();
         });
 
-        if ($completedPurchase->status === CustomerPurchaseStatus::PaymentPaid && $previousStatus !== CustomerPurchaseStatus::PaymentPaid->value) {
-            $completedPurchase->loadMissing('customerClassPass');
-
-            if ($completedPurchase->customerClassPass) {
-                $this->mailDispatcher->customerClassPassIssued($completedPurchase->customerClassPass);
+        $notify = function () use ($completedPurchase, $previousStatus): void {
+            if ($completedPurchase->isPaid() && $previousStatus !== CustomerPurchaseStatus::PaymentPaid->value) {
+                $completedPurchase->loadMissing(['customerClassPass', 'items.customerClassPass']);
+                $passes = $completedPurchase->items->isNotEmpty()
+                    ? $completedPurchase->items->pluck('customerClassPass')->filter()
+                    : collect([$completedPurchase->customerClassPass])->filter();
+                foreach ($passes as $pass) {
+                    $this->mailDispatcher->customerClassPassIssued($pass);
+                }
+                try {
+                    $this->fiscalReceipts->fiscalizeCustomerPurchase($completedPurchase);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            } elseif ($completedPurchase->status->isFinal() && $previousStatus !== $completedPurchase->status->value) {
+                $this->mailDispatcher->customerPurchaseFailed($completedPurchase);
             }
-
-            try {
-                $this->fiscalReceipts->fiscalizeCustomerPurchase($completedPurchase);
-            } catch (Throwable $exception) {
-                report($exception);
-            }
-        } elseif ($completedPurchase->status->isFinal() && $previousStatus !== $completedPurchase->status->value) {
-            $this->mailDispatcher->customerPurchaseFailed($completedPurchase);
+        };
+        if ($completedPurchase->hasItems()) {
+            DB::afterCommit($notify);
+        } else {
+            $notify();
         }
 
         return $completedPurchase;
+    }
+
+    private function completeCart(CustomerPurchase $purchase, PaymentCallbackResult $callback): CustomerPurchase
+    {
+        foreach ($purchase->items as $item) {
+            if (! $item->classPassPlan) {
+                throw new InvalidPaymentCallbackException('Class pass plan is no longer available.');
+            }
+            $pass = $item->customerClassPass;
+            if (! $pass) {
+                $issuancePlan = clone $item->classPassPlan;
+                $issuancePlan->is_trial = $item->is_trial;
+                $pass = $this->issueCustomerClassPass->execute(
+                    $purchase->account, $purchase->customer, $issuancePlan,
+                    source: $purchase->payment_source === CustomerPurchase::SourceOnlineCheckout ? 'online_payment' : 'manual',
+                    purchasedAt: $callback->paidAt ?? now(),
+                    snapshot: [
+                        'plan_name' => $item->plan_name, 'plan_slug' => $item->plan_slug,
+                        'price_cents' => $item->subtotal_cents, 'currency' => $item->currency,
+                        'sessions_count' => $item->sessions_count, 'validity_days' => $item->validity_days,
+                        'total_validity_days' => $item->total_validity_days,
+                        'available_from_time' => $item->available_from_time, 'available_until_time' => $item->available_until_time,
+                        'allows_any_time' => $item->allows_any_time, 'any_time_addon_price_cents' => $item->any_time_addon_price_cents,
+                    ],
+                    issuedBy: $purchase->actor, issuedLocation: $purchase->location,
+                    trialEligibilityAsOf: $purchase->trial_eligibility_validated_at,
+                    notify: false,
+                );
+                $item->forceFill(['customer_class_pass_id' => $pass->id])->save();
+            }
+            $pass->forceFill(['is_paid' => true, 'paid_amount_cents' => $item->amount_cents])->save();
+        }
+        $purchase->forceFill([
+            'status' => CustomerPurchaseStatus::PaymentPaid,
+            'gateway_invoice_id' => $callback->gatewayInvoiceId ?? $purchase->gateway_invoice_id,
+            'gateway_payment_id' => $callback->gatewayPaymentId ?? $purchase->gateway_payment_id,
+            'gateway_status' => $callback->gatewayStatus ?? $purchase->gateway_status,
+            'last_callback_payload' => $callback->payload, 'paid_at' => $callback->paidAt ?? now(), 'failure_reason' => null,
+        ])->save();
+        if ($purchase->isManualCashStudioPayment() && $purchase->amount_cents > 0) {
+            $this->cashEntries->execute(
+                $purchase->account, $purchase->location, StudioCashEntry::DirectionIn,
+                $purchase->amount_cents, $purchase->paid_at, $purchase->actor, $purchase->plan_name,
+                StudioCashEntry::PurposeCustomerPayment, currency: $purchase->currency, purchase: $purchase,
+                sourceKey: 'purchase:'.$purchase->id.':cash-in',
+            );
+        }
+
+        return $purchase->refresh()->load('items.customerClassPass');
     }
 
     private function assertCallbackMatchesPurchase(CustomerPurchase $purchase, PaymentCallbackResult $callback): void
     {
         if ($callback->orderId !== $purchase->order_id) {
             throw new InvalidPaymentCallbackException('Callback order does not match purchase.');
+        }
+
+        if ($callback->status === PaymentCallbackStatus::Paid && $purchase->hasItems()
+            && ($callback->amountCents === null || $callback->currency === null)) {
+            throw new InvalidPaymentCallbackException('Paid cart callback must include amount and currency.');
         }
 
         if ($callback->amountCents !== null && $callback->amountCents !== $purchase->amount_cents) {

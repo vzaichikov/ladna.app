@@ -47,7 +47,7 @@ class SaveEventPromoCodeRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/', $uniqueCode],
-            'discount_type' => ['required', new Enum(PromoCodeDiscountType::class)],
+            'discount_type' => ['required', (new Enum(PromoCodeDiscountType::class))->only([PromoCodeDiscountType::Fixed, PromoCodeDiscountType::Percent])],
             'discount_amount' => [
                 'required',
                 Rule::when(

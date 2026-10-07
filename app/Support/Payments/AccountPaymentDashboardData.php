@@ -102,7 +102,7 @@ class AccountPaymentDashboardData
                 ->where('buyer_name', 'like', "%{$search}%")
                 ->orWhere('buyer_email', 'like', "%{$search}%")
                 ->orWhere('order_id', 'like', "%{$search}%")))
-            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCash, fn (Builder $query) => $query->whereRaw('1 = 0'))
+            ->when(in_array($filters['payment_method'], [CustomerPurchase::PaymentMethodCash, CustomerPurchase::PaymentMethodCardTransfer], true), fn (Builder $query) => $query->whereRaw('1 = 0'))
             ->when($filters['status'], fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($filters['provider'], fn (Builder $query, string $provider) => $query->where('provider', $provider));
     }
@@ -136,6 +136,7 @@ class AccountPaymentDashboardData
                 CustomerPurchase::SourceManualCashBooking,
             ]))
             ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodOnline, fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceOnlineCheckout))
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCardTransfer, fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceManualCardClassPass))
             ->when($filters['status'], fn (Builder $query, string $status): Builder => $query->where('status', $status))
             ->when($filters['provider'], fn (Builder $query, string $provider): Builder => $query->where('provider', $provider))
             ->when($filters['location_id'], fn (Builder $query, int $locationId): Builder => $query->where('location_id', $locationId));

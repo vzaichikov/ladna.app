@@ -294,7 +294,7 @@
                             <div class="flex min-w-0 items-start justify-between gap-3 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_140px_150px_24px] lg:items-center">
                                 <div class="min-w-0">
                                     <div class="break-words font-semibold text-slate-950">{{ __('app.payment_refund') }} {{ $sourcePayment?->customer?->name ?? __('app.not_set') }}</div>
-                                    <div class="mt-1 break-words text-sm text-slate-500">{{ $sourcePayment?->plan_name ?? __('app.not_set') }}</div>
+                                    <div class="mt-1 break-words text-sm text-slate-500">{{ $sourcePayment?->plan_name ?: __('app.class_passes') }}</div>
                                 </div>
                                 <div class="hidden min-w-0 text-sm text-slate-500 lg:block">
                                     <div>{{ $formatDateTime($payment->refunded_at) }}</div>
@@ -327,6 +327,17 @@
                                         <div><dt class="inline font-semibold text-slate-700">{{ __('app.payment_provider') }}:</dt> <dd class="inline">{{ $sourcePayment ? $providerLabelResolver($sourcePayment->provider) : __('app.not_set') }}</dd></div>
                                         <div><dt class="inline font-semibold text-slate-700">{{ __('app.location') }}:</dt> <dd class="inline">{{ $payment->location?->name ?? __('app.not_set') }}</dd></div>
                                     </dl>
+                                    @if ($payment->items->isNotEmpty())
+                                        <ul class="mt-3 space-y-2 text-slate-600">
+                                            @foreach ($payment->items as $refundItem)
+                                                <li>
+                                                    <span class="font-semibold">{{ $refundItem->customerPurchaseItem?->plan_name }}</span>
+                                                    · {{ $refundItem->customerPurchaseItem?->customerClassPass?->code ?? __('app.not_set') }}
+                                                    · −{{ $formatMoney($refundItem->amount_cents, $payment->currency) }}
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
                                 </div>
                                 <div>
                                     <h3 class="font-semibold text-slate-950">{{ __('app.refund_reason') }}</h3>
@@ -371,7 +382,8 @@
                         default => 'crm-status-muted',
                     };
                     $currentProviderLabel = $providerLabelResolver($payment->provider);
-                    $paymentMethodLabel = $payment->isManualCashStudioPayment() ? __('app.payment_method_cash') : __('app.payment_method_online');
+                    $paymentMethodLabel = __('app.payment_method_'.$payment->paymentMethod());
+                    $paymentDescription = $payment->plan_name ?: __('app.class_passes');
                     $showFiscalStatus = $fiscalizationEnabled && ! $payment->isManualCashStudioPayment();
                     $fiscalActionRequired = $showFiscalStatus && $receipt?->status === \App\Enums\FiscalReceiptStatus::Failed;
                 @endphp
@@ -381,7 +393,7 @@
                         <div class="flex min-w-0 items-start justify-between gap-3 lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_140px_150px_24px] lg:items-center">
                             <div class="min-w-0">
                                 <div class="break-words font-semibold text-slate-950">{{ $payment->customer?->name ?? __('app.not_set') }}</div>
-                                <div class="mt-1 break-words text-sm text-slate-500">{{ $payment->plan_name }}</div>
+                                <div class="mt-1 break-words text-sm text-slate-500">{{ $paymentDescription }}</div>
                                 @if ((int) ($payment->discount_cents ?? 0) > 0)
                                     <div class="mt-1 text-xs font-semibold text-emerald-700">
                                         {{ $payment->promo_code }} · {{ $formatMoney($payment->subtotal_cents, $payment->currency) }} −{{ $formatMoney($payment->discount_cents, $payment->currency) }}
@@ -429,7 +441,9 @@
                                     <div><dt class="inline font-semibold text-slate-700">{{ __('app.phone') }}:</dt> <dd class="inline">{{ $payment->customer?->phone ?? $payment->customer?->email ?? __('app.not_set') }}</dd></div>
                                     <div><dt class="inline font-semibold text-slate-700">{{ __('app.payment_provider') }}:</dt> <dd class="inline">{{ $currentProviderLabel }}</dd></div>
                                     <div><dt class="inline font-semibold text-slate-700">{{ __('app.payment_location') }}:</dt> <dd class="inline">{{ $payment->location?->name ?? __('app.not_set') }}</dd></div>
-                                    <div><dt class="inline font-semibold text-slate-700">{{ __('app.schedule_kind') }}:</dt> <dd class="inline">{{ __('app.'.$payment->schedule_kind) }}</dd></div>
+                                    @if ($payment->schedule_kind)
+                                        <div><dt class="inline font-semibold text-slate-700">{{ __('app.schedule_kind') }}:</dt> <dd class="inline">{{ __('app.'.$payment->schedule_kind) }}</dd></div>
+                                    @endif
                                 </dl>
                             </div>
                             <div>
@@ -438,6 +452,12 @@
                                     <div><dt class="inline font-semibold text-slate-700">ID:</dt> <dd class="inline">{{ $payment->order_id }}</dd></div>
                                     @if ($payment->customerClassPass)
                                         <div><dt class="inline font-semibold text-slate-700">{{ __('app.class_pass_code') }}:</dt> <dd class="inline">{{ $payment->customerClassPass->code }}</dd></div>
+                                    @endif
+                                    @if ($payment->items->isNotEmpty())
+                                        <div><dt class="inline font-semibold text-slate-700">{{ __('app.subtotal') }}:</dt> <dd class="inline">{{ $formatMoney($payment->subtotal_cents, $payment->currency) }}</dd></div>
+                                        @if ($payment->discount_cents > 0)
+                                            <div><dt class="inline font-semibold text-slate-700">{{ __('app.discount') }}:</dt> <dd class="inline">{{ $formatMoney($payment->discount_cents, $payment->currency) }} @if ($payment->promo_code) · {{ $payment->promo_code }} @endif</dd></div>
+                                        @endif
                                     @endif
                                     @if ($payment->classBooking?->scheduledClass)
                                         <div>
@@ -451,6 +471,22 @@
                                         </div>
                                     @endif
                                 </dl>
+                                @if ($payment->items->isNotEmpty())
+                                    <ul class="mt-3 max-h-72 space-y-2 overflow-y-auto pr-2">
+                                        @foreach ($payment->items as $purchaseItem)
+                                            <li class="rounded-lg border border-stone-200 bg-white p-2">
+                                                <div class="font-semibold text-slate-800">{{ $purchaseItem->plan_name }}</div>
+                                                <div class="mt-1 break-words text-xs text-slate-500">
+                                                    {{ $purchaseItem->customerClassPass?->code ?? __('app.not_set') }}
+                                                    · {{ $formatMoney($purchaseItem->amount_cents, $purchaseItem->currency) }}
+                                                    @if ($purchaseItem->discount_cents > 0)
+                                                        · {{ __('app.discount') }} {{ $formatMoney($purchaseItem->discount_cents, $purchaseItem->currency) }}
+                                                    @endif
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
                             </div>
                             <div>
                                 <h3 class="font-semibold text-slate-950">{{ __('app.payment_status') }}</h3>
@@ -482,7 +518,7 @@
                                 data-payment-id="{{ $payment->id }}"
                                 data-action="{{ route('dashboard.accounts.payments.refunds.store', [$account, $payment]) }}"
                                 data-customer="{{ $payment->customer?->name ?? __('app.not_set') }}"
-                                data-description="{{ $payment->plan_name }}"
+                                data-description="{{ $paymentDescription }}"
                                 data-original-amount="{{ $formatMoney($payment->amount_cents, $payment->currency) }}"
                                 data-refunded-amount="{{ $formatMoney($payment->refundedAmountCents(), $payment->currency) }}"
                                 data-remaining-amount="{{ $formatMoney($payment->remainingRefundableAmountCents(), $payment->currency) }}"
@@ -495,6 +531,27 @@
                                 <x-ui.icon name="undo-2" class="h-4 w-4" />
                                 {{ __('app.refund_payment') }}
                             </button>
+                            @if ($payment->items->isNotEmpty())
+                                <template data-payment-refund-items-template="{{ $payment->id }}">
+                                    @foreach ($payment->items as $purchaseItem)
+                                        @php $remainingItemRefundCents = $purchaseItem->remainingRefundableAmountCents(); @endphp
+                                        <div class="grid gap-3 rounded-lg border border-stone-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_160px]" data-payment-refund-item>
+                                            <label class="flex min-h-11 items-start gap-3">
+                                                <input type="checkbox" class="crm-checkbox mt-1" data-payment-refund-item-select @disabled($remainingItemRefundCents <= 0)>
+                                                <span class="min-w-0 text-sm">
+                                                    <span class="block font-semibold text-slate-800">{{ $purchaseItem->plan_name }}</span>
+                                                    <span class="mt-1 block break-words text-xs text-slate-500">{{ $purchaseItem->customerClassPass?->code ?? __('app.not_set') }} · {{ __('app.remaining_to_refund') }}: {{ $formatMoney($remainingItemRefundCents, $purchaseItem->currency) }}</span>
+                                                </span>
+                                            </label>
+                                            <input type="hidden" name="items[{{ $loop->index }}][customer_purchase_item_id]" value="{{ $purchaseItem->id }}" disabled data-payment-refund-item-id>
+                                            <label class="block">
+                                                <span class="crm-label">{{ __('app.amount') }}</span>
+                                                <input name="items[{{ $loop->index }}][amount]" type="number" min="0.01" max="{{ $formatMoneyInput($remainingItemRefundCents) }}" step="0.01" inputmode="decimal" value="{{ $formatMoneyInput($remainingItemRefundCents) }}" class="crm-field min-h-11" disabled data-payment-refund-item-amount>
+                                            </label>
+                                        </div>
+                                    @endforeach
+                                </template>
+                            @endif
                         @endif
 
                         @if ($canManageStudioCashflow && $payment->canBeCorrectedAsStudioCash())
@@ -582,6 +639,7 @@
             data-old-cash-location-id="{{ $refundValidationPaymentId ? old('cash_location_id') : '' }}"
             data-old-reason="{{ $refundValidationPaymentId ? old('reason') : '' }}"
             data-old-idempotency-key="{{ $refundValidationPaymentId ? old('idempotency_key') : '' }}"
+            data-old-items="{{ json_encode($refundValidationPaymentId ? old('items', []) : []) }}"
             data-confirm-body-template="{{ __('app.confirm_payment_refund_body', ['amount' => ':amount', 'method' => ':method']) }}"
         >
             <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-stone-200 bg-white p-5 shadow-2xl sm:p-6">
@@ -615,6 +673,18 @@
                     @csrf
                     <input type="hidden" name="refund_payment_id" value="{{ old('refund_payment_id') }}" data-payment-refund-payment-id>
                     <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key') }}" data-payment-refund-idempotency-key>
+
+                    <fieldset class="hidden sm:col-span-2" data-payment-refund-items>
+                        <legend class="crm-label">{{ __('app.payment_refund_items') }}</legend>
+                        <p class="mb-3 text-sm text-slate-500">{{ __('app.payment_refund_items_help') }}</p>
+                        <div class="max-h-80 space-y-3 overflow-y-auto" data-payment-refund-items-list></div>
+                        @if ($refundValidationPaymentId)
+                            @error('items') <span class="crm-help">{{ $message }}</span> @enderror
+                            @foreach ($errors->get('items.*') as $messages)
+                                @foreach ($messages as $message) <span class="crm-help">{{ $message }}</span> @endforeach
+                            @endforeach
+                        @endif
+                    </fieldset>
 
                     <label class="block">
                         <span class="crm-label">{{ __('app.amount') }}</span>

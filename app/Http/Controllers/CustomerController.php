@@ -8,6 +8,7 @@ use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Support\Payments\PaymentGatewayRegistry;
 use App\Support\ScheduleKindRegistry;
 use App\Support\TrialClassPassEligibility;
 use App\Support\WorkingLocationContext;
@@ -81,6 +82,7 @@ class CustomerController extends Controller
         ReconcileUnreservedCustomerBookingsForIssuedClassPass $reconcileUnreservedCustomerBookings,
         TrialClassPassEligibility $trialClassPassEligibility,
         WorkingLocationContext $workingLocationContext,
+        PaymentGatewayRegistry $paymentGateways,
     ): View {
         $this->ensureBelongsToAccount($account, $customer);
         $this->authorize('manageClients', $account);
@@ -99,6 +101,7 @@ class CustomerController extends Controller
             'classPassPlan.trainerTypes',
             'classPassPlan.rooms',
             'issuedLocation',
+            'purchaseItem.purchase',
             'reservations.classBooking.scheduledClass.classType',
         ];
         $classPassTab = $request->query('class_pass_tab') === 'history' || $request->has('class_pass_history_page')
@@ -157,6 +160,10 @@ class CustomerController extends Controller
             'customerClassPassHistory' => $customerClassPassHistory,
             'classPassTab' => $classPassTab,
             'classPassPlans' => $classPassPlans,
+            'cartPlans' => $classPassPlans,
+            'cartCanCheckout' => $request->user()->can('manageClients', $account) && $request->user()->can('issueCustomerClassPasses', $account) && $request->user()->can('recordCustomerPayments', $account),
+            'cartPaymentSettings' => $paymentGateways->availableSettingsFor($account),
+            'cartPendingPurchases' => $customer->purchases()->whereBelongsTo($account)->reservingPromotionUse()->whereHas('items')->whereNull('paid_at')->with('items')->latest()->get(),
             'locations' => $account->locations()->active()->orderBy('name')->get(),
             'workingLocationId' => $workingLocationContext->formLocationId($account),
             'classPassBackfillPreview' => $classPassBackfillPreview,

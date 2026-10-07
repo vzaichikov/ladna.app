@@ -4,12 +4,14 @@ namespace App\Actions;
 
 use App\Models\Account;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseItem;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\Location;
 use App\Models\StudioCashEntry;
 use App\Models\User;
 use App\Support\ActorSnapshot;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +23,9 @@ class RecordCustomerPurchaseRefund
         private readonly RecalculateCustomerClassPassPayment $recalculateCustomerClassPassPayment,
     ) {}
 
+    /**
+     * @param  array<int, array{customer_purchase_item_id: int, amount_cents: int}>  $itemAllocations
+     */
     public function execute(
         Account $account,
         CustomerPurchase $customerPurchase,
@@ -31,8 +36,11 @@ class RecordCustomerPurchaseRefund
         ?User $user,
         string $reason,
         string $idempotencyKey,
+        array $itemAllocations = [],
     ): CustomerPurchaseRefund {
-        return DB::transaction(function () use ($account, $customerPurchase, $method, $cashLocation, $amountCents, $refundedAt, $user, $reason, $idempotencyKey): CustomerPurchaseRefund {
+        $itemAllocations = $this->normalizeItemAllocations($itemAllocations);
+
+        return DB::transaction(function () use ($account, $customerPurchase, $method, $cashLocation, $amountCents, $refundedAt, $user, $reason, $idempotencyKey, $itemAllocations): CustomerPurchaseRefund {
             $purchase = CustomerPurchase::query()
                 ->with(['customerClassPass', 'refunds'])
                 ->whereBelongsTo($account)
@@ -40,6 +48,7 @@ class RecordCustomerPurchaseRefund
                 ->lockForUpdate()
                 ->firstOrFail();
             $existingRefund = CustomerPurchaseRefund::query()
+                ->with('items')
                 ->whereBelongsTo($account)
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
@@ -54,7 +63,11 @@ class RecordCustomerPurchaseRefund
                     || $existingRefund->method !== $method
                     || $existingRefund->cash_location_id !== $expectedCashLocationId
                     || $existingRefund->amount_cents !== $amountCents
-                    || $existingRefund->reason !== $reason) {
+                    || $existingRefund->reason !== $reason
+                    || $existingRefund->items->sortBy('customer_purchase_item_id')->map(fn ($item): array => [
+                        'customer_purchase_item_id' => (int) $item->customer_purchase_item_id,
+                        'amount_cents' => (int) $item->amount_cents,
+                    ])->values()->all() !== $itemAllocations) {
                     throw ValidationException::withMessages([
                         'idempotency_key' => __('app.payment_refund_duplicate_request'),
                     ]);
@@ -91,6 +104,15 @@ class RecordCustomerPurchaseRefund
                 ]);
             }
 
+            $purchaseItems = $purchase->items()
+                ->with(['customerClassPass', 'refundItems'])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->each(fn (CustomerPurchaseItem $item): CustomerPurchaseItem => $item->setRelation('purchase', $purchase))
+                ->keyBy('id');
+            $this->validateItemAllocations($purchase, $purchaseItems, $itemAllocations, $amountCents);
+
             $refund = CustomerPurchaseRefund::query()->create([
                 'account_id' => $account->id,
                 'customer_purchase_id' => $purchase->id,
@@ -108,6 +130,13 @@ class RecordCustomerPurchaseRefund
                 ...$this->actorSnapshot->capture($account, $user),
                 'reason' => $reason,
             ]);
+
+            foreach ($itemAllocations as $allocation) {
+                $refund->items()->create([
+                    'account_id' => $account->id,
+                    ...$allocation,
+                ]);
+            }
 
             if ($refund->isCash()) {
                 $this->recordStudioCashEntry->execute(
@@ -129,7 +158,81 @@ class RecordCustomerPurchaseRefund
                 $this->recalculateCustomerClassPassPayment->execute($purchase->customerClassPass);
             }
 
-            return $refund->load(['customerPurchase', 'location', 'cashLocation', 'cashEntry']);
+            foreach ($itemAllocations as $allocation) {
+                $customerClassPass = $purchaseItems->get($allocation['customer_purchase_item_id'])?->customerClassPass;
+
+                if ($customerClassPass) {
+                    $this->recalculateCustomerClassPassPayment->execute($customerClassPass);
+                }
+            }
+
+            return $refund->load(['customerPurchase', 'location', 'cashLocation', 'cashEntry', 'items.customerPurchaseItem.customerClassPass']);
         }, attempts: 5);
+    }
+
+    /**
+     * @param  array<int, array{customer_purchase_item_id: int, amount_cents: int}>  $itemAllocations
+     * @return array<int, array{customer_purchase_item_id: int, amount_cents: int}>
+     */
+    private function normalizeItemAllocations(array $itemAllocations): array
+    {
+        $allocations = collect($itemAllocations);
+
+        if ($allocations->contains(fn (array $allocation): bool => ! is_int($allocation['customer_purchase_item_id'] ?? null)
+            || ! is_int($allocation['amount_cents'] ?? null)
+            || $allocation['customer_purchase_item_id'] <= 0
+            || $allocation['amount_cents'] <= 0)
+            || $allocations->pluck('customer_purchase_item_id')->unique()->count() !== $allocations->count()) {
+            throw ValidationException::withMessages([
+                'items' => __('app.payment_refund_items_invalid'),
+            ]);
+        }
+
+        return $allocations->sortBy('customer_purchase_item_id')->values()->all();
+    }
+
+    /**
+     * @param  Collection<int, CustomerPurchaseItem>  $purchaseItems
+     * @param  array<int, array{customer_purchase_item_id: int, amount_cents: int}>  $itemAllocations
+     */
+    private function validateItemAllocations(CustomerPurchase $purchase, Collection $purchaseItems, array $itemAllocations, int $amountCents): void
+    {
+        if ($purchaseItems->isEmpty()) {
+            if ($itemAllocations !== []) {
+                throw ValidationException::withMessages([
+                    'items' => __('app.payment_refund_items_invalid'),
+                ]);
+            }
+
+            return;
+        }
+
+        if ($itemAllocations === []) {
+            throw ValidationException::withMessages([
+                'items' => __('app.payment_refund_items_required'),
+            ]);
+        }
+
+        if ((int) collect($itemAllocations)->sum('amount_cents') !== $amountCents) {
+            throw ValidationException::withMessages([
+                'amount' => __('app.payment_refund_items_total_mismatch'),
+            ]);
+        }
+
+        foreach ($itemAllocations as $allocation) {
+            $item = $purchaseItems->get($allocation['customer_purchase_item_id']);
+
+            if (! $item
+                || $item->account_id !== $purchase->account_id
+                || ! $item->customerClassPass
+                || $item->customerClassPass->account_id !== $purchase->account_id
+                || $item->customerClassPass->customer_id !== $purchase->customer_id
+                || $item->currency !== $purchase->currency
+                || $allocation['amount_cents'] > $item->remainingRefundableAmountCents()) {
+                throw ValidationException::withMessages([
+                    'items' => __('app.payment_refund_items_invalid'),
+                ]);
+            }
+        }
     }
 }

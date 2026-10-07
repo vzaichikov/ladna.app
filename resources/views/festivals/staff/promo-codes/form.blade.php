@@ -35,7 +35,7 @@
                 <label>
                     <span class="crm-label">{{ __('app.promo_code_discount_type') }}</span>
                     <select name="discount_type" required class="crm-field">
-                        @foreach (\App\Enums\PromoCodeDiscountType::cases() as $type)
+                        @foreach ([\App\Enums\PromoCodeDiscountType::Fixed, \App\Enums\PromoCodeDiscountType::Percent] as $type)
                             <option value="{{ $type->value }}" @selected($discountType === $type->value)>{{ __('app.promo_code_discount_type_'.$type->value) }}</option>
                         @endforeach
                     </select>

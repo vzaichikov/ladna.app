@@ -47,6 +47,7 @@ class IssueCustomerClassPass
         ?string $trialEligibilityOverrideReason = null,
         ?Carbon $trialEligibilityAsOf = null,
         ?CustomerPurchase $trialEligibilityOverridePurchase = null,
+        bool $notify = true,
     ): CustomerClassPass {
         if ($customer->account_id !== $account->id || $classPassPlan->account_id !== $account->id) {
             abort(404);
@@ -162,10 +163,10 @@ class IssueCustomerClassPass
                 'sessions_count' => $snapshot['sessions_count'] ?? $classPassPlan->sessions_count,
                 'validity_days' => $snapshot['validity_days'] ?? $classPassPlan->validity_days,
                 'total_validity_days' => $totalValidityDays,
-                'available_from_time' => $snapshot['available_from_time'] ?? $classPassPlan->available_from_time,
-                'available_until_time' => $snapshot['available_until_time'] ?? $classPassPlan->available_until_time,
+                'available_from_time' => array_key_exists('available_from_time', $snapshot) ? $snapshot['available_from_time'] : $classPassPlan->available_from_time,
+                'available_until_time' => array_key_exists('available_until_time', $snapshot) ? $snapshot['available_until_time'] : $classPassPlan->available_until_time,
                 'allows_any_time' => $snapshot['allows_any_time'] ?? $classPassPlan->allows_any_time,
-                'any_time_addon_price_cents' => $snapshot['any_time_addon_price_cents'] ?? $classPassPlan->any_time_addon_price_cents,
+                'any_time_addon_price_cents' => array_key_exists('any_time_addon_price_cents', $snapshot) ? $snapshot['any_time_addon_price_cents'] : $classPassPlan->any_time_addon_price_cents,
                 'purchased_at' => $purchasedAt,
                 'usable_until_at' => $purchasedAt->copy()->addDays($totalValidityDays),
                 'is_active' => true,
@@ -193,7 +194,7 @@ class IssueCustomerClassPass
             return $classPass;
         });
 
-        if ($source !== 'online_payment') {
+        if ($notify && $source !== 'online_payment') {
             $this->mailDispatcher->customerClassPassIssued($classPass);
         }
 

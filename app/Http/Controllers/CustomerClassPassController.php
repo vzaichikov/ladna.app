@@ -59,7 +59,7 @@ class CustomerClassPassController extends Controller
             ->count();
 
         $customerClassPasses = $account->customerClassPasses()
-            ->with(['customer', 'issuedLocation', 'classPassPlan.classTypes', 'classPassPlan.trainerTypes', 'classPassPlan.rooms'])
+            ->with(['customer', 'issuedLocation', 'purchaseItem', 'classPassPlan.classTypes', 'classPassPlan.trainerTypes', 'classPassPlan.rooms'])
             ->when($term !== '', function ($query) use ($term): void {
                 $query->where(function ($query) use ($term): void {
                     $query->where('code', 'like', "%{$term}%")
@@ -155,6 +155,9 @@ class CustomerClassPassController extends Controller
             'reservations.classBooking.scheduledClass.trainer',
             'adjustments.user',
             'purchases.location',
+            'purchases.refunds',
+            'purchaseItem.purchase.location',
+            'purchaseItem.refundItems.customerPurchaseRefund',
         ]);
 
         return view('customer-class-passes.edit', [
@@ -340,6 +343,28 @@ class CustomerClassPassController extends Controller
 
         foreach ($customerClassPass->purchases as $purchase) {
             $addEntry('payment', $purchase, $purchase->paid_at ?? $purchase->failed_at ?? $purchase->started_at ?? $purchase->created_at);
+
+            foreach ($purchase->refunds as $refund) {
+                $addEntry('refund', $refund, $refund->effectiveOccurredAt());
+            }
+        }
+
+        $purchaseItem = $customerClassPass->purchaseItem;
+
+        if ($purchaseItem?->purchase) {
+            $purchase = $purchaseItem->purchase;
+            $addEntry('payment', $purchase, $purchase->effectiveOccurredAt(), [
+                'amount_cents' => (int) $purchaseItem->amount_cents,
+                'parent_amount_cents' => (int) $purchase->amount_cents,
+            ]);
+
+            foreach ($purchaseItem->refundItems as $refundItem) {
+                if ($refundItem->customerPurchaseRefund) {
+                    $addEntry('refund', $refundItem->customerPurchaseRefund, $refundItem->customerPurchaseRefund->effectiveOccurredAt(), [
+                        'amount_cents' => (int) $refundItem->amount_cents,
+                    ]);
+                }
+            }
         }
 
         foreach ($customerClassPass->adjustments as $adjustment) {

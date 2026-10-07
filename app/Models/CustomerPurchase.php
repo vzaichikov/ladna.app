@@ -16,8 +16,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 use Illuminate\Support\Carbon;
 
-#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'studio_promo_code_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'subtotal_cents', 'discount_cents', 'currency', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'promo_email_hash', 'promo_phone_hash', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'trial_eligibility_validated_at', 'paid_at', 'failed_at', 'expires_at'])]
-#[Hidden(['gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash'])]
+#[Fillable(['account_id', 'customer_id', 'location_id', 'class_pass_plan_id', 'customer_class_pass_id', 'class_booking_id', 'studio_promo_code_id', 'provider', 'payment_source', 'order_id', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'status', 'plan_name', 'plan_slug', 'schedule_kind', 'amount_cents', 'subtotal_cents', 'discount_cents', 'currency', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'promo_email_hash', 'promo_phone_hash', 'sessions_count', 'validity_days', 'total_validity_days', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'started_at', 'trial_eligibility_validated_at', 'paid_at', 'failed_at', 'expires_at', 'promo_buy_quantity', 'promo_free_quantity', 'checkout_fingerprint', 'access_token_hash', 'access_token_encrypted', 'gateway_start_requested_at', 'actor_user_id', 'actor_trainer_id', 'actor_name', 'actor_email', 'actor_role'])]
+#[Hidden(['gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash', 'access_token_hash', 'access_token_encrypted', 'checkout_fingerprint'])]
 class CustomerPurchase extends Model
 {
     /** @use HasFactory<CustomerPurchaseFactory> */
@@ -25,15 +25,21 @@ class CustomerPurchase extends Model
 
     public const ProviderStudioCash = 'studio_cash';
 
+    public const ProviderStudioCardTransfer = 'studio_card_transfer';
+
     public const ProviderFree = 'free';
 
     public const SourceOnlineCheckout = 'online_checkout';
 
     public const SourceManualCashClassPass = 'manual_cash_class_pass';
 
+    public const SourceManualCardClassPass = 'manual_card_class_pass';
+
     public const SourceManualCashBooking = 'manual_cash_booking';
 
     public const PaymentMethodCash = 'cash';
+
+    public const PaymentMethodCardTransfer = 'card_transfer';
 
     public const PaymentMethodOnline = 'online';
 
@@ -57,6 +63,10 @@ class CustomerPurchase extends Model
             'discount_cents' => 'integer',
             'promo_discount_type' => PromoCodeDiscountType::class,
             'promo_discount_value' => 'integer',
+            'promo_buy_quantity' => 'integer',
+            'promo_free_quantity' => 'integer',
+            'access_token_encrypted' => 'encrypted',
+            'gateway_start_requested_at' => 'datetime',
             'gateway_checkout_payload' => 'encrypted:array',
             'last_callback_payload' => 'encrypted:array',
             'started_at' => 'datetime',
@@ -154,6 +164,48 @@ class CustomerPurchase extends Model
         return $this->belongsTo(CustomerClassPass::class);
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(CustomerPurchaseItem::class)->orderBy('position');
+    }
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
+
+    public function hasItems(): bool
+    {
+        return $this->relationLoaded('items') ? $this->items->isNotEmpty() : $this->items()->exists();
+    }
+
+    public function paymentMethod(): string
+    {
+        return match (true) {
+            $this->isManualCashStudioPayment() => self::PaymentMethodCash,
+            $this->payment_source === self::SourceManualCardClassPass => self::PaymentMethodCardTransfer,
+            default => self::PaymentMethodOnline,
+        };
+    }
+
+    public function expirePaymentWindow(): self
+    {
+        if ($this->expires_at?->isPast() && ! $this->status->isFinal()) {
+            self::query()->whereKey($this->id)
+                ->whereIn('status', [CustomerPurchaseStatus::PaymentStarted->value, CustomerPurchaseStatus::PaymentPending->value])
+                ->where('expires_at', '<', now())
+                ->update(['status' => CustomerPurchaseStatus::PaymentExpired->value, 'failed_at' => now()]);
+            $this->refresh();
+        }
+
+        return $this;
+    }
+
+    public function paymentWindowIsOpen(): bool
+    {
+        return ! $this->status->isFinal() && (! $this->expires_at || $this->expires_at->isFuture());
+    }
+
     public function classBooking(): BelongsTo
     {
         return $this->belongsTo(ClassBooking::class);
@@ -212,7 +264,7 @@ class CustomerPurchase extends Model
      */
     public static function paymentMethods(): array
     {
-        return [self::PaymentMethodCash, self::PaymentMethodOnline];
+        return [self::PaymentMethodCash, self::PaymentMethodCardTransfer, self::PaymentMethodOnline];
     }
 
     public function canBeCorrectedAsStudioCash(): bool
@@ -223,7 +275,8 @@ class CustomerPurchase extends Model
 
         return $this->isManualCashStudioPayment()
             && $this->isPaid()
-            && ! $hasFiscalReceipts;
+            && ! $hasFiscalReceipts
+            && ! $this->hasItems();
     }
 
     public function refundedAmountCents(): int

@@ -14,7 +14,9 @@ use App\Enums\IntegrationScope;
 use App\Enums\SmsTopUpPaymentStatus;
 use App\Models\AccountSubscriptionPayment;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseItem;
 use App\Models\CustomerPurchaseRefund;
+use App\Models\CustomerPurchaseRefundItem;
 use App\Models\EventOrder;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalPaymentAttempt;
@@ -254,6 +256,8 @@ class FiscalReceiptService
         $name = $this->itemName($payment);
         $isReturn = $payment instanceof CustomerPurchaseRefund;
         $goods = match (true) {
+            $payment instanceof CustomerPurchase && $payment->items()->exists() => $this->customerPurchaseGoods($payment),
+            $payment instanceof CustomerPurchaseRefund && $payment->items()->exists() => $this->customerPurchaseRefundGoods($payment),
             $payment instanceof FestivalTicketOrder => $this->festivalTicketGoods($payment),
             $payment instanceof FestivalPaymentAttempt => $this->festivalPaymentAttemptGoods($payment),
             default => [[
@@ -300,7 +304,7 @@ class FiscalReceiptService
         }
 
         if ($payment instanceof CustomerPurchase) {
-            return Str::limit($payment->plan_name, 128, '');
+            return Str::limit($payment->plan_name ?: __('app.class_passes'), 128, '');
         }
 
         if ($payment instanceof EventOrder) {
@@ -428,6 +432,10 @@ class FiscalReceiptService
 
     private function paymentProviderLabel(string $provider): string
     {
+        if ($provider === CustomerPurchase::ProviderStudioCardTransfer) {
+            return __('app.payment_method_card_transfer');
+        }
+
         $label = config('integrations.providers.'.$provider.'.label');
 
         return is_string($label) ? $label : $provider;
@@ -447,6 +455,67 @@ class FiscalReceiptService
         }
 
         return $payment->order_id;
+    }
+
+    /**
+     * @return array<int, array{good: array{code: string, name: string, price: int}, quantity: int, is_return: false}>
+     */
+    private function customerPurchaseGoods(CustomerPurchase $purchase): array
+    {
+        $purchase->loadMissing('items');
+
+        if ((int) $purchase->items->sum('amount_cents') !== (int) $purchase->amount_cents
+            || $purchase->items->contains(fn (CustomerPurchaseItem $item): bool => $item->account_id !== $purchase->account_id
+                || $item->customer_purchase_id !== $purchase->id
+                || strtoupper($item->currency) !== strtoupper($purchase->currency))) {
+            throw new LogicException('Customer purchase item totals do not match the payment.');
+        }
+
+        return $purchase->items
+            ->filter(fn (CustomerPurchaseItem $item): bool => $item->amount_cents > 0)
+            ->map(fn (CustomerPurchaseItem $item): array => [
+                'good' => [
+                    'code' => $purchase->order_id.'-'.$item->id,
+                    'name' => Str::limit($item->plan_name, 128, ''),
+                    'price' => (int) $item->amount_cents,
+                ],
+                'quantity' => 1000,
+                'is_return' => false,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{good: array{code: string, name: string, price: int}, quantity: int, is_return: true}>
+     */
+    private function customerPurchaseRefundGoods(CustomerPurchaseRefund $refund): array
+    {
+        $refund->loadMissing(['customerPurchase', 'items.customerPurchaseItem']);
+
+        if (! $refund->customerPurchase
+            || (int) $refund->items->sum('amount_cents') !== (int) $refund->amount_cents
+            || $refund->items->contains(fn (CustomerPurchaseRefundItem $allocation): bool => $allocation->account_id !== $refund->account_id
+                || $allocation->customerPurchaseItem?->account_id !== $refund->account_id
+                || $allocation->customerPurchaseItem?->customer_purchase_id !== $refund->customer_purchase_id
+                || strtoupper((string) $allocation->customerPurchaseItem?->currency) !== strtoupper($refund->currency)
+                || $allocation->amount_cents <= 0
+                || $allocation->amount_cents > (int) $allocation->customerPurchaseItem?->amount_cents)) {
+            throw new LogicException('Customer purchase refund allocations do not match the refund.');
+        }
+
+        return $refund->items
+            ->map(fn (CustomerPurchaseRefundItem $allocation): array => [
+                'good' => [
+                    'code' => $refund->customerPurchase->order_id.'-'.$allocation->customer_purchase_item_id,
+                    'name' => Str::limit($allocation->customerPurchaseItem->plan_name, 128, ''),
+                    'price' => (int) $allocation->amount_cents,
+                ],
+                'quantity' => 1000,
+                'is_return' => true,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

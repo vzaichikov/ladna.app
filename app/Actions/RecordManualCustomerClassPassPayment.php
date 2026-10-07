@@ -45,7 +45,7 @@ class RecordManualCustomerClassPassPayment
 
         return DB::transaction(function () use ($account, $customerClassPass, $location, $amountCents, $paidAt, $user, $idempotencyKey): CustomerPurchase {
             $lockedClassPass = CustomerClassPass::query()
-                ->with('classPassPlan')
+                ->with(['classPassPlan', 'purchaseItem'])
                 ->whereKey($customerClassPass->id)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -82,7 +82,7 @@ class RecordManualCustomerClassPassPayment
             }
 
             $paidAt ??= now();
-            $newPaidAmountCents = min((int) $lockedClassPass->price_cents, $lockedClassPass->paidAmountCents() + $amountCents);
+            $newPaidAmountCents = min($lockedClassPass->payableAmountCents(), $lockedClassPass->paidAmountCents() + $amountCents);
 
             $payment = CustomerPurchase::query()->create([
                 'account_id' => $lockedClassPass->account_id,
@@ -108,7 +108,7 @@ class RecordManualCustomerClassPassPayment
 
             $lockedClassPass->forceFill([
                 'paid_amount_cents' => $newPaidAmountCents,
-                'is_paid' => $newPaidAmountCents >= (int) $lockedClassPass->price_cents,
+                'is_paid' => $newPaidAmountCents >= $lockedClassPass->payableAmountCents(),
                 'issued_location_id' => $lockedClassPass->issued_location_id ?? $location->id,
             ])->save();
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\PublicClassPassCheckoutController;
 use App\Http\Controllers\PublicClassPassPromoCodeController;
 use App\Http\Controllers\PublicClassPassPurchaseController;
+use App\Http\Controllers\PublicCustomerCartPaymentController;
 use App\Http\Controllers\PublicEventCheckoutController;
 use App\Http\Controllers\PublicEventController;
 use App\Http\Controllers\PublicEventEntranceController;
@@ -20,6 +21,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/event-checkout/google/callback', [PublicEventCheckoutController::class, 'googleCallback'])
     ->middleware('throttle:30,1')
     ->name('public.event-checkout.google.callback');
+Route::get('/{accountSlug}/cart-payments/{accessToken}', [PublicCustomerCartPaymentController::class, 'show'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.customer-cart.payment');
+Route::post('/{accountSlug}/cart-payments/{accessToken}/pay', [PublicCustomerCartPaymentController::class, 'pay'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.customer-cart.pay');
+Route::get('/{accountSlug}/cart-payments/{accessToken}/status', [PublicCustomerCartPaymentController::class, 'status'])
+    ->middleware([EnsurePublicSubscriptionIsActive::class, 'throttle:120,1'])
+    ->name('public.customer-cart.status');
 Route::get('/{accountSlug}', PublicStudioLandingController::class)
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.studio');

@@ -47,6 +47,7 @@
             'payment', 'reservation_used', 'opened' => 'crm-status-active',
             'adjustment', 'reservation_reserved' => 'crm-status-scheduled',
             'closed', 'reservation_released' => 'crm-status-muted',
+            'refund' => 'crm-status-danger',
             default => 'crm-status-warning',
         };
     @endphp
@@ -122,6 +123,9 @@
                     <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
                         <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_price') }}</div>
                         <div class="mt-1 font-semibold text-slate-950">{{ $formatMoney($customerClassPass->price_cents, $customerClassPass->currency) }}</div>
+                        @if ($customerClassPass->payableAmountCents() !== (int) $customerClassPass->price_cents)
+                            <div class="mt-1 text-xs text-slate-500">{{ __('app.class_pass_payable_amount') }}: {{ $formatMoney($customerClassPass->payableAmountCents(), $customerClassPass->currency) }}</div>
+                        @endif
                     </div>
                     <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
                         <div class="text-xs font-semibold uppercase text-slate-500">{{ __('app.class_pass_paid_amount') }}</div>
@@ -194,6 +198,7 @@
                     @php
                         $entryType = $entry['type'];
                         $entrySource = $entry['source'];
+                        $entryContext = $entry['context'];
                     @endphp
                     <div class="border-b border-stone-100 px-5 py-4 text-sm last:border-b-0">
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -219,11 +224,16 @@
                             <div class="mt-1 text-slate-500">{{ __('app.status') }}: {{ __('app.'.$entrySource->status->value) }}</div>
                         @elseif ($entryType === 'payment')
                             @php
-                                $providerLabel = $entrySource->provider === \App\Models\CustomerPurchase::ProviderStudioCash
-                                    ? __('app.provider_studio_cash')
-                                    : \Illuminate\Support\Str::headline((string) $entrySource->provider);
+                                $providerLabel = match ($entrySource->provider) {
+                                    \App\Models\CustomerPurchase::ProviderStudioCash => __('app.provider_studio_cash'),
+                                    \App\Models\CustomerPurchase::ProviderStudioCardTransfer => __('app.payment_method_card_transfer'),
+                                    default => \Illuminate\Support\Str::headline((string) $entrySource->provider),
+                                };
                             @endphp
-                            <div class="mt-3 font-semibold text-slate-950">{{ $formatMoney($entrySource->amount_cents, $entrySource->currency) }}</div>
+                            <div class="mt-3 font-semibold text-slate-950">{{ $formatMoney($entryContext['amount_cents'] ?? $entrySource->amount_cents, $entrySource->currency) }}</div>
+                            @if (array_key_exists('parent_amount_cents', $entryContext))
+                                <div class="mt-1 text-xs text-slate-500">{{ __('app.original_payment') }}: {{ $formatMoney($entryContext['parent_amount_cents'], $entrySource->currency) }}</div>
+                            @endif
                             <div class="mt-1 text-slate-500">
                                 {{ $providerLabel }} · {{ __('app.'.$entrySource->status->value) }}
                             </div>
@@ -233,6 +243,10 @@
                                     · {{ $entrySource->order_id }}
                                 @endif
                             </div>
+                        @elseif ($entryType === 'refund')
+                            <div class="mt-3 font-semibold text-rose-700">−{{ $formatMoney($entryContext['amount_cents'] ?? $entrySource->amount_cents, $entrySource->currency) }}</div>
+                            <div class="mt-1 text-slate-500">{{ __('app.payment_refund_method_'.$entrySource->method) }} · {{ $entrySource->reason }}</div>
+                            <div class="mt-1 text-xs text-slate-500">{{ __('app.refund_recorded_by') }}: {{ $entrySource->actor_name ?? __('app.system') }}</div>
                         @elseif (in_array($entryType, ['reservation_reserved', 'reservation_used', 'reservation_released'], true))
                             @php
                                 $reservation = $entrySource;

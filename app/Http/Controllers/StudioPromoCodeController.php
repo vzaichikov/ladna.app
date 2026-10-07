@@ -152,9 +152,13 @@ class StudioPromoCodeController extends Controller
             'name' => $validated['name'],
             'code' => $validated['code'],
             'discount_type' => $discountType,
-            'discount_value' => $discountType === PromoCodeDiscountType::Fixed
-                ? PaymentAmounts::decimalToCents($validated['discount_amount'])
-                : (int) $validated['discount_amount'],
+            'discount_value' => match ($discountType) {
+                PromoCodeDiscountType::Fixed => PaymentAmounts::decimalToCents($validated['discount_amount']),
+                PromoCodeDiscountType::Percent => (int) $validated['discount_amount'],
+                PromoCodeDiscountType::BuyXGetY => 0,
+            },
+            'buy_quantity' => $discountType === PromoCodeDiscountType::BuyXGetY ? (int) $validated['buy_quantity'] : null,
+            'free_quantity' => $discountType === PromoCodeDiscountType::BuyXGetY ? (int) $validated['free_quantity'] : null,
             'currency' => $account->default_currency,
             'starts_at' => CarbonImmutable::createFromFormat('Y-m-d\TH:i', $validated['starts_at'], $account->timezone)->utc(),
             'ends_at' => CarbonImmutable::createFromFormat('Y-m-d\TH:i', $validated['ends_at'], $account->timezone)->utc(),

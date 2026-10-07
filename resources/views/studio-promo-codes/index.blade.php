@@ -37,6 +37,7 @@
                 <option value="">{{ __('app.all') }}</option>
                 <option value="fixed" @selected($discountType === 'fixed')>{{ __('app.discount_type_fixed') }}</option>
                 <option value="percent" @selected($discountType === 'percent')>{{ __('app.discount_type_percent') }}</option>
+                <option value="buy_x_get_y" @selected($discountType === 'buy_x_get_y')>{{ __('app.discount_type_buy_x_get_y') }}</option>
             </select>
         </label>
     </x-ui.filter-bar>
@@ -44,9 +45,11 @@
     <x-ui.panel padding="none" class="mt-6 overflow-hidden">
         @forelse ($promoCodes as $promoCode)
             @php
-                $discount = $promoCode->discount_type === \App\Enums\PromoCodeDiscountType::Fixed
-                    ? \App\Support\MoneyFormatter::format($promoCode->discount_value, $promoCode->currency)
-                    : $promoCode->discount_value.'%';
+                $discount = match ($promoCode->discount_type) {
+                    \App\Enums\PromoCodeDiscountType::Fixed => \App\Support\MoneyFormatter::format($promoCode->discount_value, $promoCode->currency),
+                    \App\Enums\PromoCodeDiscountType::Percent => $promoCode->discount_value.'%',
+                    \App\Enums\PromoCodeDiscountType::BuyXGetY => __('app.promo_code_buy_get_label', ['buy' => $promoCode->buy_quantity, 'free' => $promoCode->free_quantity]),
+                };
                 $startsAt = $promoCode->starts_at->copy()->timezone($account->timezone);
                 $endsAt = $promoCode->ends_at->copy()->timezone($account->timezone);
             @endphp

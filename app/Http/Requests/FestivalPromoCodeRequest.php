@@ -51,7 +51,7 @@ class FestivalPromoCodeRequest extends FormRequest
                         ->where('festival_edition_id', $edition instanceof FestivalEdition ? $edition->id : 0))
                     ->ignore($promoCode instanceof FestivalPromoCode ? $promoCode->id : null),
             ],
-            'discount_type' => ['required', Rule::enum(PromoCodeDiscountType::class)],
+            'discount_type' => ['required', Rule::enum(PromoCodeDiscountType::class)->only([PromoCodeDiscountType::Fixed, PromoCodeDiscountType::Percent])],
             'discount_value' => $discountType === PromoCodeDiscountType::Percent->value
                 ? ['required', 'integer', 'min:1', 'max:100']
                 : ['required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],

@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\Customer;
 use App\Models\CustomerClassPass;
 use App\Models\CustomerPurchase;
+use App\Models\CustomerPurchaseItem;
 use App\Models\CustomerPurchaseRefund;
 use App\Models\EventOrder;
 use App\Models\FiscalReceipt;
@@ -196,6 +197,7 @@ class StudioPaymentToolData
             ->with([
                 'customer:id,account_id,name,phone,email',
                 'location:id,account_id,name',
+                'items.customerClassPass:id,account_id,code',
             ])
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $escaped = addcslashes($search, '\\%_');
@@ -203,6 +205,9 @@ class StudioPaymentToolData
                     $query
                         ->where('order_id', 'like', '%'.$escaped.'%')
                         ->orWhere('plan_name', 'like', '%'.$escaped.'%')
+                        ->orWhereHas('items', fn (Builder $query): Builder => $query
+                            ->where('plan_name', 'like', '%'.$escaped.'%')
+                            ->orWhereHas('customerClassPass', fn (Builder $query): Builder => $query->where('code', 'like', '%'.$escaped.'%')))
                         ->orWhereHas('customer', fn (Builder $query): Builder => $query
                             ->where('name', 'like', '%'.$escaped.'%')
                             ->orWhere('phone', 'like', '%'.$escaped.'%')
@@ -222,11 +227,18 @@ class StudioPaymentToolData
                 'status' => $payment->status->value,
                 'occurred_at' => $this->occurredAt($account, $payment->effectiveOccurredAt()),
                 'amount' => $this->money((int) $payment->amount_cents, (string) $payment->currency),
-                'payment_method' => $payment->isManualCashStudioPayment()
-                    ? CustomerPurchase::PaymentMethodCash
-                    : CustomerPurchase::PaymentMethodOnline,
+                'payment_method' => $payment->paymentMethod(),
                 'provider' => $payment->provider,
-                'description' => $payment->plan_name,
+                'description' => $payment->plan_name ?: __('app.class_passes'),
+                'class_pass_items_count' => $payment->items->count(),
+                'class_pass_items_truncated' => $payment->items->count() > self::MaximumSearchLimit,
+                'class_pass_items' => $payment->items->take(self::MaximumSearchLimit)
+                    ->map(fn (CustomerPurchaseItem $item): array => [
+                        'purchase_item_id' => $item->id,
+                        'plan_name' => $item->plan_name,
+                        'class_pass_code' => $item->customerClassPass?->code,
+                        'amount' => $this->money((int) $item->amount_cents, (string) $item->currency),
+                    ])->values()->all(),
                 'location' => $payment->location ? [
                     'location_id' => $payment->location->id,
                     'name' => $payment->location->name,
@@ -306,6 +318,7 @@ class StudioPaymentToolData
                 'customerPurchase.customer:id,account_id,name,phone,email',
                 'customerPurchase:id,account_id,customer_id,order_id,provider,plan_name',
                 'location:id,account_id,name',
+                'items.customerPurchaseItem.customerClassPass:id,account_id,code',
             ])
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $escaped = addcslashes($search, '\\%_');
@@ -333,7 +346,16 @@ class StudioPaymentToolData
                 'amount' => $this->money((int) $refund->amount_cents, (string) $refund->currency),
                 'payment_method' => $refund->method,
                 'provider' => $refund->customerPurchase?->provider,
-                'description' => $refund->customerPurchase?->plan_name,
+                'description' => $refund->customerPurchase?->plan_name ?: __('app.class_passes'),
+                'class_pass_items_count' => $refund->items->count(),
+                'class_pass_items_truncated' => $refund->items->count() > self::MaximumSearchLimit,
+                'class_pass_items' => $refund->items->take(self::MaximumSearchLimit)
+                    ->map(fn ($item): array => [
+                        'purchase_item_id' => $item->customer_purchase_item_id,
+                        'plan_name' => $item->customerPurchaseItem?->plan_name,
+                        'class_pass_code' => $item->customerPurchaseItem?->customerClassPass?->code,
+                        'amount' => $this->money((int) $item->amount_cents, (string) $refund->currency),
+                    ])->values()->all(),
                 'location' => $refund->location ? [
                     'location_id' => $refund->location->id,
                     'name' => $refund->location->name,

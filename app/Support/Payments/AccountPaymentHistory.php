@@ -48,6 +48,9 @@ class AccountPaymentHistory
                 'location',
                 'classPassPlan',
                 'customerClassPass',
+                'items.customerClassPass',
+                'items.refundItems',
+                'items.purchase',
                 'classBooking.scheduledClass.location',
                 'classBooking.scheduledClass.room',
                 'fiscalReceipt',
@@ -68,6 +71,7 @@ class AccountPaymentHistory
                 'customerPurchase.customer',
                 'customerPurchase.location',
                 'customerPurchase.fiscalReceipt',
+                'items.customerPurchaseItem.customerClassPass',
             ])
             ->get()
             ->keyBy('id');
@@ -119,6 +123,7 @@ class AccountPaymentHistory
                 CustomerPurchase::SourceManualCashBooking,
             ]))
             ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodOnline, fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceOnlineCheckout))
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCardTransfer, fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceManualCardClassPass))
             ->when(
                 $filters['status'] !== CustomerPurchaseRefund::StatusRecorded ? $filters['status'] : null,
                 fn (Builder $query, string $status): Builder => $query->where('status', $status),
@@ -155,7 +160,12 @@ class AccountPaymentHistory
                     ->select('id'));
             })
             ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCash, fn (Builder $query): Builder => $query->where('method', CustomerPurchaseRefund::MethodCash))
-            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodOnline, fn (Builder $query): Builder => $query->where('method', CustomerPurchaseRefund::MethodCashless))
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodOnline, fn (Builder $query): Builder => $query
+                ->where('method', CustomerPurchaseRefund::MethodCashless)
+                ->whereHas('customerPurchase', fn (Builder $query): Builder => $query->where('payment_source', '!=', CustomerPurchase::SourceManualCardClassPass)))
+            ->when($filters['payment_method'] === CustomerPurchase::PaymentMethodCardTransfer, fn (Builder $query): Builder => $query
+                ->where('method', CustomerPurchaseRefund::MethodCashless)
+                ->whereHas('customerPurchase', fn (Builder $query): Builder => $query->where('payment_source', CustomerPurchase::SourceManualCardClassPass)))
             ->when($filters['status'] && $filters['status'] !== CustomerPurchaseRefund::StatusRecorded, fn (Builder $query): Builder => $query->whereRaw('1 = 0'))
             ->when($filters['provider'], fn (Builder $query, string $provider): Builder => $query->whereIn(
                 'customer_purchase_id',

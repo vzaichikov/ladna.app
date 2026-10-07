@@ -3,6 +3,7 @@
 namespace App\Support\Promotions;
 
 use App\Enums\PromoCodeDiscountType;
+use InvalidArgumentException;
 
 class PromotionDiscountCalculator
 {
@@ -32,6 +33,7 @@ class PromotionDiscountCalculator
                 $eligibleSubtotalCents,
                 intdiv(($eligibleSubtotalCents * max(0, min(100, $discountValue))) + 50, 100),
             ),
+            PromoCodeDiscountType::BuyXGetY => throw new InvalidArgumentException('Quantity promotions require exact plan groups and buy/free quantities.'),
         };
 
         return new PromotionQuote(
@@ -40,6 +42,52 @@ class PromotionDiscountCalculator
             discountCents: $discountCents,
             totalCents: max(0, $subtotalCents - $discountCents),
             lineDiscounts: $this->allocateLineDiscounts($eligibleLines, $eligibleSubtotalCents, $discountCents),
+        );
+    }
+
+    /**
+     * @param  array<int|string, int>  $lineSubtotals
+     * @param  array<int, array<int, int|string>>  $eligibleLineIdsByPlan
+     */
+    public function calculateQuantityDiscount(
+        array $lineSubtotals,
+        array $eligibleLineIdsByPlan,
+        int $buyQuantity,
+        int $freeQuantity,
+    ): PromotionQuote {
+        if ($buyQuantity < 1 || $freeQuantity < 1) {
+            throw new InvalidArgumentException('Buy and free quantities must be positive integers.');
+        }
+
+        $normalizedLineSubtotals = collect($lineSubtotals)
+            ->map(fn (mixed $subtotal): int => max(0, (int) $subtotal))
+            ->all();
+        $lineDiscounts = [];
+        $eligibleSubtotalCents = 0;
+        $groupQuantity = $buyQuantity + $freeQuantity;
+
+        foreach ($eligibleLineIdsByPlan as $lineIds) {
+            $lineIds = array_values(array_filter($lineIds, fn (int|string $lineId): bool => array_key_exists($lineId, $normalizedLineSubtotals)));
+            $completeQuantity = intdiv(count($lineIds), $groupQuantity) * $groupQuantity;
+
+            foreach ($lineIds as $position => $lineId) {
+                $lineSubtotal = $normalizedLineSubtotals[$lineId];
+                $eligibleSubtotalCents += $lineSubtotal;
+                $lineDiscounts[$lineId] = $position < $completeQuantity && $position % $groupQuantity >= $buyQuantity
+                    ? $lineSubtotal
+                    : 0;
+            }
+        }
+
+        $subtotalCents = (int) array_sum($normalizedLineSubtotals);
+        $discountCents = (int) array_sum($lineDiscounts);
+
+        return new PromotionQuote(
+            subtotalCents: $subtotalCents,
+            eligibleSubtotalCents: $eligibleSubtotalCents,
+            discountCents: $discountCents,
+            totalCents: max(0, $subtotalCents - $discountCents),
+            lineDiscounts: $lineDiscounts,
         );
     }
 
