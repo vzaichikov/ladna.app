@@ -1001,7 +1001,7 @@ return [
     'festival_due_at' => 'Due at',
     'festival_max_file_kb' => 'Maximum file size, KB',
     'festival_file_too_large' => 'The file exceeds the configured size limit.',
-    'festival_file_type_invalid' => 'The detected file type or extension is not allowed.',
+    'festival_file_type_invalid' => 'The file is detected as :format. Allowed formats: :formats. Export or convert the file to an allowed format; renaming its extension does not change the format.',
     'festival_upload_constraints' => 'Formats: :formats. Maximum size: :size MB.',
     'festival_upload_any_format' => 'any file format',
     'festival_upload_pending' => 'Uploading your file. Keep this page open until the upload finishes.',

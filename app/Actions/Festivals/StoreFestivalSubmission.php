@@ -14,6 +14,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mime\MimeTypes;
 use Throwable;
 
 class StoreFestivalSubmission
@@ -47,7 +48,15 @@ class StoreFestivalSubmission
         $allowedExtensions = array_map('strtolower', $definition->allowed_extensions ?? []);
         if (($allowedMimes !== [] && ! in_array(strtolower($mimeType), $allowedMimes, true))
             || ($allowedExtensions !== [] && ! in_array($extension, $allowedExtensions, true))) {
-            throw ValidationException::withMessages(['file' => __('app.festival_file_type_invalid')]);
+            $allowedFormats = $allowedExtensions ?: array_map(
+                fn (string $mime): string => MimeTypes::getDefault()->getExtensions($mime)[0] ?? $mime,
+                $allowedMimes,
+            );
+
+            throw ValidationException::withMessages(['file' => __('app.festival_file_type_invalid', [
+                'format' => strtoupper((string) $file->guessExtension()) ?: __('app.unknown'),
+                'formats' => implode(', ', array_map('strtoupper', $allowedFormats)),
+            ])]);
         }
 
         [$minimumDuration, $maximumDuration] = $this->mediaDuration->bounds($definition, $requirement->entry->category);

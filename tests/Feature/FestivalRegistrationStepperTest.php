@@ -53,6 +53,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -481,6 +482,57 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->assertSame('background.mp4', $submission->refresh()->original_name);
     }
 
+    #[DataProvider('invalidVideoFormatCases')]
+    public function test_invalid_video_format_explains_detected_format_and_conversion(string $locale, array $allowedExtensions, string $expectedMessage): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'background-video', 'file');
+        $definition->update([
+            'allowed_extensions' => $allowedExtensions,
+            'allowed_mime_types' => ['video/mp4'],
+            'max_size_kb' => 307200,
+        ]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
+            $this->entry($account, $edition, $portalUser, $participant, $category, 'Renamed video entry'),
+        );
+        $requirement = $this->step($entry, 'application')->requirements->firstWhere('festival_requirement_definition_id', $definition->id);
+        $uploadUrl = route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]);
+        $temporaryFile = tmpfile();
+        fwrite($temporaryFile, hex2bin('0000001c667479703367703400000200336770343367703533673261'));
+        $upload = new UploadedFile(stream_get_meta_data($temporaryFile)['uri'], 'background.mp4', 'video/mp4', UPLOAD_ERR_OK, true);
+
+        try {
+            $this->actingAs($portalUser, 'festival')->withSession(['locale' => $locale])
+                ->postJson($uploadUrl, ['file' => $upload])
+                ->assertUnprocessable()
+                ->assertJsonPath('errors.file.0', $expectedMessage);
+            $this->post($uploadUrl, ['file' => $upload])
+                ->assertRedirect()
+                ->assertSessionHasErrors(['file' => $expectedMessage]);
+            $this->assertSame(0, $requirement->submissions()->count());
+            $this->assertSame(FestivalRequirementStatus::Missing, $requirement->refresh()->status);
+            Storage::disk('local')->assertDirectoryEmpty('festivals');
+        } finally {
+            fclose($temporaryFile);
+        }
+    }
+
+    /** @return array<string, array{string, list<string>, string}> */
+    public static function invalidVideoFormatCases(): array
+    {
+        $english = 'The file is detected as 3GP. Allowed formats: MP4. Export or convert the file to an allowed format; renaming its extension does not change the format.';
+        $ukrainian = 'Формат файлу визначено як 3GP. Дозволені формати: MP4. Експортуйте або перетворіть файл у дозволений формат. Перейменування розширення не змінює формат файлу.';
+
+        return [
+            'English MP4 field' => ['en', ['mp4'], $english],
+            'Ukrainian MP4 field' => ['uk', ['mp4'], $ukrainian],
+            'English MIME-only field' => ['en', [], $english],
+            'Ukrainian MIME-only field' => ['uk', [], $ukrainian],
+        ];
+    }
+
     public function test_required_files_upload_asynchronously_and_cannot_be_accepted_or_advance_without_a_submission(): void
     {
         Queue::fake();
@@ -553,7 +605,7 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->withHeaders($jsonHeaders)->post($uploadUrl, [
             'file' => UploadedFile::fake()->create('performance.wav', 12, 'audio/wav'),
         ])->assertUnprocessable()
-            ->assertJsonPath('errors.file.0', __('app.festival_file_type_invalid'));
+            ->assertJsonPath('errors.file.0', __('app.festival_file_type_invalid', ['format' => 'WAV', 'formats' => 'MP3']));
         $this->withHeaders($jsonHeaders)->post($uploadUrl, [
             'file' => UploadedFile::fake()->create('performance.mp3', 20481, 'audio/mpeg'),
         ])->assertUnprocessable()
