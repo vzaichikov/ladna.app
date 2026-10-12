@@ -27,7 +27,7 @@ return [
                     'Studio owners can open an active Festival participant’s cabinet directly from the Participants list or profile edit page, without entering the participant’s password.',
                     'The owner stays signed in to studio administration. Existing profile completion and phone verification requirements still apply.',
                 ],
-                'meta' => 'Pending release commit.',
+                'meta' => 'Commit b185f089.',
             ],
             [
                 'version' => '0.169.0',
@@ -1549,7 +1549,7 @@ return [
                     'Власниця студії може відкрити кабінет активного учасника фестивалю зі списку учасників або сторінки редагування профілю без пароля учасника.',
                     'Вхід до керування студією зберігається. Звичайні вимоги завершення профілю та підтвердження телефону продовжують діяти.',
                 ],
-                'meta' => 'Релізний коміт очікується.',
+                'meta' => 'Коміт b185f089.',
             ],
             [
                 'version' => '0.169.0',
