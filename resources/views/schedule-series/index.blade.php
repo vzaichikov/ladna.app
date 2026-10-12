@@ -37,7 +37,7 @@
                         </span>
                     @endif
                     <x-ui.action-button :href="route('dashboard.accounts.schedule-series.edit', [$account, $scheduleSeries])" icon="edit" :label="__('app.edit')" />
-                    <form method="POST" action="{{ route('dashboard.accounts.schedule-series.destroy', [$account, $scheduleSeries]) }}" data-confirm-delete>
+                    <form method="POST" action="{{ route('dashboard.accounts.schedule-series.destroy', [$account, $scheduleSeries]) }}" data-confirm-delete data-confirm-body="{{ __('app.schedule_series_delete_confirmation') }}">
                         @csrf
                         @method('DELETE')
                         <x-ui.action-button type="submit" variant="danger" icon="trash" :label="__('app.delete')" />

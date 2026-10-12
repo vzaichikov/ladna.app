@@ -1600,7 +1600,10 @@ class CustomerClassPassTest extends TestCase
             ->for($room)
             ->for($classType)
             ->for($trainer)
-            ->create();
+            ->create([
+                'starts_at' => now()->addDay()->setTime(18, 0),
+                'ends_at' => now()->addDay()->setTime(19, 0),
+            ]);
 
         return [$owner, $account, $customer, $plan, $scheduledClass, $location];
     }

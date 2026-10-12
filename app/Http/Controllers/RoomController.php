@@ -6,6 +6,7 @@ use App\Http\Requests\StoreRoomRequest;
 use App\Http\Requests\UpdateRoomRequest;
 use App\Models\Account;
 use App\Models\Room;
+use App\Support\ScheduleOccupancy;
 use App\Support\SlugGenerator;
 use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
@@ -141,8 +142,20 @@ class RoomController extends Controller
         $this->ensureBelongsToAccount($account, $room);
         $this->authorize('update', $account);
 
-        $room->scheduledClasses()->delete();
-        $room->delete();
+        $deleted = DB::transaction(function () use ($account, $room): bool {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            if ($room->scheduledClasses()->exists() || $room->scheduleSeries()->exists()) {
+                return false;
+            }
+
+            $room->delete();
+
+            return true;
+        });
+
+        if (! $deleted) {
+            return back()->withErrors(['room' => __('app.room_delete_history_blocked')]);
+        }
 
         return redirect()->route('dashboard.accounts.rooms.index', $account)
             ->with('status', __('app.room_deleted'));

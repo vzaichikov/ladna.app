@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.168.1',
+                'date' => '2026-10-12',
+                'title' => 'Schedule changes preserve past classes',
+                'items' => [
+                    'Changing or removing a recurring schedule now preserves past classes, attendance and class-pass usage. Affected future bookings are cancelled using the studio’s compensation rules.',
+                    'Rooms and locations with class history are protected from deletion.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.168.0',
                 'date' => '2026-10-07',
                 'title' => 'Customer carts and free class-pass promotions',
@@ -1511,6 +1521,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.168.1',
+                'date' => '2026-10-12',
+                'title' => 'Зміни розкладу зберігають минулі заняття',
+                'items' => [
+                    'Зміна або видалення регулярного розкладу тепер зберігає минулі заняття, відвідування та списання з абонементів. Записи на прибрані майбутні заняття скасовуються за правилами компенсації студії.',
+                    'Зали та локації з історією занять захищено від видалення.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.168.0',
                 'date' => '2026-10-07',

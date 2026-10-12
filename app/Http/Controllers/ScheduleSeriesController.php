@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\DeleteScheduleSeries;
 use App\Actions\GenerateAccountSchedule;
 use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
@@ -10,8 +11,11 @@ use App\Http\Requests\UpdateScheduleSeriesRequest;
 use App\Models\Account;
 use App\Models\ScheduleSeries;
 use App\Support\RoomActivityDirectionEligibility;
+use App\Support\ScheduleOccupancy;
 use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ScheduleSeriesController extends Controller
@@ -77,8 +81,11 @@ class ScheduleSeriesController extends Controller
         $this->ensureGroupClassesEnabled($account);
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
 
-        $series = $account->scheduleSeries()->create($validated);
-        $generateAccountSchedule->execute($account, $series->id);
+        DB::transaction(function () use ($account, $validated, $generateAccountSchedule, $request): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $series = $account->scheduleSeries()->create($validated);
+            $generateAccountSchedule->execute($account, $series->id, $request->user());
+        });
 
         return redirect()->route('dashboard.accounts.schedule-series.index', $account)
             ->with('status', __('app.schedule_series_created'));
@@ -106,21 +113,24 @@ class ScheduleSeriesController extends Controller
         $validated = $request->validated();
         $this->ensureRoomBelongsToLocation($account, (int) $validated['location_id'], (int) $validated['room_id']);
 
-        $scheduleSeries->update($validated);
-        $generateAccountSchedule->execute($account, $scheduleSeries->id);
+        DB::transaction(function () use ($account, $scheduleSeries, $validated, $generateAccountSchedule, $request): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $lockedSeries = $account->scheduleSeries()->whereKey($scheduleSeries->id)->lockForUpdate()->firstOrFail();
+            $lockedSeries->update($validated);
+            $generateAccountSchedule->execute($account, $lockedSeries->id, $request->user());
+        });
 
         return redirect()->route('dashboard.accounts.schedule-series.index', $account)
             ->with('status', __('app.schedule_series_updated'));
     }
 
-    public function destroy(Account $account, ScheduleSeries $scheduleSeries): RedirectResponse
+    public function destroy(Request $request, Account $account, ScheduleSeries $scheduleSeries, DeleteScheduleSeries $deleteScheduleSeries): RedirectResponse
     {
         $this->ensureBelongsToAccount($account, $scheduleSeries);
         $this->authorize('manageSchedule', $account);
         $this->ensureGroupClassesEnabled($account);
 
-        $scheduleSeries->scheduledClasses()->delete();
-        $scheduleSeries->delete();
+        $deleteScheduleSeries->execute($account, $scheduleSeries, $request->user());
 
         return redirect()->route('dashboard.accounts.schedule-series.index', $account)
             ->with('status', __('app.schedule_series_deleted'));

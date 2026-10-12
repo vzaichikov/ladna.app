@@ -7,8 +7,10 @@ use App\Http\Requests\StoreLocationRequest;
 use App\Http\Requests\UpdateLocationRequest;
 use App\Models\Account;
 use App\Models\Location;
+use App\Support\ScheduleOccupancy;
 use App\Support\SlugGenerator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class LocationController extends Controller
@@ -107,7 +109,20 @@ class LocationController extends Controller
         $this->ensureLocationBelongsToAccount($account, $location);
         $this->authorize('delete', $location);
 
-        $location->delete();
+        $deleted = DB::transaction(function () use ($account, $location): bool {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            if ($location->scheduledClasses()->exists() || $location->scheduleSeries()->exists()) {
+                return false;
+            }
+
+            $location->delete();
+
+            return true;
+        });
+
+        if (! $deleted) {
+            return back()->withErrors(['location' => __('app.location_delete_history_blocked')]);
+        }
         $account->loadMissing('subscription');
         $this->syncTrialQuantity($account);
 

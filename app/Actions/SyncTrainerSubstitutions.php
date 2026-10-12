@@ -14,13 +14,13 @@ class SyncTrainerSubstitutions
 {
     public const MetadataKey = 'trainer_substitution';
 
-    public function syncGeneratedWindow(Account $account): void
+    public function syncGeneratedWindow(Account $account, ?CarbonImmutable $cutoff = null): void
     {
-        $timezone = $this->timezone($account);
-        $from = CarbonImmutable::now($timezone)->startOfDay();
-        $until = $from->addWeeks($account->scheduleGenerationWeeks())->endOfDay();
+        $cutoff ??= CarbonImmutable::now();
+        $from = $cutoff->timezone($this->timezone($account));
+        $until = $from->startOfDay()->addWeeks($account->scheduleGenerationWeeks())->endOfDay();
 
-        $this->syncWindow($account, $from, $until);
+        $this->syncWindow($account, $from, $until, futureCutoff: $cutoff);
     }
 
     /**
@@ -57,13 +57,17 @@ class SyncTrainerSubstitutions
     /**
      * @param  array<int, int>  $scheduledClassIds
      */
-    public function syncWindow(Account $account, CarbonImmutable $from, CarbonImmutable $until, array $scheduledClassIds = []): void
+    public function syncWindow(Account $account, CarbonImmutable $from, CarbonImmutable $until, array $scheduledClassIds = [], ?CarbonImmutable $futureCutoff = null): void
     {
         $timezone = $this->timezone($account);
         $substitutions = $this->substitutionsForWindow($account, $from, $until);
 
         $this->classesForWindow($account, $from, $until, $scheduledClassIds)
-            ->each(function (ScheduledClass $scheduledClass) use ($substitutions, $timezone): void {
+            ->each(function (ScheduledClass $scheduledClass) use ($substitutions, $timezone, $futureCutoff): void {
+                if ($futureCutoff && $scheduledClass->starts_at->lessThanOrEqualTo($futureCutoff)) {
+                    return;
+                }
+
                 $this->syncClass($scheduledClass, $substitutions, $timezone);
             });
     }

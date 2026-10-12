@@ -32,11 +32,13 @@ class NormalizeCustomerClassPasses
         return $normalized;
     }
 
-    public function forPass(CustomerClassPass $customerClassPass): CustomerClassPass
+    public function forPass(CustomerClassPass $customerClassPass, bool $reconcileReservations = true): CustomerClassPass
     {
-        return DB::transaction(function () use ($customerClassPass): CustomerClassPass {
+        return DB::transaction(function () use ($customerClassPass, $reconcileReservations): CustomerClassPass {
             $now = now();
-            $this->consumeElapsedReservations($customerClassPass, $now);
+            if ($reconcileReservations) {
+                $this->consumeElapsedReservations($customerClassPass, $now);
+            }
             $customerClassPass->load('reservations');
 
             $usedReservations = $customerClassPass->reservations
@@ -59,11 +61,11 @@ class NormalizeCustomerClassPasses
             $isOperationalPass = $wasActivePass || $wasFreezedPass || $shouldReactivateUsedUpPass;
             $releasedReservations = false;
 
-            if (($wasActivePass || $wasFreezedPass) && $isTotalExpired) {
+            if ($reconcileReservations && ($wasActivePass || $wasFreezedPass) && $isTotalExpired) {
                 $releasedReservations = $this->releaseReservedReservations($customerClassPass, $now);
             }
 
-            if (! $isOperationalPass) {
+            if ($reconcileReservations && ! $isOperationalPass) {
                 $releasedReservations = $this->releaseReservedReservations($customerClassPass, $now) || $releasedReservations;
             }
 

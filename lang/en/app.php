@@ -6232,4 +6232,8 @@ return [
     'promo_code_identity_limit_reached' => 'This promotion code has reached its usage limit for this customer.',
     'promo_code_invalid_plans' => 'One or more selected plans are unavailable for this promotion code.',
     'promo_code_invalid_ticket_types' => 'One or more selected ticket types do not belong to this Event.',
+    'schedule_series_delete_confirmation' => 'Past classes and their pass usage will remain. Future classes with bookings will be cancelled using the studio’s compensation rules.',
+    'schedule_series_change_notice' => 'Schedule changes affect only classes that have not started. Bookings on removed future times are cancelled using the studio’s compensation rules.',
+    'room_delete_history_blocked' => 'This room has schedule or class history. Deactivate it instead.',
+    'location_delete_history_blocked' => 'This location has schedule or class history. Deactivate it instead.',
 ];

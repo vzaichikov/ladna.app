@@ -9,9 +9,11 @@ use App\Http\Requests\UpdateClassTypeRequest;
 use App\Models\Account;
 use App\Models\ClassType;
 use App\Support\ScheduleKindRegistry;
+use App\Support\ScheduleOccupancy;
 use App\Support\SlugGenerator;
 use App\Support\WorkingLocationContext;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ClassTypeController extends Controller
@@ -106,8 +108,11 @@ class ClassTypeController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
         $validated = $this->normalizeCapabilities($scheduleKind, $validated);
 
-        $classType->update($validated);
-        $this->regenerateGroupClassScheduleSeries($account, $scheduleKind, $generateAccountSchedule);
+        DB::transaction(function () use ($account, $classType, $validated, $scheduleKind, $generateAccountSchedule): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $classType->update($validated);
+            $this->regenerateGroupClassScheduleSeries($account, $scheduleKind, $generateAccountSchedule);
+        });
 
         return redirect()->route(ScheduleKindRegistry::routeName($scheduleKind, 'index'), $account)
             ->with('status', __('app.class_type_updated'));
@@ -194,7 +199,7 @@ class ClassTypeController extends Controller
             return;
         }
 
-        $generateAccountSchedule->execute($account);
+        $generateAccountSchedule->execute($account, actor: request()->user());
     }
 
     /**

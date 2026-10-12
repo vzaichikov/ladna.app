@@ -7,6 +7,7 @@ use App\Enums\ScheduleKind;
 use App\Enums\ScheduleSeriesStatus;
 use App\Models\ScheduledClass;
 use App\Models\ScheduleSeries;
+use App\Models\User;
 use App\Support\RoomActivityDirectionEligibility;
 use App\Support\ScheduleOccupancy;
 use Carbon\CarbonImmutable;
@@ -18,10 +19,13 @@ class GenerateScheduleOccurrences
     public function __construct(
         private readonly ScheduleOccupancy $scheduleOccupancy,
         private readonly RoomActivityDirectionEligibility $roomActivityDirectionEligibility,
+        private readonly RetireFutureScheduledClass $retireFutureScheduledClass,
     ) {}
 
-    public function execute(ScheduleSeries $series): int
+    public function execute(ScheduleSeries $series, ?User $actor = null, ?CarbonImmutable $cutoff = null): int
     {
+        $cutoff ??= CarbonImmutable::now();
+
         $series->loadMissing([
             'account',
             'location',
@@ -30,8 +34,9 @@ class GenerateScheduleOccurrences
             'trainer',
         ]);
 
-        return DB::transaction(function () use ($series): int {
+        return DB::transaction(function () use ($series, $actor, $cutoff): int {
             $this->scheduleOccupancy->lockAccount($series->account);
+            $series->refresh()->loadMissing(['location', 'room.activityDirections', 'classType.activityDirection', 'trainer']);
             $trainerIds = $series->trainer_id ? [$series->trainer_id] : [];
             $this->scheduleOccupancy->lockResources($series->account, $series->room_id, $trainerIds);
 
@@ -39,7 +44,7 @@ class GenerateScheduleOccurrences
                 ?? $series->account->timezone
                 ?? config('app.timezone');
 
-            $from = CarbonImmutable::now($timezone)->startOfDay();
+            $from = $cutoff->timezone($timezone)->startOfDay();
             $until = $from->addWeeks($series->account->scheduleGenerationWeeks())->endOfDay();
 
             if ($series->end_date && $series->end_date->copy()->timezone($timezone)->endOfDay()->lessThan($until)) {
@@ -54,17 +59,18 @@ class GenerateScheduleOccurrences
                 return 0;
             }
 
+            $canGenerate = $this->isGeneratableSeries($series, $timezone, $until);
             $futureGeneratedClasses = $series->scheduledClasses()
-                ->withCount(['classBookings' => fn ($query) => $query->notCorrectedRemoved()])
-                ->where('is_generated', true)
-                ->where('starts_at', '>=', $from->timezone(config('app.timezone')))
+                ->withCount('classBookings')
+                ->when($canGenerate, fn ($query) => $query->where('is_generated', true))
+                ->where('starts_at', '>', $cutoff)
                 ->orderBy('starts_at')
                 ->lockForUpdate()
                 ->get()
                 ->keyBy(fn (ScheduledClass $scheduledClass): string => $scheduledClass->starts_at->toDateTimeString());
 
-            if (! $this->isGeneratableSeries($series, $timezone, $until)) {
-                $this->deleteStaleGeneratedClasses($futureGeneratedClasses, []);
+            if (! $canGenerate) {
+                $this->deleteStaleGeneratedClasses($series, $futureGeneratedClasses, [], $cutoff, $actor, includeManual: true);
 
                 $series->forceFill([
                     'generated_until' => null,
@@ -85,6 +91,12 @@ class GenerateScheduleOccurrences
 
             while ($cursor->lessThanOrEqualTo($until)) {
                 $startsAt = CarbonImmutable::parse($cursor->toDateString().' '.$series->start_time, $timezone);
+                if ($startsAt->lessThanOrEqualTo($cutoff)) {
+                    $cursor = $cursor->addWeek();
+
+                    continue;
+                }
+
                 $attributes = $this->occurrenceAttributes($series, $startsAt);
 
                 if ($this->scheduleOccupancy->hasInternalClassConflict(
@@ -104,7 +116,7 @@ class GenerateScheduleOccurrences
             }
 
             $created = $this->syncDesiredOccurrences($futureGeneratedClasses, $desiredOccurrences);
-            $this->deleteStaleGeneratedClasses($futureGeneratedClasses, $desiredOccurrences);
+            $this->deleteStaleGeneratedClasses($series, $futureGeneratedClasses, $desiredOccurrences, $cutoff, $actor);
 
             $series->forceFill([
                 'generated_until' => $until->toDateString(),
@@ -203,7 +215,7 @@ class GenerateScheduleOccurrences
             $scheduledClass = $futureGeneratedClasses->get($startsAtKey);
 
             if ($scheduledClass) {
-                if (! $scheduledClass->is_manually_modified) {
+                if (! $scheduledClass->is_manually_modified && $scheduledClass->status === ScheduledClassStatus::Scheduled) {
                     $scheduledClass->forceFill($attributes);
 
                     if ($scheduledClass->isDirty()) {
@@ -225,18 +237,17 @@ class GenerateScheduleOccurrences
      * @param  Collection<string, ScheduledClass>  $futureGeneratedClasses
      * @param  array<string, array<string, mixed>>  $desiredOccurrences
      */
-    private function deleteStaleGeneratedClasses(Collection $futureGeneratedClasses, array $desiredOccurrences): void
+    private function deleteStaleGeneratedClasses(ScheduleSeries $series, Collection $futureGeneratedClasses, array $desiredOccurrences, CarbonImmutable $cutoff, ?User $actor, bool $includeManual = false): void
     {
         foreach ($futureGeneratedClasses as $startsAtKey => $scheduledClass) {
             if (
                 array_key_exists($startsAtKey, $desiredOccurrences)
-                || $scheduledClass->is_manually_modified
-                || (int) $scheduledClass->class_bookings_count > 0
+                || (! $includeManual && $scheduledClass->is_manually_modified)
             ) {
                 continue;
             }
 
-            $scheduledClass->delete();
+            $this->retireFutureScheduledClass->execute($series->account, $scheduledClass, $cutoff, $actor);
         }
     }
 }

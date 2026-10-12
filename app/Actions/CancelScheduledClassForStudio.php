@@ -31,17 +31,18 @@ class CancelScheduledClassForStudio
     ) {}
 
     /**
-     * @param  array{mode?: string, pass_effect?: string|null, reason?: string|null}  $options
+     * @param  array{mode?: string, pass_effect?: string|null, reason?: string|null, reconcile_reservations?: bool}  $options
      */
     public function execute(Account $account, ScheduledClass $scheduledClass, ?User $user, array $options = []): ScheduledClassCancellation
     {
         $mode = $options['mode'] ?? ScheduledClassCancellation::ModeStandard;
         $passEffect = $options['pass_effect'] ?? null;
         $reason = $options['reason'] ?? null;
+        $reconcileReservations = $options['reconcile_reservations'] ?? true;
 
         $this->validateOptions($mode, $passEffect, $reason);
 
-        $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user, $mode, $passEffect, $reason): ScheduledClassCancellation {
+        $cancellation = DB::transaction(function () use ($account, $scheduledClass, $user, $mode, $passEffect, $reason, $reconcileReservations): ScheduledClassCancellation {
             $lockedClass = ScheduledClass::query()
                 ->whereBelongsTo($account)
                 ->whereKey($scheduledClass->id)
@@ -85,7 +86,7 @@ class CancelScheduledClassForStudio
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get()
-                ->each(fn (ClassBooking $booking): ScheduledClassCancellationEffect => $this->cancelBooking($cancellation, $booking, $lockedClass, $rules, $passEffect));
+                ->each(fn (ClassBooking $booking): ScheduledClassCancellationEffect => $this->cancelBooking($cancellation, $booking, $lockedClass, $rules, $passEffect, $reconcileReservations));
 
             $lockedClass->forceFill([
                 'status' => ScheduledClassStatus::Cancelled->value,
@@ -95,8 +96,10 @@ class CancelScheduledClassForStudio
             return $cancellation->load('effects');
         });
 
-        $this->mailDispatcher->scheduledClassCancelled($cancellation);
-        $this->notifications->classCancelled($cancellation);
+        DB::afterCommit(function () use ($cancellation): void {
+            $this->mailDispatcher->scheduledClassCancelled($cancellation);
+            $this->notifications->classCancelled($cancellation);
+        });
 
         return $cancellation;
     }
@@ -104,7 +107,7 @@ class CancelScheduledClassForStudio
     /**
      * @param  array{return_sessions_enabled: bool, return_sessions_count: int, extend_days_enabled: bool, extend_days_count: int}  $rules
      */
-    private function cancelBooking(ScheduledClassCancellation $cancellation, ClassBooking $booking, ScheduledClass $scheduledClass, array $rules, ?string $passEffect): ScheduledClassCancellationEffect
+    private function cancelBooking(ScheduledClassCancellation $cancellation, ClassBooking $booking, ScheduledClass $scheduledClass, array $rules, ?string $passEffect, bool $reconcileReservations): ScheduledClassCancellationEffect
     {
         $reservation = $booking->classPassReservation()->lockForUpdate()->first();
         $customerClassPass = $reservation
@@ -121,7 +124,7 @@ class CancelScheduledClassForStudio
             $effectAttributes += $passEffect
                 ? $this->applyExplicitReservationPassEffect($reservation, $scheduledClass, $passEffect)
                 : $this->applyReservationAndPassRules($reservation, $customerClassPass, $scheduledClass, $rules);
-            $this->normalizeCustomerClassPasses->forPass($customerClassPass->refresh());
+            $this->normalizeCustomerClassPasses->forPass($customerClassPass->refresh(), $reconcileReservations);
         }
 
         return $cancellation->effects()->create($effectAttributes + [

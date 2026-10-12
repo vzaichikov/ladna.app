@@ -13,10 +13,12 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\TrainerSubstitution;
+use App\Support\ScheduleOccupancy;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TrainerSubstitutionController extends Controller
@@ -78,15 +80,18 @@ class TrainerSubstitutionController extends Controller
         $this->ensureTrainerBelongsToAccount($account, $trainer);
         $attributes = $request->substitutionAttributes();
 
-        $substitution = $account->trainerSubstitutions()->create($attributes);
+        DB::transaction(function () use ($account, $attributes, $request, $generateAccountSchedule, $syncTrainerSubstitutions): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $substitution = $account->trainerSubstitutions()->create($attributes);
 
-        $this->resync(
-            $account,
-            $generateAccountSchedule,
-            $syncTrainerSubstitutions,
-            $substitution->mode === TrainerSubstitutionMode::Period,
-            $request->selectedScheduledClassIds(),
-        );
+            $this->resync(
+                $account,
+                $generateAccountSchedule,
+                $syncTrainerSubstitutions,
+                $substitution->mode === TrainerSubstitutionMode::Period,
+                $request->selectedScheduledClassIds(),
+            );
+        });
 
         return redirect()->route('dashboard.accounts.trainers.edit', [$account, $trainer])
             ->with('status', __('app.trainer_substitution_created'));
@@ -103,24 +108,27 @@ class TrainerSubstitutionController extends Controller
         $this->ensureTrainerBelongsToAccount($account, $trainer);
         $this->ensureSubstitutionBelongsToTrainer($account, $trainer, $trainerSubstitution);
 
-        $oldMode = $trainerSubstitution->mode;
-        $oldClassIds = $this->ids($trainerSubstitution->scheduled_class_ids);
+        DB::transaction(function () use ($account, $trainerSubstitution, $request, $generateAccountSchedule, $syncTrainerSubstitutions): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $oldMode = $trainerSubstitution->mode;
+            $oldClassIds = $this->ids($trainerSubstitution->scheduled_class_ids);
 
-        $trainerSubstitution->update($request->substitutionAttributes());
+            $trainerSubstitution->update($request->substitutionAttributes());
 
-        $classIds = collect($oldClassIds)
-            ->merge($request->selectedScheduledClassIds())
-            ->unique()
-            ->values()
-            ->all();
+            $classIds = collect($oldClassIds)
+                ->merge($request->selectedScheduledClassIds())
+                ->unique()
+                ->values()
+                ->all();
 
-        $this->resync(
-            $account,
-            $generateAccountSchedule,
-            $syncTrainerSubstitutions,
-            $oldMode === TrainerSubstitutionMode::Period || $trainerSubstitution->fresh()->mode === TrainerSubstitutionMode::Period,
-            $classIds,
-        );
+            $this->resync(
+                $account,
+                $generateAccountSchedule,
+                $syncTrainerSubstitutions,
+                $oldMode === TrainerSubstitutionMode::Period || $trainerSubstitution->fresh()->mode === TrainerSubstitutionMode::Period,
+                $classIds,
+            );
+        });
 
         return redirect()->route('dashboard.accounts.trainers.edit', [$account, $trainer])
             ->with('status', __('app.trainer_substitution_updated'));
@@ -135,12 +143,15 @@ class TrainerSubstitutionController extends Controller
     ): RedirectResponse {
         $this->ensureTrainerBelongsToAccount($account, $trainer);
         $this->ensureSubstitutionBelongsToTrainer($account, $trainer, $trainerSubstitution);
-        $mode = $trainerSubstitution->mode;
-        $classIds = $this->ids($trainerSubstitution->scheduled_class_ids);
+        DB::transaction(function () use ($account, $trainerSubstitution, $generateAccountSchedule, $syncTrainerSubstitutions): void {
+            app(ScheduleOccupancy::class)->lockAccount($account);
+            $mode = $trainerSubstitution->mode;
+            $classIds = $this->ids($trainerSubstitution->scheduled_class_ids);
 
-        $trainerSubstitution->delete();
+            $trainerSubstitution->delete();
 
-        $this->resync($account, $generateAccountSchedule, $syncTrainerSubstitutions, $mode === TrainerSubstitutionMode::Period, $classIds);
+            $this->resync($account, $generateAccountSchedule, $syncTrainerSubstitutions, $mode === TrainerSubstitutionMode::Period, $classIds);
+        });
 
         return redirect()->route('dashboard.accounts.trainers.edit', [$account, $trainer])
             ->with('status', __('app.trainer_substitution_deleted'));
@@ -157,7 +168,7 @@ class TrainerSubstitutionController extends Controller
         array $classIds = [],
     ): void {
         if ($regenerateSchedule) {
-            $generateAccountSchedule->execute($account);
+            $generateAccountSchedule->execute($account, actor: request()->user());
         }
 
         if ($classIds !== []) {
