@@ -1707,6 +1707,7 @@ return [
     'festival_add_judge_profile' => 'Додати профіль судді',
     'festival_add_user' => 'Додати користувача фестивалю',
     'festival_edit_user' => 'Редагувати користувача фестивалю',
+    'festival_login_as_participant' => 'Увійти як учасник',
     'festival_user_form_copy' => 'Профілі належать акаунту й можуть використовуватися в усіх випусках фестивалю.',
     'festival_user_saved' => 'Користувача фестивалю збережено.',
     'festival_users_empty' => 'У цьому розділі ще немає користувачів фестивалю.',

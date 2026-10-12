@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.170.0',
+                'date' => '2026-10-12',
+                'title' => 'Open Festival participant cabinets as the studio owner',
+                'items' => [
+                    'Studio owners can open an active Festival participant’s cabinet directly from the Participants list or profile edit page, without entering the participant’s password.',
+                    'The owner stays signed in to studio administration. Existing profile completion and phone verification requirements still apply.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.169.0',
                 'date' => '2026-10-12',
                 'title' => 'Festival uploads with progress',
@@ -1531,6 +1541,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.170.0',
+                'date' => '2026-10-12',
+                'title' => 'Вхід власниці студії до кабінету учасника фестивалю',
+                'items' => [
+                    'Власниця студії може відкрити кабінет активного учасника фестивалю зі списку учасників або сторінки редагування профілю без пароля учасника.',
+                    'Вхід до керування студією зберігається. Звичайні вимоги завершення профілю та підтвердження телефону продовжують діяти.',
+                ],
+                'meta' => 'Релізний коміт очікується.',
+            ],
             [
                 'version' => '0.169.0',
                 'date' => '2026-10-12',

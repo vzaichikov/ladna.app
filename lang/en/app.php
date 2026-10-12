@@ -1707,6 +1707,7 @@ return [
     'festival_add_judge_profile' => 'Add judge profile',
     'festival_add_user' => 'Add Festival user',
     'festival_edit_user' => 'Edit Festival user',
+    'festival_login_as_participant' => 'Log in as participant',
     'festival_user_form_copy' => 'Profiles belong to the account and can be reused in every Festival edition.',
     'festival_user_saved' => 'Festival user saved.',
     'festival_users_empty' => 'No Festival users in this section yet.',

@@ -3,6 +3,9 @@
 @section('title', __('app.festival_users').' - '.$edition->title)
 
 @section('content')
+@php
+    $canLoginAsParticipant = $account->isOwnedBy(auth()->user());
+@endphp
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_users')" :copy="__('app.festival_users_page_copy')">
         <x-slot:actions>
@@ -73,7 +76,13 @@
                         <p class="mt-1">{{ trans_choice('app.festival_current_valid_tickets_count', $portalUser->current_edition_valid_tickets_count, ['count' => $portalUser->current_edition_valid_tickets_count]) }}</p>
                     @endif
                 </div>
-                <div class="flex justify-end gap-2">
+                <div class="flex flex-wrap justify-end gap-2">
+                    @if ($tab === 'participants' && $canLoginAsParticipant && $portalUser->is_active)
+                        <form method="POST" action="{{ route('dashboard.accounts.festivals.users.admin-login.store', [$account, $edition, $portalUser]) }}">
+                            @csrf
+                            <x-ui.action-button type="submit" icon="log-in" :label="__('app.festival_login_as_participant')" />
+                        </form>
+                    @endif
                     @if ($tab === 'guests' && $workspacePermissions['finance'] && $portalUser->is_active)
                         <x-ui.action-button
                             :href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'selected_guest_id' => $portalUser->id])"

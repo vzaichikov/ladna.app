@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminFestivalLoginController;
 use App\Http\Controllers\FestivalAdmissionController;
 use App\Http\Controllers\FestivalAnnouncementController;
 use App\Http\Controllers\FestivalBattleVoteController;
@@ -65,6 +66,10 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
     Route::get('/{accountSlug}/festival-documents/{festivalDocument}', [FestivalFileController::class, 'document'])->name('public.festival-documents.download');
 
     Route::get('/{accountSlug}/festival/login', [FestivalPortalAuthController::class, 'show'])->defaults('festivalRole', 'registrant')->name('festival.login');
+    Route::get('/{accountSlug}/festival/admin-login/{token}', [AdminFestivalLoginController::class, 'consume'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->middleware([PreventReadOnlyDemoMutations::class, 'signed', 'throttle:festival-login'])
+        ->name('festival.admin-login.consume');
     Route::post('/{accountSlug}/festival/login/email', [FestivalPortalAuthController::class, 'emailLogin'])->defaults('festivalRole', 'registrant')->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-login'])->name('festival.login.email');
     Route::post('/{accountSlug}/festival/login/otp', [FestivalPortalAuthController::class, 'sendOtp'])->defaults('festivalRole', 'registrant')->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-otp'])->name('festival.login.otp.send');
     Route::get('/{accountSlug}/festival/login/otp', [FestivalPortalAuthController::class, 'otpChallenge'])->defaults('festivalRole', 'registrant')->name('festival.login.otp.challenge');

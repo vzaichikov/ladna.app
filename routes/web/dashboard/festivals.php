@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminFestivalLoginController;
 use App\Http\Controllers\FestivalAdmissionTypeController;
 use App\Http\Controllers\FestivalAnnouncementController;
 use App\Http\Controllers\FestivalApplicationDecisionController;
@@ -70,6 +71,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::get('{festivalEdition:id}/users/{role}/create', [FestivalPortalUserController::class, 'create'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge', 'guest'])->name('users.create');
     Route::post('{festivalEdition:id}/users/{role}', [FestivalPortalUserController::class, 'store'])->whereNumber('festivalEdition')->whereIn('role', ['registrant', 'judge', 'guest'])->name('users.store');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/edit', [FestivalPortalUserController::class, 'edit'])->whereNumber('festivalEdition')->name('users.edit');
+    Route::post('{festivalEdition:id}/users/{festivalPortalUser}/admin-login', [AdminFestivalLoginController::class, 'store'])->whereNumber('festivalEdition')->name('users.admin-login.store');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/team', [FestivalPortalRosterController::class, 'index'])->whereNumber('festivalEdition')->name('users.team');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/notifications', [FestivalPortalUserController::class, 'notifications'])->whereNumber('festivalEdition')->name('users.notifications');
     Route::get('{festivalEdition:id}/users/{festivalPortalUser}/photo', [FestivalParticipantPhotoController::class, 'staffProfile'])->whereNumber('festivalEdition')->name('users.photo');

@@ -16,7 +16,19 @@
     <x-ui.page-header
         :title="$portalUser->exists ? __('app.festival_edit_user') : ($isJudge ? __('app.festival_add_judge_profile') : ($isGuest ? __('app.festival_add_guest') : __('app.festival_add_registrant')))"
         :copy="__('app.festival_user_form_copy')"
-    />
+    >
+        @if ($portalUser->exists && $isRegistrant && $portalUser->is_active && $account->isOwnedBy(auth()->user()))
+            <x-slot:actions>
+                <form method="POST" action="{{ route('dashboard.accounts.festivals.users.admin-login.store', [$account, $edition, $portalUser]) }}">
+                    @csrf
+                    <x-ui.button type="submit" variant="secondary">
+                        <x-ui.icon name="log-in" class="h-4 w-4" />
+                        {{ __('app.festival_login_as_participant') }}
+                    </x-ui.button>
+                </form>
+            </x-slot:actions>
+        @endif
+    </x-ui.page-header>
 
     @if (session('status'))
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{{ session('status') }}</div>
