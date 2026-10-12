@@ -136,6 +136,17 @@
                 action="{{ route('festival.portal.submissions.store', [$account->slug, $entry, $requirement]) }}"
                 data-async-form
                 data-festival-file-upload
+                @if (filled(config('festival_uploads.url')))
+                    data-upload-authorize-url="{{ route('festival.portal.submissions.authorize', [$account->slug, $entry, $requirement]) }}"
+                @endif
+                data-upload-fragment-url="{{ route('festival.portal.submissions.fragment', [$account->slug, $entry, $requirement]) }}"
+                data-upload-max-bytes="{{ min($definition->max_size_kb, \App\Models\FestivalRequirementDefinition::MaxFileSizeKb) * 1024 }}"
+                data-upload-processing-message="{{ __('app.festival_upload_processing') }}"
+                data-upload-network-message="{{ __('app.festival_upload_network_error') }}"
+                data-upload-cancelled-message="{{ __('app.festival_upload_cancelled') }}"
+                data-upload-expired-message="{{ __('app.festival_upload_expired') }}"
+                data-upload-too-large-message="{{ __('app.festival_file_too_large').' '.$uploadConstraints }}"
+                data-upload-saved-refresh-message="{{ __('app.festival_upload_saved_refresh') }}"
                 data-upload-pending-message="{{ __('app.festival_upload_pending') }}"
                 data-upload-rejected-message="{{ __('app.festival_upload_rejected').' '.$uploadConstraints }}"
                 class="mt-4"
@@ -146,6 +157,13 @@
                 <div class="flex flex-col gap-2 sm:flex-row">
                     <input type="file" name="file" @if($fileAccept !== '') accept="{{ $fileAccept }}" @endif aria-describedby="festival-upload-constraints-{{ $requirement->id }}" @required($definition->is_required) class="crm-field">
                     <x-ui.button type="submit">{{ __('app.upload') }}</x-ui.button>
+                </div>
+                <div data-upload-progress hidden class="mt-3 space-y-2">
+                    <progress data-upload-progress-bar max="100" value="0" aria-label="{{ __('app.festival_upload_progress') }}" class="block h-3 w-full accent-brand-600"></progress>
+                    <div class="flex items-center justify-between gap-3 text-sm text-slate-600">
+                        <span data-upload-progress-text>0%</span>
+                        <button type="button" data-upload-cancel class="crm-link">{{ __('app.cancel') }}</button>
+                    </div>
                 </div>
                 <div data-async-error-for="file">
                     @error('file')

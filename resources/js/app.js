@@ -5484,7 +5484,155 @@ function initPublicCalendarSwipe() {
     });
 }
 
+async function submitFestivalFileUpload(form) {
+    if (form.getAttribute('aria-busy') === 'true') {
+        return;
+    }
+
+    const formData = new FormData(form);
+    const file = formData.get('file');
+    clearAsyncFormErrors(form);
+    if (file instanceof File && file.size > Number(form.dataset.uploadMaxBytes)) {
+        renderAsyncFormErrors(form, { file: [form.dataset.uploadTooLargeMessage] });
+        setAsyncStatus(form.dataset.uploadTooLargeMessage, 'error', form);
+        return;
+    }
+
+    const card = form.closest('[data-festival-requirement-card]');
+    const progress = form.querySelector('[data-upload-progress]');
+    const bar = form.querySelector('[data-upload-progress-bar]');
+    const progressText = form.querySelector('[data-upload-progress-text]');
+    const cancel = form.querySelector('[data-upload-cancel]');
+    const controller = new AbortController();
+    let xhr = null;
+    let cancelled = false;
+    let saved = false;
+    const onCancel = () => {
+        cancelled = true;
+        controller.abort();
+        xhr?.abort();
+    };
+    const onLeave = (event) => {
+        event.preventDefault();
+        event.returnValue = '';
+    };
+
+    setFormDisabled(form, true);
+    progress.hidden = false;
+    bar.value = 0;
+    progressText.textContent = '0%';
+    cancel.disabled = false;
+    cancel.addEventListener('click', onCancel);
+    window.addEventListener('beforeunload', onLeave);
+    setAsyncStatus(form.dataset.uploadPendingMessage, 'pending', form);
+
+    try {
+        let uploadUrl = form.action;
+        let body = formData;
+        if (form.dataset.uploadAuthorizeUrl) {
+            const authorization = await fetch(form.dataset.uploadAuthorizeUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new URLSearchParams({ _token: formData.get('_token') ?? '' }),
+                signal: controller.signal,
+            });
+            const authorizationPayload = await authorization.json().catch(() => ({}));
+            if (!authorization.ok || !authorizationPayload.upload_url) {
+                throw { status: authorization.status, payload: authorizationPayload };
+            }
+            uploadUrl = authorizationPayload.upload_url;
+            body = new FormData();
+            if (file instanceof File) {
+                body.append('file', file);
+            }
+        }
+
+        const { status, payload } = await new Promise((resolve, reject) => {
+            xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener('progress', (event) => {
+                if (!event.lengthComputable) {
+                    bar.removeAttribute('value');
+                    return;
+                }
+                const percent = Math.min(100, Math.floor(event.loaded / event.total * 100));
+                bar.value = percent;
+                progressText.textContent = `${percent}% · ${(event.loaded / 1048576).toFixed(1)} / ${(event.total / 1048576).toFixed(1)} MB`;
+            });
+            xhr.upload.addEventListener('load', () => {
+                cancel.disabled = true;
+                bar.value = 100;
+                setAsyncStatus(form.dataset.uploadProcessingMessage, 'pending', form);
+            });
+            xhr.addEventListener('load', () => {
+                let payload = {};
+                try { payload = JSON.parse(xhr.responseText) ?? {}; } catch { /* The proxy may return an HTML error. */ }
+                resolve({ status: xhr.status, payload });
+            });
+            xhr.addEventListener('error', () => reject(new Error('Upload connection failed')));
+            xhr.addEventListener('timeout', () => reject(new Error('Upload timed out')));
+            xhr.addEventListener('abort', () => reject(new DOMException('Upload cancelled', 'AbortError')));
+            xhr.open('POST', uploadUrl);
+            xhr.timeout = 65 * 60 * 1000;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.send(body);
+        });
+        if (status < 200 || status >= 300) {
+            throw { status, payload };
+        }
+        saved = true;
+        if (payload.reload) {
+            window.location.reload();
+            return;
+        }
+        let fragment = payload;
+        if (!fragment.requirement_html) {
+            const response = await fetch(form.dataset.uploadFragmentUrl, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) {
+                throw new Error('Saved upload fragment unavailable');
+            }
+            fragment = await response.json();
+        }
+        if (!fragment.requirement_html) {
+            throw new Error('Saved upload fragment missing');
+        }
+        if (fragment.payment_html) {
+            replaceFestivalPaymentFragment(fragment.payment_html, card);
+        }
+        const replacement = replaceFestivalRequirementCard(fragment.requirement_html, card);
+        setAsyncStatus(payload.message, 'success', replacement?.querySelector('form[data-async-form]'));
+    } catch (error) {
+        const errors = error.payload?.errors;
+        if (errors && typeof errors === 'object' && !Array.isArray(errors)) {
+            renderAsyncFormErrors(form, errors);
+        }
+        const validationMessage = errors ? Object.values(errors).flat().find((message) => typeof message === 'string' && message) : null;
+        const message = saved ? form.dataset.uploadSavedRefreshMessage
+            : cancelled ? form.dataset.uploadCancelledMessage
+                : error.status === 413 ? form.dataset.uploadTooLargeMessage
+                    : [401, 403, 419].includes(error.status) ? form.dataset.uploadExpiredMessage
+                        : validationMessage ?? error.payload?.message ?? form.dataset.uploadNetworkMessage;
+        setAsyncStatus(message, saved ? 'success' : 'error', form);
+    } finally {
+        window.removeEventListener('beforeunload', onLeave);
+        cancel.removeEventListener('click', onCancel);
+        if (document.body.contains(form)) {
+            setFormDisabled(form, false);
+            progress.hidden = true;
+        }
+    }
+}
+
 async function submitAsyncForm(form) {
+    if (form.matches('[data-festival-file-upload]')) {
+        await submitFestivalFileUpload(form);
+        return;
+    }
+
     if (form.matches('[data-public-booking-form]')) {
         await submitPublicBookingForm(form);
         return;
@@ -5498,9 +5646,6 @@ async function submitAsyncForm(form) {
     clearAsyncFormErrors(form);
     setFormDisabled(form, true);
 
-    if (form.matches('[data-festival-file-upload]')) {
-        setAsyncStatus(form.dataset.uploadPendingMessage, 'pending', form);
-    }
 
     try {
         const response = await fetch(form.action, {
@@ -5604,16 +5749,6 @@ async function submitAsyncForm(form) {
             }
 
             replaceScheduledClassCard(payload.card_html ?? '', fallbackCard);
-            return;
-        }
-
-        if (response.status === 422 && form.matches('[data-festival-file-upload]')) {
-            const errors = payload.errors && typeof payload.errors === 'object' && !Array.isArray(payload.errors)
-                ? payload.errors
-                : {};
-            renderAsyncFormErrors(form, errors);
-            const firstMessage = Object.values(errors).flat().find((message) => typeof message === 'string' && message);
-            setAsyncStatus([firstMessage, form.dataset.uploadRejectedMessage].filter(Boolean).join(' '), 'error', form);
             return;
         }
 

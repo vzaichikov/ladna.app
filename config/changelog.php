@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.169.0',
+                'date' => '2026-10-12',
+                'title' => 'Festival uploads with progress',
+                'items' => [
+                    'Festival file uploads now show transfer progress, a separate checking and saving state, and clear connection or validation errors.',
+                    'Organizers can allow video files up to 400 MB. Large uploads use a dedicated upload connection while retaining each field’s format and duration rules.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.168.1',
                 'date' => '2026-10-12',
                 'title' => 'Schedule changes preserve past classes',
@@ -1521,6 +1531,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.169.0',
+                'date' => '2026-10-12',
+                'title' => 'Завантаження файлів фестивалю з прогресом',
+                'items' => [
+                    'Під час завантаження файлів фестивалю видно прогрес передавання, окремий стан перевірки та збереження, а також зрозумілі помилки з’єднання чи перевірки файлу.',
+                    'Організатори можуть дозволяти відеофайли до 400 МБ. Великі файли передаються через окреме з’єднання зі збереженням правил формату й тривалості кожного поля.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.168.1',
                 'date' => '2026-10-12',

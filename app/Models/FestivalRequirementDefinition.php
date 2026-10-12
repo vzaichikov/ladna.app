@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['account_id', 'festival_edition_id', 'festival_category_id', 'festival_workflow_step_id', 'code', 'type', 'subject_scope', 'input_type', 'name', 'instructions', 'options', 'validation', 'pricing', 'stage', 'due_at', 'allowed_extensions', 'allowed_mime_types', 'max_size_kb', 'min_duration_seconds', 'max_duration_seconds', 'is_required', 'is_active', 'show_in_media_report', 'sort_order'])]
 class FestivalRequirementDefinition extends Model
 {
-    public const MaxFileSizeKb = 307200;
+    public const MaxFileSizeKb = 409600;
 
     /** @use HasFactory<FestivalRequirementDefinitionFactory> */
     use HasFactory;

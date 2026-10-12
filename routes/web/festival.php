@@ -22,6 +22,7 @@ use App\Http\Controllers\FestivalSubmissionController;
 use App\Http\Controllers\FestivalTelegramLoginController;
 use App\Http\Controllers\FestivalTelegramMiniAppController;
 use App\Http\Controllers\FestivalTimelineController;
+use App\Http\Controllers\FestivalUploadController;
 use App\Http\Controllers\PublicFestivalEntranceController;
 use App\Http\Middleware\AuthenticateFestivalPortal;
 use App\Http\Middleware\EnsureFestivalEditionWritable;
@@ -113,6 +114,8 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
             Route::post('entries/{festivalEntry}/steps/{festivalEntryStep}/requirements/{festivalEntryRequirement}/response', [FestivalEntryStepController::class, 'storeResponse'])->middleware(PreventReadOnlyDemoMutations::class)->name('entry-step-responses.store');
             Route::post('entries/{festivalEntry}/withdraw', [FestivalEntryController::class, 'withdraw'])->middleware(PreventReadOnlyDemoMutations::class)->name('entries.withdraw');
             Route::post('entries/{festivalEntry}/restore', [FestivalEntryController::class, 'restore'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:6,1'])->name('entries.restore');
+            Route::post('entries/{festivalEntry}/requirements/{festivalEntryRequirement}/upload-url', [FestivalUploadController::class, 'authorizeUpload'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:60,1'])->name('submissions.authorize');
+            Route::get('entries/{festivalEntry}/requirements/{festivalEntryRequirement}/submission-fragment', [FestivalSubmissionController::class, 'fragment'])->name('submissions.fragment');
             Route::post('entries/{festivalEntry}/requirements/{festivalEntryRequirement}/submissions', [FestivalSubmissionController::class, 'store'])->middleware(PreventReadOnlyDemoMutations::class)->name('submissions.store');
             Route::get('submissions/{festivalSubmission}', [FestivalFileController::class, 'portalSubmission'])->name('submissions.download');
             Route::put('notification-preferences', [FestivalAnnouncementController::class, 'updatePreferences'])->middleware(PreventReadOnlyDemoMutations::class)->name('notification-preferences.update');

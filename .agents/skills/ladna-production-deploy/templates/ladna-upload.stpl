@@ -1,0 +1,37 @@
+# Ladna signed Festival uploads. Installed as a custom Hestia template.
+server {
+    listen %ip%:%web_ssl_port% ssl;
+    server_name %domain_idn% %alias_idn%;
+    root %sdocroot%/public;
+    access_log /var/log/nginx/domains/%domain%.log combined;
+    error_log /var/log/nginx/domains/%domain%.error.log error;
+    client_max_body_size 420m;
+    client_body_timeout 120s;
+    error_page 413 = @upload_too_large;
+
+    ssl_certificate %ssl_pem%;
+    ssl_certificate_key %ssl_key%;
+    if ($anti_replay = 307) { return 307 https://$host$request_uri; }
+    if ($anti_replay = 425) { return 425; }
+    include %home%/%user%/conf/web/%domain%/nginx.hsts.conf*;
+
+    location ^~ /festival-uploads/ {
+        if ($request_method !~ ^(POST|OPTIONS)$) { return 405; }
+        include /etc/nginx/fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTP_EARLY_DATA $rfc_early_data if_not_empty;
+        fastcgi_pass %backend_lsnr%;
+        fastcgi_read_timeout 180s;
+    }
+
+    location @upload_too_large {
+        default_type application/json;
+        add_header Access-Control-Allow-Origin "https://ladna.app" always;
+        add_header Vary Origin always;
+        return 413 '{"message":"The file exceeds the upload server size limit."}';
+    }
+
+    location / { return 404; }
+    include %home%/%user%/conf/web/%domain%/nginx.ssl.conf_*;
+}

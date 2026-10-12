@@ -443,7 +443,72 @@ class FestivalRegistrationStepperTest extends TestCase
             ->assertStatus(409);
     }
 
-    public function test_file_uploads_allow_300_megabytes_and_preserve_smaller_field_limits(): void
+    public function test_signed_uploads_save_without_portal_cookies_and_refresh_on_the_main_site(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        config(['festival_uploads.url' => 'https://upload.ladna.app', 'cors.allowed_origins' => ['https://ladna.local']]);
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $definition = $this->requirement($edition, $workflow, 'application', 'signed-video', 'file');
+        $definition->update(['allowed_extensions' => ['mp4'], 'allowed_mime_types' => ['video/mp4'], 'max_size_kb' => 409600]);
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Signed upload'));
+        $requirement = $this->step($entry, 'application')->requirements->sole();
+        $parameters = [$account->slug, $entry, $requirement];
+        $authorizeUrl = route('festival.portal.submissions.authorize', $parameters);
+        $this->actingAs($portalUser, 'festival');
+        $url = $this->postJson($authorizeUrl)->assertOk()->json('upload_url');
+        $this->assertStringStartsWith('https://upload.ladna.app/festival-uploads/', $url);
+        $this->app['auth']->forgetGuards();
+        $this->flushSession();
+        $this->withHeaders(['Origin' => 'https://ladna.local'])->postJson($url, [
+            'file' => UploadedFile::fake()->create('real-video.mp4', 409600, 'video/mp4'),
+        ])->assertOk()->assertHeader('Access-Control-Allow-Origin', 'https://ladna.local')
+            ->assertJsonPath('requirement_id', $requirement->id)->assertJsonMissingPath('requirement_html');
+        $submission = $requirement->submissions()->sole();
+        Storage::disk('local')->assertExists($submission->path);
+        $this->assertSame(FestivalRequirementStatus::Submitted, $requirement->refresh()->status);
+        $this->assertSame(FestivalEntryStepStatus::Draft, $this->step($entry, 'application')->status);
+        $this->actingAs($portalUser, 'festival')->getJson(route('festival.portal.submissions.fragment', $parameters))
+            ->assertOk()->assertJsonPath('requirement_id', $requirement->id);
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('wrong-format.3gp', 1, 'video/3gpp')])
+            ->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('too-large.mp4', 409601, 'video/mp4')])
+            ->assertUnprocessable()->assertJsonValidationErrors('file');
+        $step = $this->step($entry, 'application');
+        $step->update(['status' => FestivalEntryStepStatus::Approved]);
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('locked.mp4', 1, 'video/mp4')])->assertStatus(409);
+        $step->update(['status' => FestivalEntryStepStatus::Draft]);
+        $this->withHeaders(['Origin' => 'https://ladna.local', 'Access-Control-Request-Method' => 'POST', 'Access-Control-Request-Headers' => 'x-requested-with'])
+            ->options($url)->assertNoContent()->assertHeader('Access-Control-Allow-Origin', 'https://ladna.local');
+        $this->withHeader('Origin', 'https://unrelated.example')->options($url)
+            ->assertNoContent()->assertHeader('Access-Control-Allow-Origin', 'https://ladna.local');
+        $this->flushHeaders();
+        $this->postJson(str_replace('portal_user_id='.$portalUser->id, 'portal_user_id=999999', $url), [
+            'file' => UploadedFile::fake()->create('tampered.mp4', 1, 'video/mp4'),
+        ])->assertForbidden();
+        $portalUser->update(['is_active' => false]);
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('inactive.mp4', 1, 'video/mp4')])->assertForbidden();
+        $portalUser->update(['is_active' => true]);
+        $this->travel(61)->minutes();
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('expired.mp4', 1, 'video/mp4')])->assertForbidden();
+        $this->assertSame(1, $requirement->submissions()->count());
+    }
+
+    public function test_upload_authorization_rejects_foreign_entries_and_disabled_upload_host(): void
+    {
+        [$account, $edition, $portalUser, $participant, $category, $workflow] = $this->festival();
+        $this->requirement($edition, $workflow, 'application', 'scoped-file', 'file');
+        $entry = app(InitializeFestivalEntryWorkflow::class)->execute($this->entry($account, $edition, $portalUser, $participant, $category, 'Owned upload'));
+        $requirement = $this->step($entry, 'application')->requirements->sole();
+        $url = route('festival.portal.submissions.authorize', [$account->slug, $entry, $requirement]);
+        config(['festival_uploads.url' => 'https://upload.ladna.app']);
+        $otherUser = FestivalPortalUser::factory()->for($account)->create();
+        $this->actingAs($otherUser, 'festival')->postJson($url)->assertNotFound();
+        config(['festival_uploads.url' => '']);
+        $this->actingAs($portalUser, 'festival')->postJson($url)->assertNotFound();
+    }
+
+    public function test_file_uploads_allow_400_megabytes_and_preserve_smaller_field_limits(): void
     {
         Queue::fake();
         Storage::fake('local');
@@ -452,7 +517,7 @@ class FestivalRegistrationStepperTest extends TestCase
         $definition->update([
             'allowed_extensions' => ['mp4'],
             'allowed_mime_types' => ['video/mp4'],
-            'max_size_kb' => 307200,
+            'max_size_kb' => 409600,
         ]);
         $entry = app(InitializeFestivalEntryWorkflow::class)->execute(
             $this->entry($account, $edition, $portalUser, $participant, $category, 'Large video entry'),
@@ -464,15 +529,15 @@ class FestivalRegistrationStepperTest extends TestCase
         $this->actingAs($portalUser, 'festival')
             ->get(route('festival.portal.entry-steps.show', [$account->slug, $entry, $step]))
             ->assertOk()
-            ->assertSee(__('app.festival_upload_constraints', ['formats' => 'MP4', 'size' => 300]));
+            ->assertSee(__('app.festival_upload_constraints', ['formats' => 'MP4', 'size' => 400]));
         $this->postJson($uploadUrl, [
-            'file' => UploadedFile::fake()->create('background.mp4', 307200, 'video/mp4'),
+            'file' => UploadedFile::fake()->create('background.mp4', 409600, 'video/mp4'),
         ])->assertOk();
         $submission = $requirement->submissions()->firstOrFail();
         Storage::disk('local')->assertExists($submission->path);
 
         $this->postJson($uploadUrl, [
-            'file' => UploadedFile::fake()->create('oversized.mp4', 307201, 'video/mp4'),
+            'file' => UploadedFile::fake()->create('oversized.mp4', 409601, 'video/mp4'),
         ])->assertUnprocessable()->assertJsonValidationErrors('file');
         $definition->update(['max_size_kb' => 102400]);
         $this->postJson($uploadUrl, [
