@@ -27,7 +27,7 @@ return [
                     'Class-pass checkout now recovers delayed payment results, shows the issued pass after a successful payment, and offers another attempt when the payment has expired.',
                     'Before starting another payment, Ladna checks the previous result. An uncertain result keeps the existing purchase to prevent a second charge.',
                 ],
-                'meta' => 'Pending release commit.',
+                'meta' => 'Commit 933d0034.',
             ],
             [
                 'version' => '0.170.0',
@@ -1559,7 +1559,7 @@ return [
                     'Оформлення абонемента тепер відновлює статус затриманої оплати, показує виданий абонемент після успішного платежу та дозволяє повторити оплату, коли попередня платіжна сесія завершилася.',
                     'Перед новою оплатою Ladna перевіряє результат попередньої. Якщо статус ще не підтверджений, покупка зберігається, щоб уникнути повторного списання.',
                 ],
-                'meta' => 'Pending release commit.',
+                'meta' => 'Commit 933d0034.',
             ],
             [
                 'version' => '0.170.0',
