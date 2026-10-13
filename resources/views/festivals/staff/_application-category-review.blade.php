@@ -118,6 +118,10 @@
                     @csrf
                     @method('PATCH')
                     <input type="hidden" name="category_reassignment_form" value="1">
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="note" data-festival-category-payment-warning>
+                        <p class="font-semibold">{{ __('app.festival_category_manual_payment_title') }}</p>
+                        <p class="mt-2 leading-6">{{ __('app.festival_category_manual_payment_copy') }}</p>
+                    </div>
                     <label class="block">
                         <span class="crm-label">{{ __('app.festival_target_category') }}</span>
                         <select name="festival_category_id" class="crm-field" required @if((string) old('category_reassignment_form') === '1' && $errors->has('festival_category_id')) aria-invalid="true" @endif>

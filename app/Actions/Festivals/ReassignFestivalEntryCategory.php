@@ -15,6 +15,7 @@ use App\Models\FestivalEntry;
 use App\Models\FestivalPortalUser;
 use App\Models\User;
 use App\Support\Festivals\FestivalRuleRegistry;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -41,6 +42,18 @@ class ReassignFestivalEntryCategory
         $entry->loadMissing('charges.paymentAllocations');
 
         return $entry->status === FestivalEntryStatus::Draft && ! $this->applicantPaymentStarted($entry);
+    }
+
+    public function requiresManualPaymentHandling(FestivalEntry $entry): bool
+    {
+        $entry->loadMissing('charges');
+
+        return $entry->charges->contains(fn (FestivalCharge $charge): bool => $charge->kind === 'participation'
+            && in_array($charge->status, [
+                FestivalChargeStatus::Paid,
+                FestivalChargeStatus::PaidRequiresRefund,
+                FestivalChargeStatus::Refunded,
+            ], true));
     }
 
     private function reassign(FestivalEntry $entry, FestivalCategory $targetCategory, User|FestivalPortalUser $actor, string $reason, bool $applicantInitiated): FestivalEntry
@@ -91,22 +104,17 @@ class ReassignFestivalEntryCategory
 
             $qualificationStep = $entry->steps->first(fn ($step): bool => $step->workflowStep->review_effect?->value === 'qualification');
             $participationCharges = $entry->charges->where('kind', 'participation');
-            $protectedCharge = ! $applicantInitiated && $participationCharges->contains(function ($charge): bool {
-                $protectedStatus = in_array($charge->status, [
-                    FestivalChargeStatus::Paid,
-                    FestivalChargeStatus::PaidRequiresRefund,
-                    FestivalChargeStatus::Refunded,
-                ], true);
-                $liveAttempt = $charge->allocatedPaymentAttempts()->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending
-                    && ($attempt->provider === IntegrationProvider::Monopay->value || ! $attempt->expires_at || $attempt->expires_at->isFuture()));
-
-                return $protectedStatus || $liveAttempt;
-            });
-            if ($protectedCharge) {
+            $liveCheckout = ! $applicantInitiated && $participationCharges->contains(fn (FestivalCharge $charge): bool => $charge->allocatedPaymentAttempts()
+                ->contains(fn ($attempt): bool => $attempt->status === FestivalPaymentStatus::Pending
+                    && ($attempt->provider === IntegrationProvider::Monopay->value || ! $attempt->expires_at || $attempt->expires_at->isFuture())));
+            if ($liveCheckout) {
                 throw ValidationException::withMessages(['festival_category_id' => __('app.festival_category_reassignment_payment_started')]);
             }
-            foreach ($participationCharges->where('status', FestivalChargeStatus::PaymentPending) as $charge) {
-                $charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+            $manualPaymentHandling = ! $applicantInitiated && $this->requiresManualPaymentHandling($entry);
+            if (! $manualPaymentHandling) {
+                foreach ($participationCharges->where('status', FestivalChargeStatus::PaymentPending) as $charge) {
+                    $charge->forceFill(['status' => FestivalChargeStatus::Failed])->save();
+                }
             }
 
             $this->rules->validateEntry(
@@ -118,17 +126,39 @@ class ReassignFestivalEntryCategory
                 (bool) $entry->submitted_at,
             );
             $previousCategoryId = $entry->festival_category_id;
-            $entry->forceFill([
-                'festival_category_id' => $targetCategory->id,
-                'track_artist' => null,
-                'track_title' => null,
-                'normalized_track_key' => null,
-                'track_reserved_at' => null,
-            ])->save();
+            $preserveTrack = ! $applicantInitiated && ($entry->status === FestivalEntryStatus::Accepted
+                || ($entry->status === FestivalEntryStatus::ChangesPending && $entry->registration_completed_at !== null));
+            if ($preserveTrack && $entry->normalized_track_key !== null && FestivalEntry::query()
+                ->where('festival_category_id', $targetCategory->id)
+                ->where('normalized_track_key', $entry->normalized_track_key)
+                ->whereKeyNot($entry->id)
+                ->whereNotIn('status', [FestivalEntryStatus::Rejected->value, FestivalEntryStatus::Withdrawn->value])
+                ->exists()) {
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_track_already_reserved')]);
+            }
+            $values = ['festival_category_id' => $targetCategory->id];
+            if (! $preserveTrack) {
+                $values += [
+                    'track_artist' => null,
+                    'track_title' => null,
+                    'normalized_track_key' => null,
+                    'track_reserved_at' => null,
+                ];
+            }
+            try {
+                $entry->forceFill($values)->save();
+            } catch (QueryException $exception) {
+                if ((string) $exception->getCode() !== '23000'
+                    || ! str_contains($exception->getMessage(), 'festival_entries_category_track_unique')) {
+                    throw $exception;
+                }
+
+                throw ValidationException::withMessages(['festival_category_id' => __('app.festival_track_already_reserved')]);
+            }
             $qualificationApproved = ! $qualificationStep
                 || ($qualificationStep->status === FestivalEntryStepStatus::Approved
                     && in_array($entry->qualification_status, [FestivalQualificationStatus::NotRequired, FestivalQualificationStatus::Passed], true));
-            if ($qualificationApproved) {
+            if ($qualificationApproved && ! $manualPaymentHandling) {
                 $this->activateParticipationCharges->execute($entry, $qualificationStep?->reviewed_at ?? now());
             }
             $this->activity->record($entry, 'entry.category_reassigned', $entry->edition, $actor, [

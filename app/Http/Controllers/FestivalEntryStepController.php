@@ -147,6 +147,10 @@ class FestivalEntryStepController extends Controller
         $data = $request->validated();
         $category = $festivalEdition->categories()->whereKey($data['festival_category_id'])->firstOrFail();
         $festivalEntry = $reassign->execute($festivalEntry, $category, $request->user(), $data['reason']);
+        $message = __('app.festival_category_reassigned');
+        if ($reassign->requiresManualPaymentHandling($festivalEntry)) {
+            $message .= ' '.__('app.festival_category_manual_payment_copy');
+        }
 
         if ($request->expectsJson()) {
             $festivalEntry->load('category.direction');
@@ -170,12 +174,12 @@ class FestivalEntryStepController extends Controller
             }
 
             return response()->json([
-                'message' => __('app.festival_category_reassigned'),
+                'message' => $message,
                 'fragments_html' => $fragments,
             ]);
         }
 
-        return back()->with('status', __('app.festival_category_reassigned'));
+        return back()->with('status', $message);
     }
 
     /** @return array<int|string, mixed> */
