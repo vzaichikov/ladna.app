@@ -72,6 +72,14 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - After browser QA, inspect the screenshot visually and use Boost `browser-logs` for recent console errors when relevant.
 - Store QA screenshots, traces, and temporary artifacts in `.codex/output`; keep application source and root frontend dependencies unchanged unless the task requires a real app change.
 
+## Agent Workspace and Cleanup
+
+- Create all agent temporary files and directories inside the ignored `.codex/` directory. Use `.codex/output/` for screenshots, traces, logs, exports, disposable scripts, and test results; use `.codex/` for local plans, progress ledgers, and review artifacts.
+- Never create `.playwright-cli/`, `.superpowers/`, or any other temporary directory in the project root. Configure tool output paths before running them. If a tool cannot redirect its temporary output, run it from a dedicated directory inside `.codex/`; adapt skill defaults to this rule.
+- Keep reusable skills, domain documentation, local configuration, SSH connection files, and required browser tooling. Remove completed disposable work and obsolete browser downloads after verification. Preserve unique uncommitted work before removing a worktree.
+- Delete a temporary branch only after verifying that its tip is merged into freshly fetched `origin/main`. Report unmerged work rather than deleting it.
+- Store agent-created production backups outside webroots. Remove them only after verifying that the associated changes are published and the operation is complete. Never delete Hestia backups, backups from other projects, or backups whose ownership or purpose is unclear.
+
 ## Sub-agents
 
 - You may use subagents without asking first when they are useful for repo exploration, code review, test investigation, security review, or parallel research.
