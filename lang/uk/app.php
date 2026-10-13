@@ -5089,6 +5089,7 @@ return [
     'class_pass_checkout_checking_status' => 'Перевіряємо статус оплати...',
     'class_pass_checkout_poll_timeout' => 'Підтвердження триває довше, ніж зазвичай. Цю сторінку можна безпечно оновити.',
     'class_pass_checkout_retry' => 'Спробувати оплатити ще раз',
+    'class_pass_checkout_check_unavailable' => 'Не вдалося підтвердити статус оплати. Спробуйте ще раз трохи пізніше, перш ніж починати нову оплату.',
     'class_pass_checkout_pass_code' => 'Код абонемента',
     'payment_method' => 'Спосіб оплати',
     'payment_method_copy' => 'Оберіть платіжну систему студії.',

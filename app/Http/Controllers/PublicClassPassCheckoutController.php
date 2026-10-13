@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Payments\CompleteFreeCustomerPurchase;
 use App\Actions\Payments\CreateCustomerPurchase;
+use App\Actions\Payments\ReconcileCustomerPurchasePayment;
 use App\Actions\Payments\StartCustomerPurchasePayment;
 use App\Actions\ResolvePublicClassPassPurchaseContext;
 use App\Enums\CustomerPurchaseStatus;
@@ -15,6 +16,7 @@ use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Payments\PaymentGatewayException;
 use App\Support\Payments\PaymentGatewayRegistry;
 use App\Support\Promotions\StudioPromoCodeService;
 use App\Support\PublicClassPassCheckoutContext;
@@ -39,6 +41,7 @@ class PublicClassPassCheckoutController extends Controller
         private readonly CustomerAuthAvailability $authAvailability,
         private readonly TrialClassPassEligibility $trialEligibility,
         private readonly StudioPromoCodeService $promoCodes,
+        private readonly ReconcileCustomerPurchasePayment $reconcilePayment,
     ) {}
 
     public function show(
@@ -52,6 +55,7 @@ class PublicClassPassCheckoutController extends Controller
         $request->session()->put('url.intended', $this->checkoutContext->urlFor($account));
         $customer = $this->customerForAccount($account);
         $purchase = $this->checkoutContext->purchaseFor($account, $location, $classPassPlan, $customer);
+        $purchase = $purchase ? $this->reconcilePayment->execute($purchase)->loadMissing('customerClassPass') : null;
         $stage = $this->stage($account, $customer, $purchase);
 
         return response()
@@ -199,8 +203,9 @@ class PublicClassPassCheckoutController extends Controller
         [$account, $location, $classPassPlan] = $this->context($accountSlug, $locationSlug, $classPassPlanSlug);
         $customer = $this->customerForAccount($account);
         abort_unless($customer, 404);
-        $purchase = $this->scopedPurchase($account, $location, $classPassPlan, $customerPurchase, $customer)
-            ->loadMissing('customerClassPass');
+        $purchase = $this->reconcilePayment->execute(
+            $this->scopedPurchase($account, $location, $classPassPlan, $customerPurchase, $customer),
+        )->loadMissing('customerClassPass');
 
         return response()->json([
             'status' => $purchase->status->value,
@@ -218,6 +223,17 @@ class PublicClassPassCheckoutController extends Controller
         [$account, $location, $classPassPlan] = $this->context($accountSlug, $locationSlug, $classPassPlanSlug);
         $customer = $this->customerForAccount($account);
         $purchase = $this->checkoutContext->purchaseFor($account, $location, $classPassPlan, $customer);
+        try {
+            $purchase = $purchase ? $this->reconcilePayment->execute($purchase, requireFinalStatus: true) : null;
+        } catch (PaymentGatewayException) {
+            return redirect()->to((string) $this->checkoutContext->urlFor($account))
+                ->withErrors(['payment_status' => __('app.class_pass_checkout_check_unavailable')]);
+        }
+
+        if ($purchase?->isPaid()) {
+            return redirect()->to((string) $this->checkoutContext->urlFor($account));
+        }
+
         abort_unless($purchase && $purchase->status->isFinal() && ! $purchase->isPaid(), 404);
         $this->checkoutContext->forgetPurchase();
 

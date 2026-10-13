@@ -55,7 +55,7 @@
                 </div>
             @endif
 
-            @if ($errors->any())
+            @if ($errors->any() && ! $errors->has('payment_status'))
                 <div class="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900">
                     {{ $errors->first() }}
                 </div>
@@ -231,6 +231,9 @@
                         @endif
 
                         @if (! $purchaseStatus->isFinal())
+                            @error('payment_status')
+                                <p class="mt-5 text-sm text-rose-700" role="alert">{{ $message }}</p>
+                            @enderror
                             <div
                                 class="mt-5"
                                 data-class-pass-checkout-poll
@@ -248,6 +251,9 @@
                         @elseif (! $purchase->isPaid())
                             <form method="POST" action="{{ route('public.class-pass-plans.checkout.retry', [$account->slug, $location->slug, $classPassPlan->slug]) }}" class="mt-5">
                                 @csrf
+                                @error('payment_status')
+                                    <p class="mb-3 text-sm text-rose-700" role="alert">{{ $message }}</p>
+                                @enderror
                                 <x-ui.button type="submit" class="w-full justify-center">
                                     {{ __('app.class_pass_checkout_retry') }}
                                 </x-ui.button>

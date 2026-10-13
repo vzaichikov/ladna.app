@@ -5089,6 +5089,7 @@ return [
     'class_pass_checkout_checking_status' => 'Checking payment status...',
     'class_pass_checkout_poll_timeout' => 'Confirmation is taking longer than usual. You can refresh this page safely.',
     'class_pass_checkout_retry' => 'Try payment again',
+    'class_pass_checkout_check_unavailable' => 'We could not confirm the payment status. Please try again shortly before starting another payment.',
     'class_pass_checkout_pass_code' => 'Class pass code',
     'payment_method' => 'Payment method',
     'payment_method_copy' => 'Choose a studio payment provider.',

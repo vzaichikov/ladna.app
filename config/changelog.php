@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.170.1',
+                'date' => '2026-10-13',
+                'title' => 'Class-pass payments recover from delayed confirmation',
+                'items' => [
+                    'Class-pass checkout now recovers delayed payment results, shows the issued pass after a successful payment, and offers another attempt when the payment has expired.',
+                    'Before starting another payment, Ladna checks the previous result. An uncertain result keeps the existing purchase to prevent a second charge.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.170.0',
                 'date' => '2026-10-12',
                 'title' => 'Open Festival participant cabinets as the studio owner',
@@ -1541,6 +1551,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.170.1',
+                'date' => '2026-10-13',
+                'title' => 'Відновлення статусу оплати абонементів',
+                'items' => [
+                    'Оформлення абонемента тепер відновлює статус затриманої оплати, показує виданий абонемент після успішного платежу та дозволяє повторити оплату, коли попередня платіжна сесія завершилася.',
+                    'Перед новою оплатою Ladna перевіряє результат попередньої. Якщо статус ще не підтверджений, покупка зберігається, щоб уникнути повторного списання.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
             [
                 'version' => '0.170.0',
                 'date' => '2026-10-12',
