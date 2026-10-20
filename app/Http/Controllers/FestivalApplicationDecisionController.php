@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\FullyConfirmFestivalEntry;
 use App\Actions\Festivals\FullyDeclineFestivalEntry;
+use App\Actions\Festivals\RestoreFestivalEntryByOrganizer;
 use App\Enums\FestivalEntryStatus;
 use App\Http\Requests\FullyConfirmFestivalEntryRequest;
 use App\Http\Requests\FullyDeclineFestivalEntryRequest;
+use App\Http\Requests\RestoreFestivalEntryRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
@@ -51,6 +53,16 @@ class FestivalApplicationDecisionController extends Controller
         $decline->execute($festivalEntry, $reviewer, $request->validated('reason'));
 
         return back()->with('status', __('app.festival_application_fully_declined'));
+    }
+
+    public function restore(RestoreFestivalEntryRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalEntry $festivalEntry, RestoreFestivalEntryByOrganizer $restore): RedirectResponse
+    {
+        $this->assertScope($account, $festivalEdition, $festivalEntry);
+        $reviewer = $request->user();
+        abort_unless($reviewer instanceof User, 403);
+        $restore->execute($festivalEntry, $reviewer, $request->validated('reason'));
+
+        return back()->with('status', __('app.festival_organizer_entry_restored'));
     }
 
     private function assertScope(Account $account, FestivalEdition $edition, FestivalEntry $entry): void

@@ -164,6 +164,7 @@ class FestivalEntryController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
             abort_unless(! in_array($entry->status, [FestivalEntryStatus::Withdrawn, FestivalEntryStatus::Rejected], true), 409);
+            $previousStatus = $entry->status;
             $entry->forceFill([
                 'status' => FestivalEntryStatus::Withdrawn,
                 'withdrawn_at' => now(),
@@ -172,7 +173,7 @@ class FestivalEntryController extends Controller
                 'normalized_track_key' => null,
                 'track_reserved_at' => null,
             ])->save();
-            $activity->record($entry, 'entry.withdrawn', $entry->edition, $portalUser);
+            $activity->record($entry, 'entry.withdrawn', $entry->edition, $portalUser, ['from_status' => $previousStatus->value]);
         }, 3);
 
         return back()->with('status', __('app.festival_entry_withdrawn'));

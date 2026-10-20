@@ -67,7 +67,7 @@ class FestivalActivityLogPresenter
             ]);
         }
 
-        if (in_array($activity->action, ['entry.category_reassigned', 'schedule.rescheduled', 'score_sheet.unlocked'], true)
+        if (in_array($activity->action, ['entry.restored', 'entry.category_reassigned', 'schedule.rescheduled', 'score_sheet.unlocked'], true)
             && filled($payload['reason'] ?? null)) {
             $details[] = __('app.festival_activity_reason', ['reason' => (string) $payload['reason']]);
         }

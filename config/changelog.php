@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.171.0',
+                'date' => '2026-10-20',
+                'title' => 'Restore accidentally withdrawn Festival applications',
+                'items' => [
+                    'Organizers can restore a withdrawn application from its details page, keeping saved payments, answers and completed steps. The restoration reason is recorded in application history.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.170.1',
                 'date' => '2026-10-13',
                 'title' => 'Class-pass payments recover from delayed confirmation',
@@ -1551,6 +1560,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.171.0',
+                'date' => '2026-10-20',
+                'title' => 'Відновлення випадково відкликаних заявок фестивалю',
+                'items' => [
+                    'Організатори можуть відновити відкликану заявку з її сторінки, зберігши оплати, відповіді та пройдені кроки. Причина відновлення зберігається в історії заявки.',
+                ],
+                'meta' => 'Очікує коміту релізу.',
+            ],
             [
                 'version' => '0.170.1',
                 'date' => '2026-10-13',

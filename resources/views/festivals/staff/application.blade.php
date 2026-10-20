@@ -6,6 +6,26 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_application')" :copy="$entry->entry_name.' · '.$entry->code">
         <x-slot:actions>
+            @if ($workspacePermissions['registrations'] && $entry->status === \App\Enums\FestivalEntryStatus::Withdrawn)
+                <form method="POST"
+                    action="{{ route('dashboard.accounts.festivals.applications.restore', [$account, $edition, $entry]) }}"
+                    data-confirm-action
+                    data-confirm-title="{{ __('app.festival_entry_restore') }}"
+                    data-confirm-body="{{ __('app.festival_organizer_restore_copy') }}"
+                    data-confirm-accept="{{ __('app.festival_entry_restore') }}"
+                    data-confirm-icon="rotate-ccw"
+                    data-confirm-variant="primary"
+                    data-confirm-reason-required="true"
+                    data-confirm-reason-label="{{ __('app.festival_organizer_restore_reason') }}"
+                >
+                    @csrf
+                    @method('PATCH')
+                    <input type="hidden" name="reason" value="{{ old('reason') }}" data-confirm-reason-output>
+                    <x-ui.button type="submit">
+                        <x-ui.icon name="rotate-ccw" class="h-4 w-4" />{{ __('app.festival_entry_restore') }}
+                    </x-ui.button>
+                </form>
+            @endif
             @if ($workspacePermissions['registrations'] && in_array($entry->status, [\App\Enums\FestivalEntryStatus::Submitted, \App\Enums\FestivalEntryStatus::UnderReview, \App\Enums\FestivalEntryStatus::ChangesPending], true))
                 @include('festivals.staff._application-full-confirmation')
             @endif
@@ -70,6 +90,15 @@
         </x-slot:actions>
     </x-ui.page-header>
 
+    @error('participant_ids')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
+    @error('participants')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
+    @error('step')
+        <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
+    @enderror
     @error('festival_application')
         <div class="mb-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-900">{{ $message }}</div>
     @enderror
