@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.171.1',
+                'date' => '2026-10-20',
+                'title' => 'Continue unfinished class-pass payments',
+                'items' => [
+                    'Customers can return to the payment page to finish paying for a class pass. Expired payments update automatically, and another attempt creates a new payment link.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.171.0',
                 'date' => '2026-10-20',
                 'title' => 'Restore accidentally withdrawn Festival applications',
@@ -1560,6 +1569,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.171.1',
+                'date' => '2026-10-20',
+                'title' => 'Продовження незавершеної оплати абонемента',
+                'items' => [
+                    'Клієнти можуть повернутися на сторінку оплати й завершити покупку абонемента. Прострочені оплати оновлюються автоматично, а для повторної спроби створюється нове платіжне посилання.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.171.0',
                 'date' => '2026-10-20',

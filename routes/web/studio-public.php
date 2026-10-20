@@ -110,6 +110,9 @@ Route::get('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSl
 Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/retry', [PublicClassPassCheckoutController::class, 'retry'])
     ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
     ->name('public.class-pass-plans.checkout.retry');
+Route::post('/{accountSlug}/{locationSlug}/checkout/class-passes/{classPassPlanSlug}/resume', [PublicClassPassCheckoutController::class, 'resume'])
+    ->middleware([PreventReadOnlyDemoMutations::class, EnsurePublicSubscriptionIsActive::class, 'throttle:30,1'])
+    ->name('public.class-pass-plans.checkout.resume');
 Route::get('/{accountSlug}/{locationSlug}/price', [PublicPriceController::class, 'show'])
     ->middleware(EnsurePublicSubscriptionIsActive::class)
     ->name('public.price');

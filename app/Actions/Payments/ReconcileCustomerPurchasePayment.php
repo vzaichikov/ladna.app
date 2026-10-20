@@ -20,7 +20,7 @@ class ReconcileCustomerPurchasePayment
         private readonly CompleteCustomerPurchase $completeCustomerPurchase,
     ) {}
 
-    public function execute(CustomerPurchase $purchase, bool $requireFinalStatus = false): CustomerPurchase
+    public function execute(CustomerPurchase $purchase, bool $requireFinalStatus = false, bool $requireFreshStatus = false): CustomerPurchase
     {
         $purchase = CustomerPurchase::query()
             ->with('account')
@@ -50,7 +50,9 @@ class ReconcileCustomerPurchasePayment
 
         $cacheKey = 'customer-purchase-payment-check:'.$purchase->account_id.':'.$purchase->id;
 
-        if (! $requireFinalStatus && ! Cache::add($cacheKey, true, 15)) {
+        $mustCheck = $requireFinalStatus || $requireFreshStatus;
+
+        if (! $mustCheck && ! Cache::add($cacheKey, true, 15)) {
             return $purchase;
         }
 
@@ -59,7 +61,7 @@ class ReconcileCustomerPurchasePayment
                 throw new PaymentGatewayException('Customer purchase payment integration is unavailable.');
             }
 
-            if ($requireFinalStatus) {
+            if ($mustCheck) {
                 Cache::put($cacheKey, true, 15);
             }
 
@@ -74,25 +76,24 @@ class ReconcileCustomerPurchasePayment
                 throw new InvalidPaymentCallbackException('Monopay payment status does not match the customer purchase.');
             }
 
-            if ($callback->status !== PaymentCallbackStatus::Pending) {
-                $completedPurchase = $this->completeCustomerPurchase->execute($purchase, $callback);
-
-                if ($requireFinalStatus
-                    && ! $completedPurchase->isPaid()
-                    && $callback->isOlderThan($completedPurchase->last_callback_payload)) {
-                    throw new PaymentGatewayException('The payment provider returned an obsolete payment status.');
-                }
-
-                return $completedPurchase;
-            }
-
-            if ($requireFinalStatus) {
+            if ($callback->status === PaymentCallbackStatus::Pending
+                && ($requireFinalStatus || $purchase->status->isFinal())) {
                 throw new PaymentGatewayException('The payment provider has not confirmed a final payment status.');
             }
+
+            $completedPurchase = $this->completeCustomerPurchase->execute($purchase, $callback);
+
+            if ($mustCheck
+                && ! $completedPurchase->isPaid()
+                && $callback->isOlderThan($completedPurchase->last_callback_payload)) {
+                throw new PaymentGatewayException('The payment provider returned an obsolete payment status.');
+            }
+
+            return $completedPurchase;
         } catch (Throwable $exception) {
             report($exception);
 
-            if ($requireFinalStatus) {
+            if ($mustCheck) {
                 throw new PaymentGatewayException('Customer purchase payment status is unavailable.', previous: $exception);
             }
         }

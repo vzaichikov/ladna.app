@@ -204,12 +204,12 @@
                     @elseif ($stage === 'confirmation' && $purchase)
                         <h2 class="text-lg font-semibold text-slate-950">{{ __('app.class_pass_checkout_confirmation_title') }}</h2>
                         <div class="mt-4 rounded-xl border px-4 py-4 {{ $purchaseStatusClass }}">
-                            <div class="text-sm font-semibold">{{ __('app.class_pass_checkout_status_'.$purchaseStatus->value) }}</div>
+                            <div class="text-sm font-semibold">{{ $canResumePayment ? __('app.class_pass_checkout_awaiting_payment') : __('app.class_pass_checkout_status_'.$purchaseStatus->value) }}</div>
                             @if ($purchase->isPaid() && $purchase->customerClassPass)
                                 <div class="mt-3 text-sm">{{ __('app.class_pass_checkout_pass_code') }}</div>
                                 <div class="mt-1 font-mono text-2xl font-semibold">{{ $purchase->customerClassPass->code }}</div>
                             @elseif (! $purchaseStatus->isFinal())
-                                <p class="mt-2 text-sm leading-6">{{ __('app.class_pass_checkout_pending_help') }}</p>
+                                <p class="mt-2 text-sm leading-6">{{ $canResumePayment ? __('app.class_pass_checkout_resume_help') : __('app.class_pass_checkout_pending_help') }}</p>
                             @endif
                         </div>
 
@@ -234,6 +234,15 @@
                             @error('payment_status')
                                 <p class="mt-5 text-sm text-rose-700" role="alert">{{ $message }}</p>
                             @enderror
+                            @if ($canResumePayment)
+                                <form method="POST" action="{{ route('public.class-pass-plans.checkout.resume', [$account->slug, $location->slug, $classPassPlan->slug]) }}" class="mt-5">
+                                    @csrf
+                                    <x-ui.button type="submit" variant="success" size="lg" class="w-full justify-center">
+                                        <x-ui.payment-brand provider="monopay" presentation="card" :action-label="__('app.class_pass_checkout_resume')" class="w-full" />
+                                    </x-ui.button>
+                                    <x-ui.accepted-card-brands class="mt-5" />
+                                </form>
+                            @endif
                             <div
                                 class="mt-5"
                                 data-class-pass-checkout-poll

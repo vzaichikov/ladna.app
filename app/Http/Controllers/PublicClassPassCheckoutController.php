@@ -16,6 +16,7 @@ use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\Location;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Payments\MonopayGateway;
 use App\Support\Payments\PaymentGatewayException;
 use App\Support\Payments\PaymentGatewayRegistry;
 use App\Support\Promotions\StudioPromoCodeService;
@@ -66,6 +67,7 @@ class PublicClassPassCheckoutController extends Controller
                 'customer' => $customer,
                 'purchase' => $purchase,
                 'stage' => $stage,
+                'canResumePayment' => $purchase && $this->resumePaymentUrl($purchase) !== null,
                 'methods' => $this->authAvailability->methodsFor($account),
                 'otpPhone' => $this->sessionString('customer_otp_phone_'.$account->id),
                 'googlePhone' => $this->sessionString('customer_google_phone_'.$account->id),
@@ -213,6 +215,50 @@ class PublicClassPassCheckoutController extends Controller
             'paid' => $purchase->isPaid(),
             'class_pass_ready' => $purchase->customerClassPass !== null,
         ])->withHeaders($this->privateHeaders());
+    }
+
+    public function resume(
+        string $accountSlug,
+        string $locationSlug,
+        string $classPassPlanSlug,
+    ): RedirectResponse {
+        [$account, $location, $classPassPlan] = $this->context($accountSlug, $locationSlug, $classPassPlanSlug);
+        $customer = $this->customerForAccount($account);
+        $purchase = $this->checkoutContext->purchaseFor($account, $location, $classPassPlan, $customer);
+        abort_unless($purchase, 404);
+
+        try {
+            $purchase = $this->reconcilePayment->execute($purchase, requireFreshStatus: true);
+        } catch (PaymentGatewayException) {
+            return redirect()->to((string) $this->checkoutContext->urlFor($account))
+                ->withErrors(['payment_status' => __('app.class_pass_checkout_check_unavailable')]);
+        }
+
+        $url = $this->resumePaymentUrl($purchase);
+
+        if ($url !== null) {
+            return redirect()->away($url)->withHeaders($this->privateHeaders());
+        }
+
+        $response = redirect()->to((string) $this->checkoutContext->urlFor($account));
+
+        return ! $purchase->status->isFinal() && $purchase->gateway_status === 'created'
+            ? $response->withErrors(['payment_status' => __('app.class_pass_checkout_check_unavailable')])
+            : $response;
+    }
+
+    private function resumePaymentUrl(CustomerPurchase $purchase): ?string
+    {
+        if ($purchase->provider !== IntegrationProvider::Monopay->value
+            || $purchase->payment_source !== CustomerPurchase::SourceOnlineCheckout
+            || ! $purchase->paymentWindowIsOpen()
+            || $purchase->gateway_status !== 'created') {
+            return null;
+        }
+
+        $url = data_get($purchase->gateway_checkout_payload, 'response.pageUrl');
+
+        return is_string($url) && MonopayGateway::trustedIframeOrigin($url) ? $url : null;
     }
 
     public function retry(

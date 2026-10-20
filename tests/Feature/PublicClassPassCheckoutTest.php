@@ -563,6 +563,226 @@ class PublicClassPassCheckoutTest extends TestCase
         return ['paid' => ['success'], 'expired' => ['expired']];
     }
 
+    public function test_unpaid_monopay_checkout_offers_to_resume_the_existing_invoice(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $this->fakeMonopayStatus($purchase, 'created');
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+
+        $this->get($this->checkoutUrl($account, $location, $plan))
+            ->assertOk()
+            ->assertSee('action="'.$this->checkoutUrl($account, $location, $plan).'/resume"', false)
+            ->assertDontSee(__('app.class_pass_checkout_status_payment_pending'));
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect('https://pay.monobank.ua/invoice/resumable-checkout');
+        $this->assertSame(1, $customer->purchases()->count());
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/invoice/create'));
+    }
+
+    #[DataProvider('nonResumableBankStatuses')]
+    public function test_resume_checks_the_bank_again_and_does_not_reopen_an_invoice_that_is_no_longer_payable(string $status): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        Http::preventStrayRequests();
+        Http::fake([
+            'api.monobank.ua/api/merchant/invoice/status*' => Http::sequence()
+                ->push($this->monopayStatusPayload($purchase, 'created'))
+                ->push($this->monopayStatusPayload($purchase, $status)),
+        ]);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        $this->get($this->checkoutUrl($account, $location, $plan))->assertOk();
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan));
+
+        $this->assertSame($status, $purchase->fresh()->gateway_status);
+        $this->assertSame(1, $customer->purchases()->count());
+        $this->assertSame($status === 'success' ? 1 : 0, $customer->customerClassPasses()->count());
+        Http::assertSentCount(2);
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function nonResumableBankStatuses(): array
+    {
+        return [
+            'bank processing' => ['processing'],
+            'already paid' => ['success'],
+            'expired' => ['expired'],
+            'failed' => ['failure'],
+        ];
+    }
+
+    public function test_resume_preserves_the_invoice_when_a_fresh_bank_check_fails(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        Http::preventStrayRequests();
+        Http::fake(['api.monobank.ua/api/merchant/invoice/status*' => Http::failedConnection()]);
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan))
+            ->assertSessionHasErrors('payment_status');
+        $this->assertSame($purchase->id, session('public_class_pass_checkout.purchase_id'));
+        $this->assertSame(1, $customer->purchases()->count());
+    }
+
+    #[DataProvider('unsafeResumeUrls')]
+    public function test_checkout_never_resumes_an_untrusted_or_missing_payment_url(?string $url): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $purchase->update(['gateway_checkout_payload' => ['response' => ['pageUrl' => $url]]]);
+        $this->fakeMonopayStatus($purchase, 'created');
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+
+        $this->get($this->checkoutUrl($account, $location, $plan))->assertOk()
+            ->assertDontSee('action="'.$this->checkoutUrl($account, $location, $plan).'/resume"', false);
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan))
+            ->assertSessionHasErrors('payment_status');
+    }
+
+    /** @return array<string, array{0: string|null}> */
+    public static function unsafeResumeUrls(): array
+    {
+        return [
+            'missing' => [null],
+            'external host' => ['https://example.com/invoice'],
+            'deceptive host' => ['https://pay.monobank.ua.example.com/invoice'],
+            'insecure' => ['http://pay.monobank.ua/invoice'],
+        ];
+    }
+
+    public function test_another_customer_cannot_resume_a_remembered_invoice(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        $otherCustomer = Customer::factory()->for($account)->create();
+        Http::preventStrayRequests();
+        Http::fake();
+
+        $this->actingAs($otherCustomer, 'customer')
+            ->post($this->checkoutUrl($account, $location, $plan).'/resume')->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_stale_class_pass_payments_are_reconciled_without_an_open_browser(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $purchase->forceFill(['expires_at' => now()->subHour(), 'updated_at' => now()->subHour()])->save();
+        $this->fakeMonopayStatus($purchase, 'expired');
+
+        $this->artisan('customer-purchases:reconcile')->assertSuccessful();
+        $this->assertSame(CustomerPurchaseStatus::PaymentExpired, $purchase->fresh()->status);
+        $this->assertSame('expired', $purchase->fresh()->gateway_status);
+        $this->assertNull($purchase->fresh()->customer_class_pass_id);
+    }
+
+    public function test_background_reconciliation_recovers_a_paid_invoice_once_and_skips_fresh_paid_manual_and_demo_purchases(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $purchase->forceFill(['updated_at' => now()->subHour()])->save();
+        $this->purchase($account, $location, $plan, $customer);
+        $this->purchase($account, $location, $plan, $customer, CustomerPurchaseStatus::PaymentPaid);
+        $manual = $this->purchase($account, $location, $plan, $customer);
+        $manual->forceFill(['provider' => CustomerPurchase::ProviderStudioCash, 'payment_source' => CustomerPurchase::SourceManualCashClassPass, 'updated_at' => now()->subHour()])->save();
+        [$demoAccount, $demoLocation, $demoPlan, $demoCustomer] = $this->checkoutContext();
+        $demoAccount->update(['mode' => AccountMode::DemoReadonly]);
+        $demo = $this->resumablePurchase($demoAccount, $demoLocation, $demoPlan, $demoCustomer);
+        $demo->forceFill(['updated_at' => now()->subHour()])->save();
+        $this->fakeMonopayStatus($purchase, 'success');
+
+        $this->artisan('customer-purchases:reconcile')->assertSuccessful();
+        $this->artisan('customer-purchases:reconcile')->assertSuccessful();
+
+        $this->assertSame(CustomerPurchaseStatus::PaymentPaid, $purchase->fresh()->status);
+        $this->assertSame(1, $customer->customerClassPasses()->count());
+        $this->assertSame(CustomerPurchaseStatus::PaymentPending, $demo->fresh()->status);
+        $this->assertSame(CustomerPurchaseStatus::PaymentPending, $manual->fresh()->status);
+        Http::assertSentCount(1);
+    }
+
+    public function test_background_reconciliation_rotates_an_unavailable_payment_so_it_cannot_starve_later_payments(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $first = $this->resumablePurchase($account, $location, $plan, $customer);
+        $first->forceFill(['updated_at' => now()->subHours(2)])->save();
+        $second = $this->purchase($account, $location, $plan, $customer);
+        $second->forceFill(['provider' => 'monopay', 'gateway_invoice_id' => 'second-invoice', 'updated_at' => now()->subHour()])->save();
+        Http::preventStrayRequests();
+        Http::fake(fn ($request) => $request['invoiceId'] === $first->gateway_invoice_id
+            ? Http::failedConnection()
+            : Http::response($this->monopayStatusPayload($second, 'expired')));
+        $this->artisan('customer-purchases:reconcile', ['--limit' => 1])->assertFailed();
+        $this->assertSame(CustomerPurchaseStatus::PaymentPending, $first->fresh()->status);
+        $this->assertTrue($first->fresh()->updated_at->greaterThan($second->updated_at));
+
+        $this->artisan('customer-purchases:reconcile', ['--limit' => 1])->assertSuccessful();
+        $this->assertSame(CustomerPurchaseStatus::PaymentExpired, $second->fresh()->status);
+        $this->assertSame(CustomerPurchaseStatus::PaymentPending, $first->fresh()->status);
+    }
+
+    #[DataProvider('mismatchedMonopayStatuses')]
+    public function test_resume_does_not_redirect_when_bank_details_do_not_match_the_purchase(array $overrides): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        $this->fakeMonopayStatus($purchase, 'created', $overrides);
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan))
+            ->assertSessionHasErrors('payment_status');
+        $this->assertSame(1, $customer->purchases()->count());
+    }
+
+    public function test_resume_rejects_an_obsolete_created_status_without_overwriting_processing(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $purchase->update(['gateway_status' => 'processing', 'last_callback_payload' => ['status' => 'processing', 'modifiedDate' => now()->toIso8601String()]]);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        $this->fakeMonopayStatus($purchase, 'created', ['modifiedDate' => now()->subMinute()->toIso8601String()]);
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan))
+            ->assertSessionHasErrors('payment_status');
+        $this->assertSame('processing', $purchase->fresh()->gateway_status);
+    }
+
+    public function test_a_pending_bank_response_cannot_reopen_a_purchase_finalized_during_the_status_check(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext();
+        $purchase = $this->resumablePurchase($account, $location, $plan, $customer);
+        $this->rememberPurchase($account, $location, $plan, $customer, $purchase);
+        Http::preventStrayRequests();
+        Http::fake(function () use ($purchase) {
+            $purchase->update(['status' => CustomerPurchaseStatus::PaymentExpired, 'gateway_status' => 'expired']);
+
+            return Http::response($this->monopayStatusPayload($purchase, 'created'));
+        });
+
+        $this->post($this->checkoutUrl($account, $location, $plan).'/resume')
+            ->assertRedirect($this->checkoutUrl($account, $location, $plan));
+        $this->assertSame(CustomerPurchaseStatus::PaymentExpired, $purchase->fresh()->status);
+        $this->assertSame('expired', $purchase->fresh()->gateway_status);
+    }
+
+    private function resumablePurchase(Account $account, Location $location, ClassPassPlan $plan, Customer $customer): CustomerPurchase
+    {
+        return $this->monopayPurchase($account, $location, $plan, $customer, [
+            'gateway_status' => 'created',
+            'gateway_checkout_payload' => ['response' => ['pageUrl' => 'https://pay.monobank.ua/invoice/resumable-checkout']],
+        ]);
+    }
+
     private function rememberPurchase(Account $account, Location $location, ClassPassPlan $plan, Customer $customer, CustomerPurchase $purchase): void
     {
         $this->actingAs($customer, 'customer')->get($this->checkoutUrl($account, $location, $plan))->assertOk();

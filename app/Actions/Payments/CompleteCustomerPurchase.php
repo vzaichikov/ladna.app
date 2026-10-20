@@ -43,7 +43,8 @@ class CompleteCustomerPurchase
 
             $this->assertCallbackMatchesPurchase($lockedPurchase, $callback);
 
-            if ($lockedPurchase->isPaid()) {
+            if ($lockedPurchase->isPaid()
+                || ($lockedPurchase->status->isFinal() && $callback->status === PaymentCallbackStatus::Pending)) {
                 return $lockedPurchase;
             }
 

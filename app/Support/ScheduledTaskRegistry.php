@@ -44,6 +44,15 @@ class ScheduledTaskRegistry
                 'overlap_minutes' => 30,
             ],
             [
+                'key' => 'customer_purchases_reconcile',
+                'command' => 'customer-purchases:reconcile --limit=50',
+                'expression' => '*/5 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_five_minutes',
+                'description_key' => 'scheduled_task_customer_purchases_reconcile_description',
+                'overlap_minutes' => 30,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'telegram_alerts_send',
                 'command' => 'telegram-alerts:send --limit=50',
                 'expression' => '* * * * *',
