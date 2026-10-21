@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.172.0',
+                'date' => '2026-10-21',
+                'title' => 'SMS credit on the studio dashboard and Telegram alerts',
+                'items' => [
+                    'The studio owner dashboard now shows available and reserved SMS credit, estimated remaining segments, and warnings with a link to the SMS account.',
+                    'Connected studio owners automatically receive Telegram alerts about insufficient SMS credit, outstanding amounts, suspended automatic top-ups, and monthly limits. Repeated warnings are suppressed, resolved issues are checked before delivery, and alerts can be switched off on the SMS account page.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.171.1',
                 'date' => '2026-10-20',
                 'title' => 'Continue unfinished class-pass payments',
@@ -1569,6 +1579,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.172.0',
+                'date' => '2026-10-21',
+                'title' => 'SMS-кредит на головній сторінці студії та сповіщення в Telegram',
+                'items' => [
+                    'Головна сторінка власника студії тепер показує доступний і зарезервований SMS-кредит, приблизну кількість SMS-сегментів та попередження з посиланням на SMS-рахунок.',
+                    'Підключені власники студії автоматично отримують Telegram-сповіщення про недостатній SMS-кредит, заборгованість, призупинене автопоповнення та місячний ліміт. Повторні попередження не дублюються, актуальність проблеми перевіряється перед надсиланням, а сповіщення можна вимкнути на сторінці SMS-рахунку.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.171.1',
                 'date' => '2026-10-20',

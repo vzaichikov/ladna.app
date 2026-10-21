@@ -84,6 +84,24 @@
         />
     </section>
 
+    @unless ($platformView)
+        <x-ui.panel class="mt-6">
+            <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_telegram_alerts_title') }}</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{{ __('app.sms_telegram_alerts_copy') }}</p>
+            <form method="POST" action="{{ route('dashboard.accounts.sms-account.telegram-alerts.update', $account) }}" class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                @csrf
+                @method('PUT')
+                <input type="hidden" name="telegram_alerts_enabled" value="0">
+                <label class="flex items-center gap-3 text-sm font-medium text-slate-800">
+                    <input type="checkbox" name="telegram_alerts_enabled" value="1" @checked(old('telegram_alerts_enabled', $wallet->telegram_alerts_enabled)) @disabled($account->isReadOnlyDemo()) class="crm-checkbox">
+                    {{ __('app.sms_telegram_alerts_enable') }}
+                </label>
+                <x-ui.button type="submit" :disabled="$account->isReadOnlyDemo()">{{ __('app.save') }}</x-ui.button>
+                @error('telegram_alerts_enabled') <p class="crm-help">{{ $message }}</p> @enderror
+            </form>
+        </x-ui.panel>
+    @endunless
+
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
         <x-ui.panel padding="lg">
             <h2 class="text-lg font-semibold text-slate-950">{{ __('app.sms_top_up') }}</h2>

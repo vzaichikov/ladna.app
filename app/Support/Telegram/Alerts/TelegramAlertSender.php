@@ -3,6 +3,7 @@
 namespace App\Support\Telegram\Alerts;
 
 use App\Enums\AccountRole;
+use App\Enums\AccountStatus;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
 use App\Enums\TelegramAlertRecipientKind;
@@ -17,6 +18,7 @@ use App\Models\TelegramBotInstallation;
 use App\Models\TelegramBroadcastTarget;
 use App\Models\TelegramChatAuthorization;
 use App\Models\TelegramMessage;
+use App\Support\Sms\SmsAccountStatus;
 use App\Support\Telegram\Announcements\TelegramBroadcastTargetVerifier;
 use App\Support\Telegram\TelegramClient;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +35,7 @@ class TelegramAlertSender
     public function __construct(
         private readonly TelegramClient $telegramClient,
         private readonly TelegramBroadcastTargetVerifier $targetVerifier,
+        private readonly SmsAccountStatus $smsAccountStatus,
     ) {}
 
     /**
@@ -129,7 +132,7 @@ class TelegramAlertSender
         }
 
         if ($alert->recipient_kind === TelegramAlertRecipientKind::StudioOwner
-            && $alert->type !== TelegramAlertType::FestivalUpdate) {
+            && ! in_array($alert->type, [TelegramAlertType::FestivalUpdate, TelegramAlertType::SmsAccountIssue], true)) {
             return $this->retryOrFail($alert, 'studio_owner_broadcast_retired', true);
         }
 
@@ -139,6 +142,21 @@ class TelegramAlertSender
 
         if ($alert->account->isReadOnlyDemo()) {
             return $this->retryOrFail($alert, 'read_only_demo', true);
+        }
+
+        if ($alert->type === TelegramAlertType::SmsAccountIssue) {
+            $alert->account->load('smsWallet');
+            if (! $alert->account->smsWallet?->telegram_alerts_enabled) {
+                return $this->retryOrFail($alert, 'sms_account_alerts_disabled', true);
+            }
+
+            $issue = $this->smsAccountStatus->forAccount($alert->account)['issue'];
+            $episode = $issue ? $alert->account->smsWallet->{$this->smsAccountStatus->warningTimestampField($issue)}?->toISOString() : null;
+            if ($alert->account->status !== AccountStatus::Active
+                || $issue !== ($alert->payload['issue'] ?? null)
+                || $episode !== ($alert->payload['episode'] ?? null)) {
+                return $this->retryOrFail($alert, 'sms_account_issue_no_longer_relevant', true);
+            }
         }
 
         if ($alert->recipient_kind !== TelegramAlertRecipientKind::StudioOwner

@@ -15,6 +15,7 @@ use App\Models\Trainer;
 use App\Models\User;
 use App\Support\PeopleCounter\PeopleCounterImageLocator;
 use App\Support\Reports\UnpaidClassBookingPaymentsReport;
+use App\Support\Sms\SmsAccountStatus;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
@@ -27,6 +28,7 @@ class StudioDashboardData
         private readonly UnreservedClassPassBookingIssues $unreservedClassPassBookingIssues,
         private readonly UnpaidClassBookingPaymentsReport $unpaidClassBookingPaymentsReport,
         private readonly PeopleCounterImageLocator $peopleCounterImageLocator,
+        private readonly SmsAccountStatus $smsAccountStatus,
     ) {}
 
     /**
@@ -34,6 +36,7 @@ class StudioDashboardData
      *     mode: string,
      *     timezone: string,
      *     ownerDashboard?: array<string, mixed>,
+     *     smsAccount?: array<string, mixed>|null,
      *     trainer: ?Trainer,
      *     trainerDashboard?: array<string, mixed>
      * }
@@ -61,6 +64,7 @@ class StudioDashboardData
             'mode' => 'owner',
             'timezone' => $timezone,
             'trainer' => null,
+            'smsAccount' => $account->isOwnedBy($user) ? $this->smsAccountStatus->forAccount($account) : null,
             'ownerDashboard' => $this->ownerDashboard($account, $timezone, $locationId),
         ];
     }

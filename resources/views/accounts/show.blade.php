@@ -137,6 +137,10 @@
             <x-ui.metric :label="__('app.today_load')" :value="$ownerDashboard['metrics']['todayLoad']['percent'].'%'" :meta="__('app.booked_of_capacity', ['booked' => $ownerDashboard['metrics']['todayLoad']['bookings'], 'capacity' => $ownerDashboard['metrics']['todayLoad']['capacity']])" icon="generated-classes" accent="slate" />
         </section>
 
+        @if ($smsAccount)
+            @include('accounts._dashboard-sms-account')
+        @endif
+
         @php
             $peopleCounterRooms = $ownerDashboard['peopleCounterRooms'] ?? collect();
             $peopleCounterTotal = $peopleCounterRooms->sum(fn (array $row): int => (int) ($row['detected_count'] ?? 0));

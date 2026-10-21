@@ -12,6 +12,7 @@ class TelegramAlertRendererRegistry
         private readonly TrainerAssignmentTelegramAlertRenderer $trainerAssignmentRenderer,
         private readonly TrainerClassCancellationTelegramAlertRenderer $trainerClassCancellationRenderer,
         private readonly FestivalOwnerTelegramAlertRenderer $festivalOwnerRenderer,
+        private readonly SmsAccountTelegramAlertRenderer $smsAccountRenderer,
     ) {}
 
     /**
@@ -28,6 +29,7 @@ class TelegramAlertRendererRegistry
             TelegramAlertType::TrainerAssignment => $this->trainerAssignmentRenderer,
             TelegramAlertType::TrainerClassCancellation => $this->trainerClassCancellationRenderer,
             TelegramAlertType::FestivalUpdate => $this->festivalOwnerRenderer,
+            TelegramAlertType::SmsAccountIssue => $this->smsAccountRenderer,
             default => throw new InvalidArgumentException('Unsupported Telegram alert type: '.$type->value),
         };
     }

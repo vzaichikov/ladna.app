@@ -104,6 +104,15 @@ class ScheduledTaskRegistry
                 'single_server' => true,
             ],
             [
+                'key' => 'sms_wallets_queue_alerts',
+                'command' => 'sms-wallets:queue-alerts',
+                'expression' => '*/10 * * * *',
+                'frequency_key' => 'scheduled_task_frequency_every_ten_minutes',
+                'description_key' => 'scheduled_task_sms_wallets_queue_alerts_description',
+                'overlap_minutes' => 5,
+                'single_server' => true,
+            ],
+            [
                 'key' => 'sms_service_check_provider_balance',
                 'command' => 'sms-service:check-provider-balance',
                 'expression' => '*/15 * * * *',

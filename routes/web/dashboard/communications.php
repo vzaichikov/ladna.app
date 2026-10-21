@@ -8,6 +8,7 @@ use App\Http\Controllers\AccountCustomerTelegramBotController;
 use App\Http\Controllers\AccountCustomerTelegramWebhookController;
 use App\Http\Controllers\AccountMcpConnectionController;
 use App\Http\Controllers\AccountSmsAccountController;
+use App\Http\Controllers\AccountSmsAlertSettingsController;
 use App\Http\Controllers\AccountSmsAutoTopUpController;
 use App\Http\Controllers\AccountSmsTopUpController;
 use App\Http\Controllers\AccountTelegramAlertController;
@@ -30,6 +31,8 @@ Route::post('accounts/{account}/sms-account/top-ups', [AccountSmsTopUpController
     ->name('accounts.sms-account.top-ups.store');
 Route::put('accounts/{account}/sms-account/auto-top-up', [AccountSmsAutoTopUpController::class, 'update'])
     ->name('accounts.sms-account.auto-top-up.update');
+Route::put('accounts/{account}/sms-account/telegram-alerts', [AccountSmsAlertSettingsController::class, 'update'])
+    ->name('accounts.sms-account.telegram-alerts.update');
 Route::get('accounts/{account}/trainer-telegram-alert-logs', [AccountTelegramAlertController::class, 'index'])
     ->name('accounts.trainer-telegram-alert-logs.index');
 Route::post('accounts/{account}/api-tokens', [AccountApiTokenController::class, 'store'])

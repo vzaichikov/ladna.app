@@ -6,10 +6,28 @@ use App\Enums\EmailScenario;
 use App\Models\Account;
 use App\Models\AccountSmsWallet;
 use App\Support\Mail\TransactionalMailDispatcher;
+use App\Support\Telegram\Alerts\QueueSmsAccountTelegramAlert;
 
 class SmsAccountNotifier
 {
-    public function __construct(private readonly TransactionalMailDispatcher $mail) {}
+    public function __construct(
+        private readonly TransactionalMailDispatcher $mail,
+        private readonly QueueSmsAccountTelegramAlert $telegramAlerts,
+        private readonly SmsAccountStatus $status,
+    ) {}
+
+    public function notifyCurrentIssue(Account $account): void
+    {
+        $issue = $this->status->forAccount($account)['issue'];
+
+        match ($issue) {
+            'outstanding' => $this->outstandingCredit($account),
+            'auto_top_up_suspended' => $this->automaticTopUpFailed($account),
+            'monthly_cap' => $this->automaticTopUpFailed($account, 'monthly_cap_exceeded'),
+            'low_credit' => $this->lowCredit($account),
+            default => null,
+        };
+    }
 
     public function lowCredit(Account $account): void
     {
@@ -47,7 +65,7 @@ class SmsAccountNotifier
     ): void {
         $wallet = $account->smsWallet()->first();
 
-        if (! $wallet || $wallet->{$timestampField} !== null) {
+        if (! $wallet) {
             return;
         }
 
@@ -59,5 +77,7 @@ class SmsAccountNotifier
         if ($updated === 1) {
             $this->mail->smsAccountNotice($account, $scenario, $reason);
         }
+
+        $this->telegramAlerts->execute($account);
     }
 }

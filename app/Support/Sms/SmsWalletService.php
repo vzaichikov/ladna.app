@@ -142,7 +142,8 @@ class SmsWalletService
             if ($wallet && $delivery->reserved_amount_cents > 0) {
                 $wallet->forceFill([
                     'reserved_cents' => max(0, $wallet->reserved_cents - $delivery->reserved_amount_cents),
-                ])->save();
+                ]);
+                $wallet->forceFill($this->recoveredWarningValues($wallet))->save();
             }
 
             $delivery->forceFill([

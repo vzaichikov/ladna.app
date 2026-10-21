@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'balance_cents', 'reserved_cents', 'outstanding_cents', 'currency', 'auto_top_up_enabled', 'auto_top_up_threshold_cents', 'auto_top_up_target_cents', 'auto_top_up_monthly_cap_cents', 'auto_top_up_monthly_spent_cents', 'auto_top_up_monthly_period', 'auto_top_up_suspended_at', 'last_low_balance_warning_at', 'last_auto_top_up_failure_warning_at', 'last_outstanding_warning_at'])]
+#[Fillable(['telegram_alerts_enabled', 'account_id', 'balance_cents', 'reserved_cents', 'outstanding_cents', 'currency', 'auto_top_up_enabled', 'auto_top_up_threshold_cents', 'auto_top_up_target_cents', 'auto_top_up_monthly_cap_cents', 'auto_top_up_monthly_spent_cents', 'auto_top_up_monthly_period', 'auto_top_up_suspended_at', 'last_low_balance_warning_at', 'last_auto_top_up_failure_warning_at', 'last_outstanding_warning_at'])]
 class AccountSmsWallet extends Model
 {
     /** @use HasFactory<AccountSmsWalletFactory> */
@@ -21,6 +21,7 @@ class AccountSmsWallet extends Model
         'outstanding_cents' => 0,
         'currency' => 'UAH',
         'auto_top_up_enabled' => false,
+        'telegram_alerts_enabled' => true,
         'auto_top_up_monthly_spent_cents' => 0,
     ];
 
@@ -34,6 +35,7 @@ class AccountSmsWallet extends Model
             'reserved_cents' => 'integer',
             'outstanding_cents' => 'integer',
             'auto_top_up_enabled' => 'boolean',
+            'telegram_alerts_enabled' => 'boolean',
             'auto_top_up_threshold_cents' => 'integer',
             'auto_top_up_target_cents' => 'integer',
             'auto_top_up_monthly_cap_cents' => 'integer',
