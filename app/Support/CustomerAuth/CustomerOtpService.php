@@ -16,6 +16,7 @@ class CustomerOtpService
         private CustomerAuthAvailability $availability,
         private StudioSmsSender $smsSender,
         private PhoneNumberNormalizer $phones,
+        private SmsSegmentCalculator $segments,
     ) {}
 
     public function send(Account $account, string $phone, ?string $ipAddress = null, ?string $userAgent = null): OtpChallengeResult
@@ -54,10 +55,7 @@ class CustomerOtpService
         }
 
         $code = $this->generateCode();
-        $message = __('app.customer_otp_sms_message', [
-            'code' => $code,
-            'studio' => $account->name,
-        ]);
+        $message = $this->smsMessage($account, $code);
 
         $sendResult = $this->smsSender->send(
             account: $account,
@@ -130,6 +128,28 @@ class CustomerOtpService
         $challenge->forceFill(['consumed_at' => now()])->save();
 
         return OtpChallengeResult::ok($challenge, 0);
+    }
+
+    private function smsMessage(Account $account, string $code): string
+    {
+        $studioName = Str::squish($account->name);
+        $message = __('app.customer_otp_sms_message', ['code' => $code, 'studio' => $studioName]);
+
+        if ($this->segments->estimate($message)->segments === 1) {
+            return $message;
+        }
+
+        $studioCharacters = grapheme_str_split($studioName);
+
+        do {
+            array_pop($studioCharacters);
+            $message = __('app.customer_otp_sms_message', [
+                'code' => $code,
+                'studio' => rtrim(implode('', $studioCharacters)).'...',
+            ]);
+        } while ($studioCharacters !== [] && $this->segments->estimate($message)->segments > 1);
+
+        return $message;
     }
 
     private function activeChallenge(Account $account, string $phone): ?CustomerOtpChallenge

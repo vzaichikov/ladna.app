@@ -5559,7 +5559,7 @@ return [
     'customer_auth_method_unavailable' => 'Цей спосіб входу недоступний.',
     'customer_auth_phone_invalid' => 'Введіть коректний номер телефону.',
     'customer_captcha_failed' => 'Не вдалося підтвердити, що запит зробила людина. Спробуйте ще раз.',
-    'customer_otp_sms_message' => ':code — код входу в кабінет :studio. Нікому не повідомляйте цей код.',
+    'customer_otp_sms_message' => ':code - код входу :studio. Нікому не кажіть.',
     'customer_otp_sent' => 'Код надіслано.',
     'customer_studio_login_eyebrow' => 'Кабінет клієнта',
     'customer_studio_login_title' => 'Вхід для клієнтів',

@@ -24,7 +24,10 @@ use App\Support\Sms\SmsWalletService;
 use App\Support\Sms\StudioSmsSender;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class StudioSmsSenderTest extends TestCase
@@ -65,9 +68,19 @@ class StudioSmsSenderTest extends TestCase
         $this->assertSame(200, $result->delivery->amount_cents);
     }
 
-    public function test_customer_otp_service_creates_the_normal_charged_delivery_log(): void
-    {
+    #[DataProvider('customerOtpSmsNames')]
+    public function test_customer_otp_service_sends_one_segment_and_creates_the_normal_charged_delivery_log(
+        string $locale,
+        string $studioName,
+        string $studioPrefix,
+    ): void {
         [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);
+        $account->update([
+            'name' => $studioName,
+            'default_language' => $locale === 'uk' ? 'en' : 'uk',
+        ]);
+        app()->setLocale($locale);
+        Http::preventStrayRequests();
         Http::fake([
             'https://im.smsclub.mobi/sms/send' => Http::response([
                 'success_request' => ['info' => ['customer-otp-id' => '+380501112233']],
@@ -78,23 +91,65 @@ class StudioSmsSenderTest extends TestCase
 
         $this->assertTrue($result->ok);
         $this->assertNotNull($result->challenge);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $result->debugCode);
+        Http::assertSentCount(1);
+        $message = (string) Http::recorded()->sole()[0]['message'];
+        $this->assertTrue(mb_check_encoding($message, 'UTF-8'));
+        $this->assertSame(1, app(SmsSegmentCalculator::class)->estimate($message)->segments);
+        $messagePrefix = $result->debugCode.($locale === 'uk' ? ' - код входу ' : ' - ');
+        $messageSuffix = $locale === 'uk' ? '. Нікому не кажіть.' : ' login code. Do not share.';
+        $this->assertStringStartsWith($messagePrefix, $message);
+        $this->assertStringEndsWith($messageSuffix, $message);
+        $studioLabel = Str::substr(
+            $message,
+            Str::length($messagePrefix),
+            Str::length($message) - Str::length($messagePrefix) - Str::length($messageSuffix),
+        );
+        $this->assertStringStartsWith($studioPrefix, $studioLabel);
+        $retainedStudioName = Str::endsWith($studioLabel, '...') ? Str::substr($studioLabel, 0, -3) : $studioLabel;
+        $this->assertStringStartsWith($retainedStudioName, $studioName);
+        $this->assertSame(
+            $retainedStudioName,
+            grapheme_substr($studioName, 0, grapheme_strlen($retainedStudioName)),
+        );
+        $this->assertTrue(Hash::check($result->debugCode, $result->challenge->refresh()->code_hash));
+        $this->assertNotSame($result->debugCode, $result->challenge->code_hash);
 
         $delivery = $account->smsDeliveries()->sole();
-        $expectedSegments = app(SmsSegmentCalculator::class)->estimate(__('app.customer_otp_sms_message', [
-            'code' => $result->debugCode,
-            'studio' => $account->name,
-        ]))->segments;
-
         $this->assertSame(SmsDeliveryPurpose::CustomerOtp, $delivery->purpose);
         $this->assertSame(SmsDeliveryStatus::Accepted, $delivery->status);
-        $this->assertSame($expectedSegments, $delivery->billed_segments);
+        $this->assertSame(1, $delivery->estimated_segments);
+        $this->assertSame(1, $delivery->billed_segments);
         $this->assertSame(100, $delivery->sms_segment_price_cents);
-        $this->assertSame($expectedSegments * 100, $delivery->amount_cents);
+        $this->assertSame(100, $delivery->amount_cents);
         $this->assertSame('customer-otp-id', $delivery->provider_message_id);
         $this->assertNull($delivery->message_preview);
         $this->assertSame($result->challenge->getMorphClass(), $delivery->source_type);
         $this->assertSame($result->challenge->id, $delivery->source_id);
-        $this->assertSame(1_000 - ($expectedSegments * 100), $wallet->refresh()->balance_cents);
+        $this->assertSame(900, $wallet->refresh()->balance_cents);
+        $this->assertSame(0, $wallet->reserved_cents);
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function customerOtpSmsNames(): array
+    {
+        $names = [
+            'Charmpole' => ['Charmpole', 'Charmpole'],
+            '255 ASCII characters' => [str_repeat('A', 255), 'AAAAAA'],
+            '255 Cyrillic characters' => [str_repeat('Я', 255), 'ЯЯЯЯЯЯ'],
+            'emoji with ZWJ and combining marks' => [str_repeat("👩🏽‍💻e\u{0301}", 35), "👩🏽‍💻e\u{0301}"],
+            'family emoji with ZWJ' => [str_repeat('👨‍👩‍👧‍👦', 36), '👨‍👩‍👧‍👦'],
+            'GSM7 extension characters' => [str_repeat('^{}€', 63).'^{}', '^{}€'],
+        ];
+        $cases = [];
+
+        foreach (['uk', 'en'] as $locale) {
+            foreach ($names as $name => [$studioName, $studioPrefix]) {
+                $cases[$locale.' '.$name] = [$locale, $studioName, $studioPrefix];
+            }
+        }
+
+        return $cases;
     }
 
     public function test_festival_otp_uses_the_same_sensitive_preview_and_credit_rules_as_customer_otp(): void

@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.172.1',
+                'date' => '2026-10-22',
+                'title' => 'Studio sign-in codes fit one SMS',
+                'items' => [
+                    'Studio customer sign-in and phone-verification codes now fit one SMS segment in Ukrainian and English. Long studio names are shortened while keeping the complete code and security warning.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.172.0',
                 'date' => '2026-10-21',
                 'title' => 'SMS credit on the studio dashboard and Telegram alerts',
@@ -1579,6 +1588,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.172.1',
+                'date' => '2026-10-22',
+                'title' => 'Коди входу до студії в одному SMS',
+                'items' => [
+                    'Коди входу та підтвердження номера клієнтів студії тепер вміщуються в один SMS-сегмент українською й англійською. Довгі назви студій скорочуються, а повний код і попередження про безпеку зберігаються.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.172.0',
                 'date' => '2026-10-21',

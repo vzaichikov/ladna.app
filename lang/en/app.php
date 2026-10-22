@@ -5559,7 +5559,7 @@ return [
     'customer_auth_method_unavailable' => 'This login method is unavailable.',
     'customer_auth_phone_invalid' => 'Enter a valid phone number.',
     'customer_captcha_failed' => 'We could not verify that this request was made by a person. Please try again.',
-    'customer_otp_sms_message' => ':code is your login code for :studio. Do not share this code.',
+    'customer_otp_sms_message' => ':code - :studio login code. Do not share.',
     'customer_otp_sent' => 'Code sent.',
     'customer_studio_login_eyebrow' => 'Customer portal',
     'customer_studio_login_title' => 'Customer login',
