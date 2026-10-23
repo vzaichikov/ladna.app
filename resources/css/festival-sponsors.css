@@ -1,0 +1,290 @@
+@layer components {
+    [data-festival-telegram-mini-app] .festival-sponsors {
+        --festival-page: #0f172a;
+        --festival-surface: #1e293b;
+        --festival-text: #f8fafc;
+        --festival-muted-text: #cbd5e1;
+        --festival-border: #475569;
+        --festival-primary: #f8fafc;
+        --festival-primary-text: #0f172a;
+        --festival-accent: #cbd5e1;
+    }
+
+    .festival-sponsors {
+        color: var(--festival-text, #2b2b2f);
+    }
+
+    .festival-sponsors-heading {
+        margin-bottom: 1.25rem;
+    }
+
+    .festival-sponsors-heading h2 {
+        font-size: 1.5rem;
+        font-weight: 650;
+        line-height: 1.3;
+    }
+
+    .festival-sponsors-heading p {
+        margin-top: 0.5rem;
+        color: var(--festival-muted-text, #64748b);
+        line-height: 1.6;
+    }
+
+    .festival-sponsors-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+        gap: 1rem;
+    }
+
+    .festival-sponsor-card {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--festival-border, #e7ddc9);
+        border-radius: 1rem;
+        background: var(--festival-surface, #fff);
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .festival-sponsor-card:hover {
+        border-color: var(--festival-accent, #a78ab9);
+        box-shadow: 0 4px 18px rgb(0 0 0 / 8%);
+    }
+
+    .festival-sponsor-card:focus-visible,
+    .festival-sponsor-close:focus-visible,
+    .festival-sponsor-website:focus-visible,
+    .festival-sponsors-list:focus-visible {
+        outline: 3px solid var(--festival-accent, #a78ab9);
+        outline-offset: 4px;
+    }
+
+    .festival-sponsor-logo {
+        display: flex;
+        height: 8rem;
+        align-items: center;
+        justify-content: center;
+        margin: 1rem 1rem 0;
+        padding: 1rem;
+        border-radius: 0.625rem;
+        background: #fff;
+    }
+
+    .festival-sponsor-logo img,
+    .festival-sponsor-dialog-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .festival-sponsor-copy {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 1.25rem;
+        overflow-wrap: anywhere;
+    }
+
+    .festival-sponsor-copy strong {
+        font-size: 1.125rem;
+        line-height: 1.45;
+    }
+
+    .festival-sponsor-introduction {
+        color: var(--festival-muted-text, #64748b);
+        font-size: 0.875rem;
+        line-height: 1.65;
+    }
+
+    .festival-sponsor-more {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: auto;
+        padding-top: 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 650;
+    }
+
+    .festival-sponsors--strip .festival-sponsors-heading h2 {
+        font-size: 0.875rem;
+    }
+
+    .festival-sponsors--strip .festival-sponsors-list {
+        display: flex;
+        overflow-x: auto;
+        padding: 0.25rem 0.25rem 0.75rem;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
+    }
+
+    .festival-sponsors--strip .festival-sponsor-card {
+        width: 20rem;
+        max-width: 90%;
+        flex: 0 0 auto;
+        flex-direction: row;
+        align-items: center;
+        scroll-snap-align: start;
+    }
+
+    .festival-sponsors--strip .festival-sponsor-logo {
+        width: 4.5rem;
+        height: 4.5rem;
+        flex-shrink: 0;
+        margin: 0.75rem 0 0.75rem 0.75rem;
+        padding: 0.5rem;
+    }
+
+    .festival-sponsors--strip .festival-sponsor-copy {
+        gap: 0.25rem;
+        padding: 0.875rem;
+    }
+
+    .festival-sponsors--strip .festival-sponsor-copy strong {
+        font-size: 0.875rem;
+    }
+
+    .festival-sponsors--strip .festival-sponsor-introduction {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        font-size: 0.75rem;
+    }
+
+    .festival-sponsor-dialog {
+        width: min(36rem, calc(100% - 2rem));
+        max-height: calc(100dvh - 2rem);
+        margin: auto;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--festival-border, #e7ddc9);
+        border-radius: 1.5rem;
+        background: var(--festival-surface, #fff);
+        color: var(--festival-text, #2b2b2f);
+        box-shadow: 0 24px 80px rgb(0 0 0 / 25%);
+    }
+
+    .festival-sponsor-dialog::backdrop {
+        background: rgb(15 10 20 / 65%);
+        backdrop-filter: blur(4px);
+    }
+
+    .festival-sponsor-dialog-body {
+        max-height: calc(100dvh - 2rem - 2px);
+        padding: 2rem;
+        overflow-y: auto;
+        overflow-wrap: anywhere;
+        overscroll-behavior: contain;
+    }
+
+    .festival-sponsor-dialog-body:focus-visible {
+        outline: 3px solid var(--festival-accent, #a78ab9);
+        outline-offset: -4px;
+    }
+
+    .festival-sponsor-close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        z-index: 1;
+        display: grid;
+        width: 2.75rem;
+        height: 2.75rem;
+        place-items: center;
+        border: 1px solid var(--festival-border, #e7ddc9);
+        border-radius: 50%;
+        background: var(--festival-surface, #fff);
+        cursor: pointer;
+    }
+
+    .festival-sponsor-dialog-logo {
+        width: 12rem;
+        max-width: calc(100% - 2rem);
+        height: 7rem;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        border: 1px solid #e7e5e4;
+        border-radius: 0.75rem;
+        background: #fff;
+    }
+
+    .festival-sponsor-eyebrow {
+        margin-bottom: 0.5rem;
+        color: var(--festival-muted-text, #64748b);
+        font-size: 0.75rem;
+        font-weight: 650;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .festival-sponsor-dialog h2 {
+        padding-right: 1rem;
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .festival-sponsor-dialog-introduction {
+        margin-top: 0.75rem;
+        color: var(--festival-muted-text, #64748b);
+        line-height: 1.7;
+    }
+
+    .festival-sponsor-giveaway {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        border: 1px solid var(--festival-border, #e7ddc9);
+        border-radius: 0.875rem;
+        background: var(--festival-page, #faf8f5);
+    }
+
+    .festival-sponsor-giveaway h3 {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+    }
+
+    .festival-sponsor-giveaway p {
+        margin-top: 0.75rem;
+        font-size: 0.9375rem;
+        line-height: 1.7;
+        white-space: pre-line;
+    }
+
+    .festival-sponsor-website {
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.625rem;
+        margin-top: 1.5rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.625rem;
+        background: var(--festival-primary, #3b223f);
+        color: var(--festival-primary-text, #fff);
+        font-size: 0.875rem;
+        font-weight: 650;
+    }
+
+    @media (max-width: 639px) {
+        .festival-sponsor-dialog-body {
+            padding: 1.5rem;
+        }
+    }
+
+    @media print {
+        .festival-sponsors {
+            display: none !important;
+        }
+    }
+}

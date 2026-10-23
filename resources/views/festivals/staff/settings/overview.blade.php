@@ -24,6 +24,7 @@
             ['requirements', 'festival_registration_fields', 'festival_registration_fields_card_copy', $permissions['manage']],
             ['fees', 'festival_fees', 'festival_fees_card_copy', $permissions['finance']],
             ['content', 'festival_content_media', 'festival_content_card_copy', $permissions['manage']],
+            ['sponsors', 'festival_sponsors', 'festival_sponsors_card_copy', $permissions['manage']],
         ])
         @foreach($cards as [$page, $label, $copy, $visible])
             @continue(!$visible)

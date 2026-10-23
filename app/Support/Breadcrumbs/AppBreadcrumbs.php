@@ -796,6 +796,14 @@ final class AppBreadcrumbs
                 'edit' => 'dashboard.accounts.festivals.charge-definitions.edit',
                 'parameter' => 'festivalChargeDefinition',
             ],
+            'sponsors' => [
+                'index' => 'dashboard.accounts.festivals.settings.sponsors',
+                'label' => 'app.festival_sponsors',
+                'item' => 'app.festival_sponsor',
+                'create' => 'dashboard.accounts.festivals.sponsors.create',
+                'edit' => 'dashboard.accounts.festivals.sponsors.edit',
+                'parameter' => 'festivalSponsor',
+            ],
         ];
 
         foreach ($definitions as $definition) {

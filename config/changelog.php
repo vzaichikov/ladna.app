@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.173.0',
+                'date' => '2026-10-23',
+                'title' => 'Sponsors for each Festival',
+                'items' => [
+                    'Organizers can add and manage sponsors in Festival Settings, with a logo, website, short introduction and optional prize or nomination details.',
+                    'Sponsors appear on the Festival page with a popup for more information. An optional footer strip keeps selected sponsors visible across that Festival’s pages, including cabinets, tickets and its Mini App view.',
+                ],
+                'meta' => 'Pending release commit.',
+            ],
+            [
                 'version' => '0.172.1',
                 'date' => '2026-10-22',
                 'title' => 'Studio sign-in codes fit one SMS',
@@ -1588,6 +1598,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.173.0',
+                'date' => '2026-10-23',
+                'title' => 'Спонсори для кожного фестивалю',
+                'items' => [
+                    'Організатори можуть додавати спонсорів у налаштуваннях фестивалю: логотип, сайт, короткий опис та, за потреби, інформацію про призи й номінації.',
+                    'Спонсори відображаються на сторінці фестивалю, а натискання відкриває докладну інформацію. Вибраних спонсорів також можна показувати перед підвалом на сторінках цього фестивалю, зокрема в кабінетах, квитках і його розділі Mini App.',
+                ],
+                'meta' => 'Релізний коміт готується.',
+            ],
             [
                 'version' => '0.172.1',
                 'date' => '2026-10-22',

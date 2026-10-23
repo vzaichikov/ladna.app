@@ -36,6 +36,7 @@ use App\Models\FestivalRequirementDefinition;
 use App\Models\FestivalRubric;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
+use App\Models\FestivalSponsor;
 use App\Models\FestivalStage;
 use App\Models\FestivalTariffPackage;
 use App\Models\FestivalWorkflow;
@@ -78,7 +79,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(226, $classifiedRouteNames);
+        $this->assertCount(229, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -257,6 +258,10 @@ class MultiLocationPageSmokeTest extends TestCase
             'caption' => 'Smoke media',
         ]);
         $festivalNomination = FestivalNomination::factory()->for($festivalEdition)->create(['account_id' => $account->id]);
+        $festivalSponsor = FestivalSponsor::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $festivalEdition->id,
+        ]);
         $festivalPortalUser = FestivalPortalUser::factory()->for($account)->create();
         $festivalParticipant = FestivalParticipant::factory()->create([
             'account_id' => $account->id,
@@ -313,6 +318,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'festival_fee' => $festivalFee,
             'festival_media' => $festivalMedia,
             'festival_nomination' => $festivalNomination,
+            'festival_sponsor' => $festivalSponsor,
             'festival_participant' => $festivalParticipant,
             'festival_portal_user' => $festivalPortalUser,
             'festival_promo_code' => $festivalPromoCode,
@@ -606,6 +612,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.settings.nominations' => 'festival_edition',
             'dashboard.accounts.festivals.nominations.create' => 'festival_edition',
             'dashboard.accounts.festivals.nominations.edit' => 'festival_nomination',
+            'dashboard.accounts.festivals.settings.sponsors' => 'festival_edition',
+            'dashboard.accounts.festivals.sponsors.create' => 'festival_edition',
+            'dashboard.accounts.festivals.sponsors.edit' => 'festival_sponsor',
             'dashboard.accounts.festivals.settings.fees' => 'festival_edition',
             'dashboard.accounts.festivals.settings.requirements' => 'festival_edition',
             'dashboard.accounts.festivals.settings.workflows' => 'festival_edition',

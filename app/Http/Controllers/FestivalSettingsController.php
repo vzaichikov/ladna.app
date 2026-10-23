@@ -28,6 +28,7 @@ class FestivalSettingsController extends Controller
             'requirements' => $permissions['manage'] ? FestivalRequirementDefinition::query()->where('festival_edition_id', $festivalEdition->id)->count() : null,
             'fees' => $permissions['finance'] ? FestivalChargeDefinition::query()->where('festival_edition_id', $festivalEdition->id)->count() : null,
             'content' => $permissions['manage'] ? $festivalEdition->sections()->count() + $festivalEdition->documents()->count() + $festivalEdition->media()->count() : null,
+            'sponsors' => $permissions['manage'] ? $festivalEdition->sponsors()->whereBelongsTo($account)->count() : null,
         ];
 
         return view('festivals.staff.settings.overview', compact('account', 'festivalEdition', 'permissions', 'counts') + ['edition' => $festivalEdition, 'workspacePermissions' => $permissions]);

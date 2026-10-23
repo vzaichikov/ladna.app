@@ -9,6 +9,7 @@
         data-festival-palette="{{ $landingPaletteKey }}"
     >
         @yield('festivalContent')
+        <x-festivals.sponsors :sponsors="$festivalFooterSponsors" :strip="true" class="mx-auto max-w-6xl px-5 pb-8 sm:px-8" />
         <x-ui.powered-footer
             :account="$account"
             :show-locale-switcher="true"

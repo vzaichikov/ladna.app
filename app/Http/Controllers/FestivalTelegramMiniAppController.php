@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalNotification;
 use App\Models\FestivalSeries;
+use App\Models\FestivalSponsor;
 use App\Models\FestivalTicketOrder;
 use App\Support\FestivalAuth\TelegramFestivalLoginTokenService;
 use App\Support\Festivals\FestivalTelegramAuthorizationResolver;
@@ -34,12 +35,21 @@ class FestivalTelegramMiniAppController extends Controller
         [$account, $series] = $this->context($request, $accountSlug, $seriesSlug);
         $installation = $authorizations->installation($series);
         abort_unless($installation, 404);
+        $initialData = $data->build($series);
+        $sponsorsByEdition = FestivalSponsor::query()
+            ->where('account_id', $account->id)
+            ->whereIn('festival_edition_id', array_column($initialData['editions'], 'id'))
+            ->where('show_on_all_pages', true)
+            ->orderBy('id')
+            ->get()
+            ->groupBy('festival_edition_id');
 
         return view('festivals.telegram.mini-app', [
             'account' => $account,
             'series' => $series,
             'installation' => $installation,
-            'initialData' => $data->build($series),
+            'initialData' => $initialData,
+            'sponsorsByEdition' => $sponsorsByEdition,
             'labels' => $this->labels(),
         ]);
     }

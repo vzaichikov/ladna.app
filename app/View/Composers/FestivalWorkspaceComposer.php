@@ -111,6 +111,7 @@ class FestivalWorkspaceComposer
                     $this->item('settings-workflows', 'dashboard.accounts.festivals.settings.workflows', 'festival_registration_workflows', 'settings', $permissions['manage'], $active, $account, $edition),
                     $this->item('settings-requirements', 'dashboard.accounts.festivals.settings.requirements', 'festival_registration_fields', 'settings', $permissions['manage'], $active, $account, $edition),
                     $this->item('settings-fees', 'dashboard.accounts.festivals.settings.fees', 'festival_fees', 'settings', $permissions['finance'], $active, $account, $edition),
+                    $this->item('settings-sponsors', 'dashboard.accounts.festivals.settings.sponsors', 'festival_sponsors', 'handshake', $permissions['manage'], $active, $account, $edition),
                 ],
             ],
         ];
@@ -176,6 +177,7 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.settings.workflows', 'dashboard.accounts.festivals.workflows.*', 'dashboard.accounts.festivals.workflow-steps.*') => 'settings-workflows',
             request()->routeIs('dashboard.accounts.festivals.settings.requirements', 'dashboard.accounts.festivals.requirements.*') => 'settings-requirements',
             request()->routeIs('dashboard.accounts.festivals.settings.fees', 'dashboard.accounts.festivals.charge-definitions.*') => 'settings-fees',
+            request()->routeIs('dashboard.accounts.festivals.settings.sponsors', 'dashboard.accounts.festivals.sponsors.*') => 'settings-sponsors',
             request()->routeIs('dashboard.accounts.festivals.settings.content', 'dashboard.accounts.festivals.settings.content.*', 'dashboard.accounts.festivals.content.*', 'dashboard.accounts.festivals.documents.*', 'dashboard.accounts.festivals.media.*') => 'settings-content',
             request()->routeIs('dashboard.accounts.festivals.settings', 'dashboard.accounts.festivals.edit') => 'settings',
             default => 'overview',

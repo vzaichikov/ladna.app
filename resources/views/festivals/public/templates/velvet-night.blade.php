@@ -191,6 +191,8 @@
             </section>
         @endif
 
+        <x-festivals.sponsors :sponsors="$festivalSponsors" class="mt-10" />
+
         <div class="velvet-section-heading mt-8">
             <p>{{ $edition->series->name }}</p>
             <h2>{{ __('app.festival_admission') }}</h2>

@@ -22,6 +22,7 @@ use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalRubricSection;
 use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalSeries;
+use App\Models\FestivalSponsor;
 use App\Models\FestivalStage;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTimeline;
@@ -39,6 +40,27 @@ use Tests\TestCase;
 class FestivalTelegramMiniAppTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_sponsor_templates_are_limited_to_flagged_sponsors_of_visible_series_editions(): void
+    {
+        [$account, $series, $edition] = $this->festival();
+        $sponsor = FestivalSponsor::factory()->for($edition, 'edition')->onAllPages()->create(['name' => 'Visible partner']);
+        FestivalSponsor::factory()->for($edition, 'edition')->create(['name' => 'Main page only partner']);
+        $draft = FestivalEdition::factory()->for($series)->create(['account_id' => $account->id]);
+        FestivalSponsor::factory()->for($draft, 'edition')->onAllPages()->create(['name' => 'Unpublished partner']);
+        $otherSeries = FestivalSeries::factory()->for($account)->create();
+        $otherEdition = FestivalEdition::factory()->published()->for($otherSeries)->create(['account_id' => $account->id]);
+        FestivalSponsor::factory()->for($otherEdition, 'edition')->onAllPages()->create(['name' => 'Another series partner']);
+
+        $this->get(route('public.festival-telegram.show', [$account->slug, $series->slug]))
+            ->assertOk()
+            ->assertSee('data-festival-telegram-sponsors="'.$edition->id.'"', false)
+            ->assertSee('id="festival-sponsor-'.$sponsor->id.'"', false)
+            ->assertSee('Visible partner')
+            ->assertDontSee('Main page only partner')
+            ->assertDontSee('Unpublished partner')
+            ->assertDontSee('Another series partner');
+    }
 
     public function test_init_data_requires_exact_bot_hmac_and_a_fresh_private_session(): void
     {

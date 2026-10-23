@@ -140,6 +140,8 @@ class FestivalSettingsManagementTest extends TestCase
 
     public function test_registration_field_form_groups_and_explains_settings_without_legacy_stage(): void
     {
+        $this->travelTo(now()->setDate(2026, 8, 10)->startOfDay());
+
         [$account, $edition, $owner] = $this->festival();
         $workflow = FestivalWorkflow::factory()->for($edition)->create(['account_id' => $account->id]);
         $step = FestivalWorkflowStep::factory()->for($workflow, 'workflow')->create(['account_id' => $account->id]);

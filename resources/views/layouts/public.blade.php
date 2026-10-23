@@ -75,6 +75,9 @@
         @yield('content')
 
         @unless ($isEmbedLayout)
+            @unless (request()->routeIs('public.festivals.show'))
+                <x-festivals.sponsors :sponsors="$festivalFooterSponsors" :strip="true" class="mx-auto max-w-6xl px-5 py-8 sm:px-8" />
+            @endunless
             @hasSection('publicFooter')
                 @yield('publicFooter')
             @elseif (! ($hideAppFooter ?? false))

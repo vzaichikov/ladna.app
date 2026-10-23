@@ -26,6 +26,11 @@
     >
         <script type="application/json" data-festival-telegram-initial>@json($initialData)</script>
         <script type="application/json" data-festival-telegram-labels>@json($labels)</script>
+        @foreach ($sponsorsByEdition as $sponsorEditionId => $sponsors)
+            <template data-festival-telegram-sponsors="{{ $sponsorEditionId }}">
+                <x-festivals.sponsors :$sponsors :strip="true" class="mt-6" />
+            </template>
+        @endforeach
 
         <div class="mx-auto max-w-3xl pb-[max(2rem,env(safe-area-inset-bottom))]">
             <header

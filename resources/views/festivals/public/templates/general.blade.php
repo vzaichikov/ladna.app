@@ -63,6 +63,8 @@
             @endif
         </div>
 
+        <x-festivals.sponsors :sponsors="$festivalSponsors" class="mt-10" />
+
         @include('festivals.public._admission-checkout')
     </section>
 </main>

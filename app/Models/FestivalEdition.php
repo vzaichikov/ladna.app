@@ -208,6 +208,16 @@ class FestivalEdition extends Model
         return $this->nominations();
     }
 
+    public function sponsors(): HasMany
+    {
+        return $this->hasMany(FestivalSponsor::class)->orderBy('id');
+    }
+
+    public function festivalSponsors(): HasMany
+    {
+        return $this->sponsors();
+    }
+
     public function scheduleSlots(): HasMany
     {
         return $this->hasMany(FestivalScheduleSlot::class);

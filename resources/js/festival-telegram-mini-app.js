@@ -13,6 +13,8 @@ const element = (tag, className = '', text = '') => {
     return node;
 };
 
+import { initFestivalSponsors } from './festival-sponsors';
+
 export function initFestivalTelegramMiniApp() {
     const root = document.querySelector('[data-festival-telegram-mini-app]');
     if (!root) return;
@@ -432,12 +434,19 @@ export function initFestivalTelegramMiniApp() {
         const sections = element('div', 'mt-4 space-y-3');
         appendEditionSections(sections, edition);
         container.append(sections);
+        const sponsorTemplate = root.querySelector(`[data-festival-telegram-sponsors="${edition.id}"]`);
+
+        if (sponsorTemplate) {
+            container.append(sponsorTemplate.content.cloneNode(true));
+            initFestivalSponsors(container);
+        }
     };
 
     const renderEditions = () => {
         const list = root.querySelector('[data-festival-telegram-editions]');
         const detail = root.querySelector('[data-festival-telegram-edition-detail]');
         list.replaceChildren();
+        detail.querySelectorAll('[data-festival-sponsor-dialog][open]').forEach((dialog) => dialog.close());
         detail.replaceChildren();
 
         let selectedEdition = (state.editions || []).find((edition) => edition.id === selectedEditionId);

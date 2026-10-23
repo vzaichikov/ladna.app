@@ -9,6 +9,7 @@ import { initEventScanner } from './event-scanner';
 import { initFestivalStreamPlayer } from './festival-stream-player';
 import { initFestivalTelegramMiniApp } from './festival-telegram-mini-app';
 import { initFestivalMediaDuplicates } from './festival-media-duplicates';
+import { initFestivalSponsors } from './festival-sponsors';
 import { initCustomerCart, initCustomerCartPayment } from './customer-cart';
 import { initStudioPromoCodes } from './studio-promo-codes';
 
@@ -10830,6 +10831,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initEntranceOperations();
     initFestivalStreamPlayer();
     initFestivalMediaDuplicates();
+    initFestivalSponsors();
     initFestivalStreamStatus();
     initFestivalAnnouncementModal();
     initFestivalApplicationModals();
