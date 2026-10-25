@@ -10,6 +10,7 @@
             $categoryName = $entry->category->name;
             $directionName = $entry->category->direction->name;
             $categoryRequirementsHtml = $entry->category->requirements_html;
+            $activeTechnicalCorrections = $workflowStates->filter(fn ($state): bool => $state['mutable'] && $state['step']->isTechnicalCorrection() && $state['step']->correction_due_at?->isFuture());
         @endphp
         <header class="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -93,7 +94,8 @@
                 $selectedState = $workflowStates->first(fn($state) => $state['step']->is($selectedStep));
                 $summarySelected = $selectedStep->workflowStep->type === \App\Enums\FestivalWorkflowStepType::Summary;
                 $displayState = $selectedState;
-                if (! $summarySelected && ($entry->registration_completed_at || $entry->status === \App\Enums\FestivalEntryStatus::Rejected)) {
+                $activeTechnicalCorrection = $selectedStep->isTechnicalCorrection() && $selectedStep->correction_due_at?->isFuture() && $selectedState['mutable'];
+                if (! $summarySelected && ! $activeTechnicalCorrection && ($entry->registration_completed_at || $entry->status === \App\Enums\FestivalEntryStatus::Rejected)) {
                     $displayState['mutable'] = false;
                     $displayState['requirement_mutability'] = collect($displayState['requirement_mutability'])->map(fn () => false)->all();
                 }
@@ -115,7 +117,7 @@
                             <div>
                                 <strong>{{ __('app.festival_review_comment') }}</strong>
                                 <p class="mt-1 whitespace-pre-line">{{ $selectedStep->review_notes }}</p>
-                                @if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }}</p>@endif
+                                @if($selectedStep->correction_due_at)<p class="mt-2 font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $selectedStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }} ({{ $entry->edition->timezone }})</p>@endif
                                 @if($displayState['mutable'] && !$displayState['has_blocking_charges'])
                                     <p class="mt-3 font-semibold">{{ __('app.festival_correction_submit_required') }}</p>
                                 @endif
@@ -130,7 +132,25 @@
                 @endif
 
                 @if ($summarySelected)
-                    @if ($entry->status === \App\Enums\FestivalEntryStatus::Accepted)
+                    @if ($activeTechnicalCorrections->isNotEmpty())
+                        <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950" data-festival-summary-corrections>
+                            <h3 class="text-lg font-semibold">{{ __('app.festival_summary_corrections_title') }}</h3>
+                            <p class="mt-1 text-sm">{{ __('app.festival_summary_corrections_copy') }}</p>
+                            <div class="mt-4 space-y-4">
+                                @foreach ($activeTechnicalCorrections as $correctionState)
+                                    @php
+                                        $correctionStep = $correctionState['step'];
+                                    @endphp
+                                    <div>
+                                        <strong class="block text-sm">{{ $correctionStep->workflowStep->title }}</strong>
+                                        <p class="mt-1 whitespace-pre-line text-sm">{{ $correctionStep->review_notes }}</p>
+                                        <p class="mt-2 text-sm font-semibold">{{ __('app.festival_correction_due_at') }}: {{ $correctionStep->correction_due_at->timezone($entry->edition->timezone)->format('d.m.Y H:i') }} ({{ $entry->edition->timezone }})</p>
+                                        <x-ui.button :href="route('festival.portal.entry-steps.show', [$account->slug, $entry, $correctionStep])" variant="warning" class="mt-3">{{ __('app.festival_open_correction_step', ['step' => $correctionStep->workflowStep->title]) }}</x-ui.button>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @elseif ($entry->status === \App\Enums\FestivalEntryStatus::Accepted)
                         <div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
                             <h3 class="text-lg font-semibold">{{ __('app.festival_summary_accepted_title') }}</h3>
                             <p class="mt-1 text-sm">{{ __('app.festival_summary_accepted_copy') }}</p>

@@ -8,6 +8,7 @@ use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalQualificationStatus;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalWorkflowReviewEffect;
+use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
 use App\Models\User;
 use App\Support\Festivals\FestivalEntryStepCompletion;
@@ -48,8 +49,14 @@ class ReviewFestivalEntryStep
         $reviewDedupeToken = (string) Str::uuid();
 
         return DB::transaction(function () use ($step, $reviewer, $decision, $comment, $correctionDueAt, $requirementNotes, $reviewDedupeToken): FestivalEntryStep {
+            FestivalEntry::query()->whereKey($step->festival_entry_id)->lockForUpdate()->firstOrFail();
             $step = FestivalEntryStep::query()->with(['workflowStep', 'entry.account', 'entry.edition', 'entry.portalUser', 'entry.steps.workflowStep', 'requirements.definition', 'requirements.selectedHelpers', 'requirements.submissions'])->whereKey($step->id)->lockForUpdate()->firstOrFail();
-            abort_unless($step->status === FestivalEntryStepStatus::Submitted, 409);
+            $reopening = $decision === 'request_changes' && $step->canReturnForCorrection();
+            abort_unless($step->status === FestivalEntryStepStatus::Submitted || $reopening, 409);
+            abort_if(in_array($step->entry->status, [FestivalEntryStatus::Rejected, FestivalEntryStatus::Withdrawn], true), 409);
+            if ($reopening && $step->entry->status === FestivalEntryStatus::Accepted) {
+                $step->entry->forceFill(['status' => FestivalEntryStatus::ChangesPending])->save();
+            }
             $postConfirmationReview = $step->entry->status === FestivalEntryStatus::ChangesPending;
 
             if ($decision === 'approve' && ! $this->completion->requirementsComplete($step)) {
@@ -82,7 +89,7 @@ class ReviewFestivalEntryStep
                 }
             } elseif ($decision === 'request_changes') {
                 $step->forceFill(['status' => FestivalEntryStepStatus::ChangesRequested, 'reviewed_by' => $reviewer->id, 'reviewed_at' => now(), 'review_notes' => $comment, 'correction_due_at' => $correctionDueAt])->save();
-                if (! $postConfirmationReview) {
+                if (! $postConfirmationReview && ! $step->isTechnicalForm()) {
                     $step->entry->steps()
                         ->whereHas('workflowStep', fn ($query) => $query->where('sort_order', '>', $step->workflowStep->sort_order))
                         ->where('status', '!=', FestivalEntryStepStatus::Draft->value)
@@ -115,7 +122,7 @@ class ReviewFestivalEntryStep
                     'step' => $step->workflowStep->title,
                     'decision' => $decision,
                     'comment' => $comment,
-                    'correction_due_at' => $correctionDueAt,
+                    'correction_due_at' => $step->correction_due_at?->timezone($step->entry->edition->timezone)->format('d.m.Y H:i').' '.$step->entry->edition->timezone,
                     'entry_status' => $step->entry->status->value,
                     'next_step' => null,
                     'next_step_type' => null,

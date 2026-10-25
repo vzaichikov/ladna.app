@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.174.0',
+                'date' => '2026-10-25',
+                'title' => 'Corrections for approved Festival technical steps',
+                'items' => [
+                    'Organizers can return an approved technical step for correction with a comment and a separate deadline. Qualification, paid charges and other approved steps stay intact.',
+                    'Applicants can replace music and update technical answers, then submit the step for review again. Previously completed applications require final organizer confirmation after the correction.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.173.0',
                 'date' => '2026-10-23',
                 'title' => 'Sponsors for each Festival',
@@ -1598,6 +1608,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.174.0',
+                'date' => '2026-10-25',
+                'title' => 'Доопрацювання погоджених технічних кроків Фестивалю',
+                'items' => [
+                    'Організатор може повернути погоджений технічний крок на доопрацювання з коментарем та окремим строком. Відеовідбір, сплачені внески й інші погоджені кроки зберігаються.',
+                    'Заявник може замінити музику та виправити технічні відповіді, а потім знову подати крок на перевірку. Раніше завершену заявку після виправлень потрібно остаточно підтвердити повторно.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.173.0',
                 'date' => '2026-10-23',

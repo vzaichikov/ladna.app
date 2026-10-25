@@ -455,6 +455,30 @@ class HelpPagesTest extends TestCase
         }
     }
 
+    public function test_festival_help_explains_corrections_to_approved_music_steps(): void
+    {
+        $this->get(route('help.show', 'festival-applications-payments', false))
+            ->assertOk()
+            ->assertSee('Виправлення завершених кроків', false)
+            ->assertSee('майбутній Строк доопрацювання в часовому поясі фестивалю', false)
+            ->assertSee('обовʼязковий Коментар організатора', false)
+            ->assertSee('Самого завантаження недостатньо', false)
+            ->assertSee('Погоджена кваліфікація, оплати та інші завершені кроки зберігаються', false)
+            ->assertSee('Повністю підтвердити заявку', false);
+
+        $this->get(route('help.show', 'festival-participant-confirmation', false))
+            ->assertOk()
+            ->assertSee('відкрийте посилання Виправити крок у Підсумку', false)
+            ->assertSee('обовʼязково натисніть Подати до цього строку', false)
+            ->assertSee('Загальний строк самостійного редагування не обмежує це виправлення', false);
+
+        foreach (['як замінити вже погоджену музику', 'як повернути завершений крок на доопрацювання'] as $question) {
+            $results = app(OwnerHelpIndex::class)->search($question, 1);
+
+            $this->assertSame('festival-applications-payments', $results[0]['slug'] ?? null, $question);
+        }
+    }
+
     public function test_help_search_finds_festival_participant_workflows(): void
     {
         $questions = [

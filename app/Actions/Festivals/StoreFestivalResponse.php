@@ -5,7 +5,9 @@ namespace App\Actions\Festivals;
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
 use App\Enums\FestivalTeamMemberType;
+use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
+use App\Models\FestivalEntryStep;
 use App\Models\FestivalParticipant;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSubmission;
@@ -30,6 +32,8 @@ class StoreFestivalResponse
         $this->workflowState->assertRequirementMutable($requirement);
 
         $submission = DB::transaction(function () use ($requirement, $portalUser, $value): FestivalSubmission {
+            FestivalEntry::query()->whereKey($requirement->festival_entry_id)->lockForUpdate()->firstOrFail();
+            FestivalEntryStep::query()->whereKey($requirement->festival_entry_step_id)->lockForUpdate()->firstOrFail();
             $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
             $postConfirmationChange = $this->workflowState->assertRequirementMutable($locked);
             $value = $this->validatedValue($locked, $value);

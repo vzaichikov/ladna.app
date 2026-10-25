@@ -53,7 +53,7 @@ class FestivalEntryWorkflowState
                 $lockedReason = __('app.festival_full_confirm_qualification_incomplete');
             } elseif ($step->workflowStep->opens_at?->greaterThan($at)) {
                 $lockedReason = __('app.festival_step_locked_until', ['date' => $step->workflowStep->opens_at->timezone($entry->edition->timezone)->format('d.m.Y H:i')]);
-            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->correction_due_at?->lessThan($at)) {
+            } elseif ($step->status === FestivalEntryStepStatus::ChangesRequested && $step->correction_due_at?->lessThanOrEqualTo($at)) {
                 $lockedReason = __('app.festival_step_correction_expired');
             } elseif ($step->workflowStep->due_at?->lessThan($at) && $step->status === FestivalEntryStepStatus::Draft) {
                 $lockedReason = __('app.festival_step_deadline_expired');
@@ -65,15 +65,16 @@ class FestivalEntryWorkflowState
             $mutable = ! $summary
                 && ! $terminal
                 && $available
+                && (! $step->isTechnicalCorrection() || $step->correction_due_at !== null)
                 && in_array($step->status, [FestivalEntryStepStatus::Draft, FestivalEntryStepStatus::ChangesRequested], true);
             $requirementMutability = $step->requirements
                 ->mapWithKeys(fn (FestivalEntryRequirement $requirement): array => [
-                    $requirement->id => $this->requirementIsMutableForState($entry, $requirement, $mutable),
+                    $requirement->id => $this->requirementIsMutableForState($entry, $requirement, $step, $mutable),
                 ])
                 ->all();
             $editableUntil = $step->requirements
                 ->mapWithKeys(fn (FestivalEntryRequirement $requirement): array => [
-                    $requirement->id => $this->deadlineResolver->allowsPostConfirmationEdits($requirement->definition)
+                    $requirement->id => ! $step->isTechnicalCorrection() && $this->deadlineResolver->allowsPostConfirmationEdits($requirement->definition)
                         ? $this->deadlineResolver->editableUntil($requirement->definition)
                         : null,
                 ])
@@ -126,6 +127,12 @@ class FestivalEntryWorkflowState
         abort_unless($requirement->entryStep && $requirement->entryStep->festival_entry_id === $requirement->entry->id, 404);
         $state = $this->forEntry($requirement->entry)->first(fn (array $state): bool => $state['step']->is($requirement->entryStep));
         abort_unless($state, 409);
+
+        if ($requirement->entryStep->isTechnicalCorrection()) {
+            abort_unless($state['mutable'] && $requirement->entryStep->correction_due_at?->isFuture(), 409, __('app.festival_field_editing_unavailable'));
+
+            return false;
+        }
 
         if ($requirement->entry->status !== FestivalEntryStatus::ChangesPending
             && $state['mutable']
@@ -200,8 +207,12 @@ class FestivalEntryWorkflowState
         })->values();
     }
 
-    private function requirementIsMutableForState(FestivalEntry $entry, FestivalEntryRequirement $requirement, bool $stepMutable): bool
+    private function requirementIsMutableForState(FestivalEntry $entry, FestivalEntryRequirement $requirement, FestivalEntryStep $step, bool $stepMutable): bool
     {
+        if ($step->isTechnicalCorrection()) {
+            return $stepMutable;
+        }
+
         if ($entry->status !== FestivalEntryStatus::ChangesPending
             && $stepMutable
             && ! $this->deadlineResolver->dueAt($requirement->definition)?->isPast()) {

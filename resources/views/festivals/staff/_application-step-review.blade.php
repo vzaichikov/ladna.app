@@ -123,4 +123,80 @@
             <p class="mt-3 rounded-xl bg-sky-50 p-4 text-sm font-semibold text-sky-800">{{ __('app.festival_summary_awaiting_title') }}</p>
         @endif
     @endif
+
+    @php
+        $approvedCorrectionSteps = $entry->steps->filter(fn ($step): bool => $step->canReturnForCorrection($entry));
+    @endphp
+    @if ($approvedCorrectionSteps->isNotEmpty())
+        <div class="mt-5 border-t border-stone-200 pt-5">
+            <h4 class="text-sm font-semibold text-slate-950">{{ __('app.festival_approved_step_corrections') }}</h4>
+            <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_approved_step_corrections_help') }}</p>
+            <div class="mt-3 space-y-3">
+                @foreach ($approvedCorrectionSteps as $correctionStep)
+                    @php
+                        $correctionDecisionConfig = [
+                            'request_changes' => [
+                                'button_label' => __('app.festival_review_return_for_correction'),
+                                'button_variant' => 'warning',
+                                'confirm_title' => __('app.festival_review_return_confirm_title'),
+                                'confirm_body' => __('app.festival_approved_step_correction_confirm_copy'),
+                                'confirm_accept' => __('app.festival_review_return_for_correction'),
+                                'confirm_icon' => 'undo-2',
+                                'confirm_variant' => 'warning',
+                                'comment_required' => true,
+                                'deadline_required' => true,
+                            ],
+                        ];
+                        $correctionConfirmationDetails = [[
+                            'label' => __('app.festival_activity_step_label'),
+                            'value' => $correctionStep->workflowStep->title,
+                        ]];
+                    @endphp
+                    <details class="rounded-xl border border-stone-200 bg-white p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-brand-700 crm-focus">{{ __('app.festival_approved_step_correction_action', ['step' => $correctionStep->workflowStep->title]) }}</summary>
+                        <form
+                            method="POST"
+                            action="{{ route('dashboard.accounts.festivals.entry-steps.review', [$account, $edition, $entry, $correctionStep]) }}"
+                            class="mt-4 grid gap-3"
+                            data-festival-approved-step-correction="{{ $correctionStep->id }}"
+                            data-async-form
+                            data-confirm-action
+                            data-festival-decision-form
+                            data-decision-config='@json($correctionDecisionConfig)'
+                            data-decision-base-details='@json($correctionConfirmationDetails)'
+                            data-decision-comment-label="{{ __('app.festival_review_comment') }}"
+                            data-decision-deadline-label="{{ __('app.festival_correction_due_at') }} ({{ $edition->timezone }})"
+                            data-decision-empty-value="—"
+                            data-confirm-title="{{ __('app.festival_review_return_confirm_title') }}"
+                            data-confirm-body="{{ __('app.festival_approved_step_correction_confirm_copy') }}"
+                            data-confirm-accept="{{ __('app.festival_review_return_for_correction') }}"
+                            data-confirm-icon="undo-2"
+                            data-confirm-variant="warning"
+                            data-confirm-details='@json($correctionConfirmationDetails)'
+                        >
+                            @csrf
+                            @method('PATCH')
+                            <input type="hidden" name="decision" value="request_changes" data-festival-decision>
+                            <label>
+                                <span class="crm-label">{{ __('app.festival_correction_due_at') }} ({{ $edition->timezone }})</span>
+                                <input type="datetime-local" name="correction_due_at" min="{{ now()->timezone($edition->timezone)->format('Y-m-d\TH:i') }}" required class="crm-field" data-festival-decision-deadline>
+                                <span data-async-error-for="correction_due_at"></span>
+                            </label>
+                            <label>
+                                <span class="crm-label">{{ __('app.festival_review_comment') }}</span>
+                                <textarea name="comment" rows="3" maxlength="5000" required class="crm-field" data-festival-decision-comment></textarea>
+                                <span class="mt-1 block text-sm text-slate-500">{{ __('app.festival_approved_step_correction_comment_help') }}</span>
+                                <span data-async-error-for="comment"></span>
+                            </label>
+                            <div>
+                                <x-ui.button type="submit" variant="warning" data-festival-decision-submit>
+                                    <span data-festival-decision-submit-label>{{ __('app.festival_review_return_for_correction') }}</span>
+                                </x-ui.button>
+                            </div>
+                        </form>
+                    </details>
+                @endforeach
+            </div>
+        </div>
+    @endif
 </section>

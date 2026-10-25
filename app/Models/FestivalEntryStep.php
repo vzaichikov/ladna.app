@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
+use App\Enums\FestivalWorkflowReviewEffect;
+use App\Enums\FestivalWorkflowStepType;
 use Database\Factories\FestivalEntryStepFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,6 +29,29 @@ class FestivalEntryStep extends Model
             'reviewed_at' => 'datetime',
             'correction_due_at' => 'datetime',
         ];
+    }
+
+    public function isTechnicalForm(): bool
+    {
+        return $this->workflowStep->type === FestivalWorkflowStepType::Form
+            && $this->workflowStep->review_effect === FestivalWorkflowReviewEffect::None;
+    }
+
+    public function isTechnicalCorrection(): bool
+    {
+        return $this->status === FestivalEntryStepStatus::ChangesRequested && $this->isTechnicalForm();
+    }
+
+    public function canReturnForCorrection(?FestivalEntry $entry = null): bool
+    {
+        return $this->status === FestivalEntryStepStatus::Approved
+            && $this->isTechnicalForm()
+            && in_array(($entry ?? $this->entry)->status, [
+                FestivalEntryStatus::Submitted,
+                FestivalEntryStatus::UnderReview,
+                FestivalEntryStatus::Accepted,
+                FestivalEntryStatus::ChangesPending,
+            ], true);
     }
 
     public function entry(): BelongsTo

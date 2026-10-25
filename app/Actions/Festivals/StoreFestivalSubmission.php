@@ -4,7 +4,9 @@ namespace App\Actions\Festivals;
 
 use App\Enums\FestivalRequirementInputType;
 use App\Enums\FestivalRequirementStatus;
+use App\Models\FestivalEntry;
 use App\Models\FestivalEntryRequirement;
+use App\Models\FestivalEntryStep;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSubmission;
 use App\Support\Festivals\FestivalEntryWorkflowState;
@@ -81,6 +83,10 @@ class StoreFestivalSubmission
         $previousPath = null;
         try {
             $submission = DB::transaction(function () use ($requirement, $portalUser, $file, $path, $mimeType, $duration, &$previousPath): FestivalSubmission {
+                FestivalEntry::query()->whereKey($requirement->festival_entry_id)->lockForUpdate()->firstOrFail();
+                if ($requirement->festival_entry_step_id !== null) {
+                    FestivalEntryStep::query()->whereKey($requirement->festival_entry_step_id)->lockForUpdate()->firstOrFail();
+                }
                 $locked = FestivalEntryRequirement::query()->with(['definition', 'entry.edition', 'entry.steps.workflowStep', 'entryStep.workflowStep'])->whereKey($requirement->id)->lockForUpdate()->firstOrFail();
                 if ($locked->entryStep) {
                     $postConfirmationChange = $this->workflowState->assertRequirementMutable($locked);

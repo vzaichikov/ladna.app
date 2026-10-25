@@ -78,7 +78,7 @@ class SubmitFestivalEntryStep
             }
 
             $postConfirmationReview = $entry->status === FestivalEntryStatus::ChangesPending;
-            $automatic = ! $postConfirmationReview && $step->workflowStep->review_mode === FestivalWorkflowReviewMode::Automatic;
+            $automatic = ! $postConfirmationReview && ! $step->isTechnicalCorrection() && $step->workflowStep->review_mode === FestivalWorkflowReviewMode::Automatic;
             $step->forceFill([
                 'status' => $automatic ? FestivalEntryStepStatus::Approved : FestivalEntryStepStatus::Submitted,
                 'submitted_at' => now(),
