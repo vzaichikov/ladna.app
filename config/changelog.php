@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.174.1',
+                'date' => '2026-10-29',
+                'title' => 'Trial class passes after room rentals',
+                'items' => [
+                    'Previous room rental bookings no longer block a trial class pass purchase, including when the rental has been paid. All other trial eligibility conditions remain unchanged.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.174.0',
                 'date' => '2026-10-25',
                 'title' => 'Corrections for approved Festival technical steps',
@@ -1608,6 +1617,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.174.1',
+                'date' => '2026-10-29',
+                'title' => 'Пробні абонементи після оренди залу',
+                'items' => [
+                    'Попередні записи на оренду залу більше не блокують придбання пробного абонемента, зокрема якщо оренду вже оплачено. Усі інші умови доступності пробного залишаються без змін.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.174.0',
                 'date' => '2026-10-25',

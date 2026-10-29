@@ -8,6 +8,7 @@ use App\Enums\AccountRole;
 use App\Enums\CustomerClassPassAdjustmentType;
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerClassPassStatus;
+use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\ClassBooking;
@@ -22,6 +23,7 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use App\Models\TrainerType;
 use App\Models\User;
+use App\Support\TrialClassPassEligibility;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -370,6 +372,76 @@ class CustomerClassPassTest extends TestCase
             $plan,
             source: 'online_payment',
         );
+    }
+
+    public function test_trial_class_pass_ignores_paid_rental_bookings_and_their_used_reservations(): void
+    {
+        [, $account, $customer, , $scheduledClass] = $this->passContext(isTrial: true);
+        $scheduledClass->classType->update(['schedule_kind' => ScheduleKind::RoomRental]);
+        $rentalPlan = ClassPassPlan::factory()->for($account)->create(['schedule_kind' => ScheduleKind::RoomRental]);
+        $rentalPass = CustomerClassPass::factory()->for($account)->for($customer)
+            ->for($rentalPlan, 'classPassPlan')->create([
+                'is_paid' => true,
+                'status' => CustomerClassPassStatus::UsedUp,
+                'is_active' => false,
+            ]);
+        CustomerPurchase::factory()->for($account)->for($customer)->for($rentalPlan, 'classPassPlan')->create([
+            'customer_class_pass_id' => $rentalPass->id,
+            'schedule_kind' => ScheduleKind::RoomRental->value,
+            'status' => 'payment_paid',
+            'paid_at' => now(),
+        ]);
+        foreach (['booked', 'attended'] as $index => $status) {
+            $rentalClass = $this->matchingScheduledClass($scheduledClass, '2026-06-'.(21 + $index).' 10:00:00');
+            $booking = ClassBooking::factory()->for($account)->for($customer)->for($rentalClass, 'scheduledClass')->create(['status' => $status]);
+            $rentalPass->reservations()->create([
+                'account_id' => $account->id,
+                'class_booking_id' => $booking->id,
+                'scheduled_class_id' => $rentalClass->id,
+                'status' => CustomerClassPassReservationStatus::Used,
+                'reserved_at' => now(),
+                'used_at' => now(),
+            ]);
+        }
+
+        $eligibility = app(TrialClassPassEligibility::class);
+        foreach (TrialClassPassEligibility::sources() as $source) {
+            foreach ([null, now()] as $asOf) {
+                $result = $eligibility->evaluate($account, $customer, $source, $asOf);
+
+                $this->assertSame('eligible', $result['status']);
+                $this->assertSame(['no_existing_bookings'], $result['reason_codes']);
+                $this->assertSame(0, $result['counted_bookings_count']);
+                $this->assertSame(0, $result['active_reservations_count']);
+            }
+        }
+    }
+
+    public function test_rental_exclusion_preserves_trial_restrictions_for_group_and_private_bookings(): void
+    {
+        foreach ([ScheduleKind::GroupClass, ScheduleKind::PrivateLesson] as $scheduleKind) {
+            [, $account, $customer, , $scheduledClass] = $this->passContext(isTrial: true);
+            $scheduledClass->classType->update(['schedule_kind' => $scheduleKind]);
+            $rentalType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::RoomRental]);
+            $rentalClass = $this->matchingScheduledClass($scheduledClass, '2026-06-21 10:00:00');
+            $rentalClass->update(['class_type_id' => $rentalType->id]);
+            ClassBooking::factory()->for($account)->for($customer)->for($rentalClass)->create();
+            ClassBooking::factory()->for($account)->for($customer)->for($scheduledClass)->create(['status' => 'cancelled']);
+            $eligibility = app(TrialClassPassEligibility::class);
+
+            $manual = $eligibility->evaluate($account, $customer);
+            $this->assertSame('eligible', $manual['status']);
+            $this->assertSame(1, $manual['counted_bookings_count']);
+            $this->assertSame(['single_unreserved_booking_manual_exception'], $manual['reason_codes']);
+            $this->assertSame('ineligible', $eligibility->evaluate($account, $customer, TrialClassPassEligibility::SourceOnlinePayment)['status']);
+
+            ClassBooking::factory()->for($account)->for($customer)
+                ->for($this->matchingScheduledClass($scheduledClass, '2026-06-22 10:00:00'), 'scheduledClass')->create();
+            $manual = $eligibility->evaluate($account, $customer);
+            $this->assertSame('ineligible', $manual['status']);
+            $this->assertSame(2, $manual['counted_bookings_count']);
+            $this->assertSame(['multiple_existing_bookings'], $manual['reason_codes']);
+        }
     }
 
     public function test_customer_list_searches_by_class_pass_code(): void

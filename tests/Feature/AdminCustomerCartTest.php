@@ -2,19 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Actions\RecordManualClassBookingPayment;
 use App\Actions\RecordStudioCashEntry;
 use App\Enums\AccountRole;
 use App\Enums\IntegrationProvider;
 use App\Enums\PromoCodeDiscountType;
+use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\AccountMembership;
+use App\Models\ClassBooking;
 use App\Models\ClassPassPlan;
 use App\Models\ClassType;
 use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Models\ScheduledClass;
 use App\Models\StudioPromoCode;
 use App\Models\User;
 use App\Support\Payments\LiqPayGateway;
@@ -239,6 +243,33 @@ class AdminCustomerCartTest extends TestCase
         $input = $this->input($location, $plan, 1);
         $quote = $this->postJson($this->url($account, $customer, 'quote'), $input)->assertOk()->json();
         $this->postJson($this->url($account, $customer, 'checkout'), $this->checkout($input, $quote))->assertCreated();
+        $this->postJson($this->url($account, $customer, 'quote'), $input)->assertUnprocessable();
+    }
+
+    public function test_trial_cart_allows_purchase_after_paid_room_rental_and_still_rejects_repeat(): void
+    {
+        [$owner, $account, $location, $plan, $customer] = $this->context();
+        $plan->update(['is_trial' => true]);
+        $rentalType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::RoomRental]);
+        $rentalClass = ScheduledClass::factory()->recycle([$account, $location])->for($account)->for($location)->for($rentalType, 'classType')->create([
+            'starts_at' => now()->subDays(2),
+            'ends_at' => now()->subDays(2)->addHour(),
+        ]);
+        $booking = ClassBooking::factory()->for($account)->for($customer)->for($rentalClass, 'scheduledClass')->create([
+            'status' => 'attended',
+            'attended_at' => $rentalClass->starts_at,
+        ]);
+        $rentalPayment = app(RecordManualClassBookingPayment::class)->execute($account, $booking, 70000, $owner);
+        $this->assertTrue($rentalPayment->isPaid());
+        $this->actingAs($owner);
+        $input = $this->input($location, $plan, 1);
+
+        $quote = $this->postJson($this->url($account, $customer, 'quote'), $input)->assertOk()->json();
+        $this->postJson($this->url($account, $customer, 'checkout'), $this->checkout($input, $quote))
+            ->assertCreated()->assertJsonPath('paid', true);
+
+        $this->assertSame($plan->id, $customer->customerClassPasses()->sole()->class_pass_plan_id);
+        $this->assertTrue($rentalPayment->fresh()->isPaid());
         $this->postJson($this->url($account, $customer, 'quote'), $input)->assertUnprocessable();
     }
 

@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\CustomerClassPassReservationStatus;
 use App\Enums\CustomerPurchaseStatus;
+use App\Enums\ScheduleKind;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\ClassBooking;
@@ -235,7 +236,11 @@ class TrialClassPassEligibility
     ): Builder {
         $query = ClassBooking::query()
             ->whereBelongsTo($account)
-            ->whereBelongsTo($customer);
+            ->whereBelongsTo($customer)
+            ->whereDoesntHave(
+                'scheduledClass.classType',
+                fn (Builder $query) => $query->where('schedule_kind', ScheduleKind::RoomRental->value),
+            );
 
         if ($asOf === null) {
             return $query->notCorrectedRemoved();
