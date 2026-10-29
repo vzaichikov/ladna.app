@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.174.2',
+                'date' => '2026-10-29',
+                'title' => 'Trainer levels in the public price list',
+                'items' => [
+                    'Trainer levels on studio price cards now display their configured color and icon, matching the studio dashboard.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.174.1',
                 'date' => '2026-10-29',
                 'title' => 'Trial class passes after room rentals',
@@ -1617,6 +1626,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.174.2',
+                'date' => '2026-10-29',
+                'title' => 'Рівні тренерів у публічному прайсі',
+                'items' => [
+                    'Рівні тренерів у картках прайсу студії тепер показують налаштовані колір та іконку, як у кабінеті студії.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.174.1',
                 'date' => '2026-10-29',

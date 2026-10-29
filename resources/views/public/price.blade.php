@@ -176,7 +176,7 @@
                                                         </button>
                                                     @endif
                                                     @foreach ($classPassPlan->trainerTypes as $trainerType)
-                                                        <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{{ $trainerType->name }}</span>
+                                                        <x-ui.trainer-type-badge :trainer-type="$trainerType" />
                                                     @endforeach
                                                     @foreach ($classPassPlan->rooms as $room)
                                                         <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1">{{ $room->name }}</span>
