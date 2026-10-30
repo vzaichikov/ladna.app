@@ -453,7 +453,6 @@ class CustomerBookingLedgerInvestigation
             'rule_reference_key' => 'trial_class_pass_eligibility',
             'evidence_complete' => $trialPlanCount === 0
                 || ! $isHistoricalReconstruction
-                || $source === TrialClassPassEligibility::SourceOnlinePayment
                 || $eligibility['counted_bookings_count'] !== 1,
             'historical_reconstruction' => [
                 'requested' => $isHistoricalReconstruction,

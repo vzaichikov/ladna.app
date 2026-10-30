@@ -2396,6 +2396,7 @@ class LadnaOpenApiSpec
                                 'multiple_existing_bookings',
                                 'active_reservation_exists',
                                 'single_unreserved_booking_manual_exception',
+                                'single_future_unreserved_booking_online_exception',
                             ],
                         ],
                     ],

@@ -355,9 +355,10 @@ class CustomerClassPassTest extends TestCase
         $this->assertSame($customerClassPass->id, $booking->classPassReservation()->firstOrFail()->customer_class_pass_id);
     }
 
-    public function test_online_trial_class_pass_remains_blocked_after_any_booking(): void
+    public function test_online_trial_class_pass_remains_blocked_after_a_past_booking(): void
     {
         [, $account, $customer, $plan, $scheduledClass] = $this->passContext(isTrial: true);
+        $scheduledClass->update(['starts_at' => now()->subHours(2), 'ends_at' => now()->subHour()]);
         ClassBooking::factory()
             ->for($account)
             ->for($scheduledClass)
@@ -422,6 +423,7 @@ class CustomerClassPassTest extends TestCase
         foreach ([ScheduleKind::GroupClass, ScheduleKind::PrivateLesson] as $scheduleKind) {
             [, $account, $customer, , $scheduledClass] = $this->passContext(isTrial: true);
             $scheduledClass->classType->update(['schedule_kind' => $scheduleKind]);
+            $scheduledClass->update(['starts_at' => now()->subHours(2), 'ends_at' => now()->subHour()]);
             $rentalType = ClassType::factory()->for($account)->create(['schedule_kind' => ScheduleKind::RoomRental]);
             $rentalClass = $this->matchingScheduledClass($scheduledClass, '2026-06-21 10:00:00');
             $rentalClass->update(['class_type_id' => $rentalType->id]);

@@ -218,6 +218,7 @@ class ApiDocumentationTest extends TestCase
             ->assertJsonPath('components.schemas.McpCustomerBookingInvestigationArguments.properties.source.enum.1', 'online_payment')
             ->assertJsonPath('components.schemas.McpCustomerHistorySummary.properties.counted_bookings_count.type', 'integer')
             ->assertJsonPath('components.schemas.McpTrialEligibility.properties.status.enum.2', 'not_configured')
+            ->assertJsonPath('components.schemas.McpTrialEligibility.properties.reason_codes.items.enum.6', 'single_future_unreserved_booking_online_exception')
             ->assertJsonPath('components.schemas.McpTrialEligibility.properties.trial_plans.properties.items.maxItems', 20)
             ->assertJsonPath('components.schemas.McpTrialPlanCandidate.properties.price_cents.type', 'integer')
             ->assertJsonPath('components.schemas.McpManualTrialOverride.properties.status.enum.2', 'actor_permissions_not_evaluated')

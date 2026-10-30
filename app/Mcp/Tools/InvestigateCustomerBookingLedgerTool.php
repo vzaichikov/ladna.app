@@ -96,7 +96,7 @@ class InvestigateCustomerBookingLedgerTool extends Tool
             'from_date' => $schema->string()->format('date')->description('Optional first detailed-timeline date in YYYY-MM-DD, interpreted in the studio timezone.'),
             'to_date' => $schema->string()->format('date')->description('Optional last detailed-timeline date in YYYY-MM-DD, interpreted in the studio timezone. Maximum period is 366 days.'),
             'as_of' => $schema->string()->format('date-time')->description('Optional RFC3339 timestamp at or before now for all-time history and trial eligibility, interpreted in the studio timezone. Defaults to now.'),
-            'source' => $schema->string()->enum(TrialClassPassEligibility::sources())->default(TrialClassPassEligibility::SourceManual)->description('Trial issuance path to evaluate. Manual permits the single-unreserved-booking exception; online payment does not.'),
+            'source' => $schema->string()->enum(TrialClassPassEligibility::sources())->default(TrialClassPassEligibility::SourceManual)->description('Trial issuance path to evaluate. Room rentals do not count. Manual permits one unreserved booking; online payment permits it only when the class starts after the evaluation time.'),
         ];
     }
 

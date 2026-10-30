@@ -362,7 +362,7 @@ class CustomerBookingLedgerInvestigationTest extends TestCase
             $eligibility->evaluate($account, $customerWithOneBooking)['reason_codes'][0],
         );
         $this->assertSame(
-            'existing_booking_non_manual',
+            'single_future_unreserved_booking_online_exception',
             $eligibility->evaluate(
                 $account,
                 $customerWithOneBooking,

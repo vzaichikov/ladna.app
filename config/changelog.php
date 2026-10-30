@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.175.0',
+                'date' => '2026-10-30',
+                'title' => 'Pay online for a trial after booking your first class',
+                'items' => [
+                    'Customers can buy a trial class pass online after booking one future class, provided no pass session is reserved or used for it. Other trial eligibility conditions remain unchanged.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.174.2',
                 'date' => '2026-10-29',
                 'title' => 'Trainer levels in the public price list',
@@ -1626,6 +1635,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.175.0',
+                'date' => '2026-10-30',
+                'title' => 'Онлайн-оплата пробного після запису на перше заняття',
+                'items' => [
+                    'Клієнт може придбати пробний абонемент онлайн після запису на одне майбутнє заняття, якщо для нього ще не зарезервовано й не списано заняття з абонемента. Інші умови доступності пробного залишаються без змін.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.174.2',
                 'date' => '2026-10-29',

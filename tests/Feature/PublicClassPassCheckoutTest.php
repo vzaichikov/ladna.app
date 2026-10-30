@@ -15,6 +15,7 @@ use App\Models\Customer;
 use App\Models\CustomerPurchase;
 use App\Models\IntegrationSetting;
 use App\Models\Location;
+use App\Models\ScheduledClass;
 use App\Support\PublicClassPassCheckoutContext;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Request;
@@ -161,12 +162,47 @@ class PublicClassPassCheckoutTest extends TestCase
             ->assertSee($purchase->customerClassPass->code);
     }
 
+    public function test_online_trial_checkout_accepts_one_future_booking_without_a_pass_reservation(): void
+    {
+        [$account, $location, $plan, $customer] = $this->checkoutContext(['is_trial' => true]);
+        $class = ScheduledClass::factory()->recycle([$account, $location])->for($account)->for($location)
+            ->for($plan->classTypes()->firstOrFail(), 'classType')->create([
+                'starts_at' => now()->addDay(),
+                'ends_at' => now()->addDay()->addHour(),
+            ]);
+        ClassBooking::factory()->for($account)->for($customer)->for($class, 'scheduledClass')->create();
+        $this->accountIntegration($account, IntegrationProvider::Monopay, ['api_token' => 'mono-token']);
+        Http::preventStrayRequests();
+        Http::fake([
+            'api.monobank.ua/api/merchant/invoice/create' => Http::response([
+                'invoiceId' => 'future-booking-trial-invoice',
+                'pageUrl' => 'https://pay.monobank.ua/invoice/future-booking-trial-invoice',
+                'status' => 'created',
+            ]),
+        ]);
+        $checkoutUrl = $this->checkoutUrl($account, $location, $plan);
+        $this->actingAs($customer, 'customer')->get($checkoutUrl)
+            ->assertOk()->assertViewHas('trialIsAvailable', true)->assertDontSee(__('app.trial_class_pass_not_available'));
+
+        $this->post(route('public.class-pass-plans.checkout.store', [$account->slug, $location->slug, $plan->slug]), [
+            'studio_rules_accepted' => '1',
+            'provider' => IntegrationProvider::Monopay->value,
+        ])->assertRedirect('https://pay.monobank.ua/invoice/future-booking-trial-invoice');
+
+        $this->assertNotNull($customer->purchases()->sole()->trial_eligibility_validated_at);
+    }
+
     public function test_ineligible_trial_is_rejected_before_a_purchase_is_created(): void
     {
         [$account, $location, $plan, $customer] = $this->checkoutContext(['is_trial' => true]);
+        $pastClass = ScheduledClass::factory()->for($account)->create([
+            'starts_at' => now()->subHours(2),
+            'ends_at' => now()->subHour(),
+        ]);
         ClassBooking::factory()->create([
             'account_id' => $account->id,
             'customer_id' => $customer->id,
+            'scheduled_class_id' => $pastClass->id,
         ]);
         $this->accountIntegration($account, IntegrationProvider::Liqpay, [
             'public_key' => 'public-key',

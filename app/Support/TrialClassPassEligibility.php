@@ -79,6 +79,16 @@ class TrialClassPassEligibility
             return $this->result('eligible', 'no_existing_bookings', 0, 0);
         }
 
+        if ($source === self::SourceOnlinePayment
+            && $bookingCount === 1
+            && $activeReservationsCount === 0
+            && (clone $bookings)->whereHas(
+                'scheduledClass',
+                fn (Builder $query) => $query->where('starts_at', '>', ($asOf ?? now())->copy()->utc()),
+            )->exists()) {
+            return $this->result('eligible', 'single_future_unreserved_booking_online_exception', 1, 0);
+        }
+
         if ($source !== self::SourceManual) {
             return $this->result(
                 'ineligible',

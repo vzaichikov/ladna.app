@@ -5046,7 +5046,7 @@ return [
     'pass_effect' => 'Class-pass effect',
     'pass_effect_return_session' => 'Return the consumed session',
     'pass_effect_keep_consumed' => 'Keep the session consumed',
-    'trial_class_pass_not_available' => 'Trial class pass is available only before the first booking.',
+    'trial_class_pass_not_available' => 'Trial class pass is not available for the current booking history.',
     'trial_class_pass_override_title' => 'Audited trial exception',
     'trial_class_pass_override_warning' => 'This customer does not meet the normal trial rule. Use this exception only after a human review. The comment and issuer will be stored permanently in the class-pass history.',
     'trial_class_pass_override_checkbox' => 'Issue this trial class pass as an audited exception',

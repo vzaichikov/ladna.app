@@ -238,6 +238,12 @@ class AdminCustomerCartTest extends TestCase
     {
         [$owner, $account, $location, $plan, $customer] = $this->context();
         $plan->update(['is_trial' => true]);
+        $class = ScheduledClass::factory()->recycle([$account, $location])->for($account)->for($location)
+            ->for($plan->classTypes()->firstOrFail(), 'classType')->create([
+                'starts_at' => now()->addDay(),
+                'ends_at' => now()->addDay()->addHour(),
+            ]);
+        ClassBooking::factory()->for($account)->for($customer)->for($class, 'scheduledClass')->create();
         $this->actingAs($owner);
         $this->postJson($this->url($account, $customer, 'quote'), $this->input($location, $plan, 2))->assertUnprocessable();
         $input = $this->input($location, $plan, 1);

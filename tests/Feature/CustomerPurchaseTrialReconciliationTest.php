@@ -86,12 +86,37 @@ class CustomerPurchaseTrialReconciliationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_trial_purchase_with_one_future_booking_can_complete_after_the_class_starts(): void
+    {
+        Carbon::setTestNow('2026-10-30 13:00:00');
+        $context = $this->context();
+        $booking = $this->booking($context);
+        $booking->scheduledClass->update(['starts_at' => now()->addMinute(), 'ends_at' => now()->addHour()]);
+
+        try {
+            $purchase = app(CreateCustomerPurchase::class)->execute(
+                $context['account'], $context['customer'], $context['plan'], IntegrationProvider::Monopay, $context['location'],
+            );
+            $this->assertNotNull($purchase->trial_eligibility_validated_at);
+
+            Carbon::setTestNow(now()->addMinutes(10));
+            $completed = app(CompleteCustomerPurchase::class)->execute($purchase, $this->paidCallback($purchase));
+
+            $this->assertSame('payment_paid', $completed->status->value);
+            $this->assertNotNull($completed->customer_class_pass_id);
+            $this->assertSame($completed->customer_class_pass_id, $booking->classPassReservation()->sole()->customer_class_pass_id);
+            $this->assertSame(0, CustomerClassPassAdjustment::whereBelongsTo($context['account'])->count());
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_paid_trial_requires_and_records_an_authorized_audited_exception(): void
     {
         $context = $this->context();
         $owner = User::factory()->create(['name' => 'Auditing Owner']);
         $context['account']->addOwner($owner);
-        $this->booking($context);
+        $this->booking($context)->scheduledClass->update(['starts_at' => now()->subHours(2), 'ends_at' => now()->subHour()]);
         $purchase = CustomerPurchase::factory()
             ->for($context['account'])
             ->for($context['customer'])
@@ -180,7 +205,7 @@ class CustomerPurchaseTrialReconciliationTest extends TestCase
         $context = $this->context();
         $owner = User::factory()->create(['name' => 'Command Audit Owner']);
         $context['account']->addOwner($owner);
-        $this->booking($context);
+        $this->booking($context)->scheduledClass->update(['starts_at' => now()->subHours(2), 'ends_at' => now()->subHour()]);
         $purchase = CustomerPurchase::factory()
             ->for($context['account'])
             ->for($context['customer'])
@@ -433,7 +458,10 @@ class CustomerPurchaseTrialReconciliationTest extends TestCase
         $context = $this->context();
         $owner = User::factory()->create();
         $context['account']->addOwner($owner);
-        $this->booking($context);
+        $this->booking($context)->scheduledClass->update([
+            'starts_at' => now()->subHours(2),
+            'ends_at' => now()->subHour(),
+        ]);
         $purchase = CustomerPurchase::factory()
             ->for($context['account'])
             ->for($context['customer'])
