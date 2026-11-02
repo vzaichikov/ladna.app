@@ -23,6 +23,7 @@ class FestivalGoogleEmailPrefill
         $setting = $this->availability->googleSetting();
         abort_unless($setting, 404);
         abort_unless($edition->account_id === $account->id
+            && ! $edition->is_private
             && in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
             && $edition->ends_at->isFuture()
             && $edition->admissionTypes()->availableForSale()->exists(), 404);
@@ -66,7 +67,7 @@ class FestivalGoogleEmailPrefill
             ->firstOrFail();
         $edition = FestivalEdition::query()
             ->whereBelongsTo($account)
-            ->published()
+            ->published()->publiclyVisible()
             ->where('slug', $payload['edition_slug'] ?? null)
             ->firstOrFail();
         $checkoutDraft = is_array($payload['checkout_draft'] ?? null) ? $payload['checkout_draft'] : [];

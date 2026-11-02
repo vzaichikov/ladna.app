@@ -102,6 +102,7 @@ class FestivalChargeRecoveryController extends Controller
         abort_unless($account instanceof Account && $portalUser instanceof FestivalPortalUser
             && $portalUser->account_id === $account->id
             && $entry->account_id === $account->id && $entry->festival_portal_user_id === $portalUser->id
+            && $entry->edition()->publiclyVisible()->exists()
             && $charge->account_id === $account->id && $charge->festival_entry_id === $entry->id, 404);
 
         return $account;

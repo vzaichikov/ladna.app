@@ -135,7 +135,7 @@ class FestivalTimelineController extends Controller
     {
         $account = $request->attributes->get('festivalAccount');
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->firstOrFail();
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)->firstOrFail();
         $data = $this->publicFragmentData($edition, $account);
 
         return response()

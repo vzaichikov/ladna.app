@@ -8,6 +8,7 @@ use App\Models\FestivalSponsor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -21,15 +22,18 @@ class SaveFestivalSponsor
         $oldPath = null;
 
         try {
-            if ($logo !== null) {
-                $newPath = $logo->store("festivals/{$account->id}/{$edition->id}/sponsors", 'public');
-
-                if (! is_string($newPath)) {
-                    throw new RuntimeException('Unable to store the Festival sponsor logo.');
+            $sponsor = DB::transaction(function () use ($account, $edition, $sponsor, $input, $logo, &$newPath, &$oldPath): FestivalSponsor {
+                $lockedEdition = FestivalEdition::query()->whereBelongsTo($account)->whereKey($edition->id)->lockForUpdate()->firstOrFail();
+                if ($lockedEdition->is_private && $logo !== null) {
+                    throw ValidationException::withMessages(['logo' => __('app.festival_private_marketing_upload')]);
                 }
-            }
+                if ($logo !== null) {
+                    $newPath = $logo->store("festivals/{$account->id}/{$edition->id}/sponsors", 'public');
+                    if (! is_string($newPath)) {
+                        throw new RuntimeException('Unable to store the Festival sponsor logo.');
+                    }
+                }
 
-            $sponsor = DB::transaction(function () use ($account, $edition, $sponsor, $input, $newPath, &$oldPath): FestivalSponsor {
                 $savedSponsor = $sponsor->exists
                     ? FestivalSponsor::query()
                         ->whereBelongsTo($account)

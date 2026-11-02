@@ -30,7 +30,7 @@ class FestivalAdmissionController extends Controller
     {
         $account = $request->attributes->get('festivalAccount');
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->with('series')->firstOrFail();
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)->with('series')->firstOrFail();
         $input = $request->orderInput();
         $input['locale'] = app()->getLocale();
         $hadTelegramHandoff = $telegramHandoff->hasSession($request, $edition);
@@ -93,7 +93,7 @@ class FestivalAdmissionController extends Controller
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
         $edition = FestivalEdition::query()
             ->whereBelongsTo($account)
-            ->published()
+            ->published()->publiclyVisible()
             ->where('slug', $editionSlug)
             ->firstOrFail();
 

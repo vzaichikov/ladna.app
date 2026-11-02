@@ -117,7 +117,7 @@ class FestivalWorkspaceComposer
         ];
 
         $links = [
-            ...(in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress, FestivalEditionStatus::Completed], true) ? [[
+            ...(! $edition->is_private && in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress, FestivalEditionStatus::Completed], true) ? [[
                 'label' => __('app.festival_public_page'),
                 'description' => __('app.festival_public_page_sidebar_help'),
                 'icon' => 'globe',

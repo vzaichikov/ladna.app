@@ -39,7 +39,7 @@ class PublicStudioLandingController extends Controller
 
         if ($account->enable_festivals) {
             $festivals = $account->festivalEditions()
-                ->published()
+                ->published()->publiclyVisible()
                 ->upcoming()
                 ->where('show_on_studio_page', true)
                 ->select(['id', 'account_id', 'festival_series_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])

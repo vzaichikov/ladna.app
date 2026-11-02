@@ -33,7 +33,7 @@ class FestivalPublicController extends Controller
     public function index(Request $request, string $accountSlug): View
     {
         $account = $this->account($request, $accountSlug);
-        $editions = FestivalEdition::query()->whereBelongsTo($account)->published()->with('series')->orderBy('starts_at')->paginate(24);
+        $editions = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->with('series')->orderBy('starts_at')->paginate(24);
 
         return view('festivals.public.index', compact('account', 'editions'));
     }
@@ -48,7 +48,7 @@ class FestivalPublicController extends Controller
         CustomerAuthAvailability $authAvailability,
     ): View {
         $account = $this->account($request, $accountSlug);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)
             ->with(['series.telegramBotInstallation', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
@@ -221,6 +221,7 @@ class FestivalPublicController extends Controller
         $order = FestivalTicketOrder::query()
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->with('edition:id,status,cancelled_at')
             ->with(['tickets' => fn ($query) => $query
                 ->where('status', FestivalTicketStatus::Valid->value)
@@ -258,6 +259,7 @@ class FestivalPublicController extends Controller
         $order = FestivalTicketOrder::query()
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->where('status', FestivalTicketOrderStatus::Paid->value)
             ->whereHas('edition', fn ($query) => $query
                 ->whereNull('cancelled_at')
@@ -294,6 +296,7 @@ class FestivalPublicController extends Controller
         $order = FestivalTicketOrder::query()
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->where('status', FestivalTicketOrderStatus::Paid->value)
             ->whereHas('edition', fn ($query) => $query
                 ->whereNull('cancelled_at')
@@ -320,6 +323,7 @@ class FestivalPublicController extends Controller
         return FestivalTicketOrder::query()
             ->whereBelongsTo($account)
             ->where('access_token_hash', hash('sha256', $accessToken))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->with($with)
             ->firstOrFail();
     }

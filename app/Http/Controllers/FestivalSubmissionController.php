@@ -23,7 +23,8 @@ class FestivalSubmissionController extends Controller
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
         abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser, 404);
-        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_portal_user_id === $portalUser->id && $festivalEntryRequirement->festival_entry_id === $festivalEntry->id, 404);
+        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_portal_user_id === $portalUser->id && $festivalEntryRequirement->festival_entry_id === $festivalEntry->id
+            && $festivalEntry->edition()->publiclyVisible()->exists(), 404);
         $wasAccepted = $festivalEntry->status === FestivalEntryStatus::Accepted;
         $store->execute($festivalEntryRequirement, $portalUser, $request->file('file'));
 
@@ -39,7 +40,8 @@ class FestivalSubmissionController extends Controller
         $account = $request->attributes->get('festivalAccount');
         $portalUser = $request->user('festival');
         abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser, 404);
-        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_portal_user_id === $portalUser->id && $festivalEntryRequirement->festival_entry_id === $festivalEntry->id, 404);
+        abort_unless($festivalEntry->account_id === $account->id && $festivalEntry->festival_portal_user_id === $portalUser->id && $festivalEntryRequirement->festival_entry_id === $festivalEntry->id
+            && $festivalEntry->edition()->publiclyVisible()->exists(), 404);
         $festivalEntryRequirement->refresh()->load(['definition', 'participant', 'selectedHelpers', 'submissions', 'entryStep']);
         $festivalEntry->refresh()->load(['edition', 'steps.workflowStep', 'steps.requirements.definition.edition', 'steps.requirements.selectedHelpers', 'steps.requirements.submissions', 'steps.charges.paymentAllocations.attempt']);
         $selectedStep = $festivalEntry->steps->firstWhere('id', $festivalEntryRequirement->festival_entry_step_id);

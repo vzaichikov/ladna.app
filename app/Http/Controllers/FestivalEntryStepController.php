@@ -220,6 +220,7 @@ class FestivalEntryStepController extends Controller
 
     private function assertPortalEntry(FestivalEntry $entry, FestivalEntryStep $step, FestivalPortalUser $portalUser): void
     {
-        abort_unless($entry->festival_portal_user_id === $portalUser->id && $entry->account_id === $portalUser->account_id && $step->festival_entry_id === $entry->id, 404);
+        abort_unless($entry->festival_portal_user_id === $portalUser->id && $entry->account_id === $portalUser->account_id && $step->festival_entry_id === $entry->id
+            && $entry->edition()->publiclyVisible()->exists(), 404);
     }
 }

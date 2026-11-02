@@ -58,7 +58,7 @@ class FestivalTelegramLoginController extends Controller
             ->where('account_id', $account->id)
             ->where('festival_series_id', $series->id)
             ->where('slug', $editionSlug)
-            ->published()
+            ->published()->publiclyVisible()
             ->firstOrFail();
         abort_unless($handoff->consumeIntoSession($request, $series, $edition, $token), 403);
 

@@ -130,7 +130,7 @@ class FestivalPromoCodeQuoteController extends Controller
         abort_unless($attribute instanceof Account && $attribute->slug === $accountSlug, 404);
         $edition = FestivalEdition::query()
             ->whereBelongsTo($attribute)
-            ->published()
+            ->published()->publiclyVisible()
             ->where('slug', $editionSlug)
             ->with('account')
             ->firstOrFail();

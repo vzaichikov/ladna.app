@@ -59,6 +59,7 @@ class TelegramFestivalLoginTokenService
         $guest = $order->portalUser;
 
         if (! $guest
+            || $order->edition->is_private
             || $guest->role !== FestivalPortalRole::Guest
             || (int) $order->account_id !== (int) $series->account_id
             || (int) $order->edition->festival_series_id !== (int) $series->id
@@ -125,7 +126,7 @@ class TelegramFestivalLoginTokenService
             ->whereKey((int) $payload['festival_ticket_order_id'])
             ->where('account_id', $series->account_id)
             ->where('festival_portal_user_id', $guest->id)
-            ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible()->where('festival_series_id', $series->id))
             ->first();
     }
 
@@ -191,7 +192,7 @@ class TelegramFestivalLoginTokenService
             ->whereKey($targetId)
             ->where('account_id', $series->account_id)
             ->where('festival_portal_user_id', $registrant->id)
-            ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible()->where('festival_series_id', $series->id))
             ->firstOrFail();
 
         return ['festival.portal.entries.show', [$accountSlug, $entry]];
@@ -204,7 +205,7 @@ class TelegramFestivalLoginTokenService
             ->whereKey($targetId)
             ->where('account_id', $series->account_id)
             ->where('festival_series_id', $series->id)
-            ->published()
+            ->published()->publiclyVisible()
             ->firstOrFail();
 
         return ['festival.portal.entries.create', [$accountSlug, $edition->slug]];

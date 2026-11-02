@@ -58,6 +58,7 @@ class FestivalUploadController extends Controller
         $portalUser = $request->user('festival');
         abort_unless($account instanceof Account && $account->slug === $accountSlug && $portalUser instanceof FestivalPortalUser, 404);
         abort_unless($entry->account_id === $account->id && $entry->festival_portal_user_id === $portalUser->id
+            && $entry->edition()->publiclyVisible()->exists()
             && $requirement->account_id === $account->id && $requirement->festival_entry_id === $entry->id, 404);
 
         return $portalUser;

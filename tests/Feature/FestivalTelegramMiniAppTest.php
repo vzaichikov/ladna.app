@@ -255,6 +255,40 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonMissing(['title' => 'Inactive information']);
     }
 
+    public function test_privacy_hides_authorized_registrant_data_and_revokes_an_existing_entry_handoff(): void
+    {
+        [$account, $series, $edition, $installation] = $this->festival();
+        $linked = app(FestivalTelegramIdentityLinker::class)->authorizeRegistrant(
+            $series, $installation, '7002099', '7002099', '+380501234599',
+            ['first_name' => 'Олена', 'last_name' => 'Вербова', 'language_code' => 'uk'],
+        );
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $linked['registrant']->id,
+            'entry_name' => 'Прихований виступ',
+            'status' => 'accepted',
+        ]);
+        $participant = FestivalParticipant::factory()->for($linked['registrant'])->create(['account_id' => $account->id]);
+        $entry->participants()->attach($participant->id, ['account_id' => $account->id, 'sort_order' => 0]);
+        $url = app(TelegramFestivalLoginTokenService::class)->issueRegistrantUrl(
+            $series, $linked['authorization'], $linked['registrant'], 'entry', $entry->id,
+        );
+
+        $edition->update(['is_private' => true]);
+
+        $this->postJson(route('public.festival-telegram.bootstrap', [$account->slug, $series->slug]), [
+            'init_data' => $this->initData($installation, '7002099'),
+        ])->assertOk()
+            ->assertJsonPath('editions', [])
+            ->assertJsonPath('registrant.entries', [])
+            ->assertJsonPath('registrant.statistics.applications', 0)
+            ->assertJsonPath('registrant.statistics.participants', 0)
+            ->assertJsonMissing(['name' => $entry->entry_name]);
+        $this->get($url)->assertNotFound();
+    }
+
     public function test_exact_festival_includes_public_rules_categories_criteria_and_ordered_program_without_private_facts(): void
     {
         [$account, $series, $edition, $installation] = $this->festival();

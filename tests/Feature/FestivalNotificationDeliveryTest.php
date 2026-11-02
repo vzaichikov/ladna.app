@@ -123,6 +123,26 @@ class FestivalNotificationDeliveryTest extends TestCase
             ]]);
     }
 
+    public function test_private_editions_do_not_queue_notifications_and_cancel_pending_delivery(): void
+    {
+        [$account, $edition, $portalUser] = $this->festival();
+        $outbox = app(FestivalNotificationOutbox::class);
+        $pending = $outbox->queue($portalUser, $edition, FestivalNotificationType::EntrySubmitted, ['entry_code' => 'ENTRY-PRIVATE']);
+        $this->assertNotNull($pending);
+        $edition->update(['is_private' => true]);
+
+        $this->assertNull($outbox->queue($portalUser, $edition, FestivalNotificationType::EntrySubmitted, ['entry_code' => 'ENTRY-HIDDEN']));
+        $this->assertNull($outbox->queueForEntrancePasses($portalUser, $edition, 1, 'private-pass'));
+        $order = FestivalTicketOrder::factory()->create(['account_id' => $account->id, 'festival_edition_id' => $edition->id]);
+        $this->assertNull($outbox->queueForTicketOrder($order, ['tickets_count' => 1]));
+        app()->call([new SendFestivalNotification($pending->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Cancelled, $pending->refresh()->status);
+        $this->assertSame('private_festival', $pending->failure_reason);
+        $this->assertSame(1, FestivalNotification::query()->where('festival_edition_id', $edition->id)->count());
+        Mail::assertNothingSent();
+    }
+
     public function test_disabled_email_scenario_is_applied_when_queueing_and_again_before_delivery(): void
     {
         [$account, $edition, $portalUser] = $this->festival(locale: 'en');

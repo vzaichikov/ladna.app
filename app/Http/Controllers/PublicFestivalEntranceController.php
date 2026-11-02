@@ -24,7 +24,7 @@ class PublicFestivalEntranceController extends Controller
         PaymentGatewayRegistry $gateways,
     ): View {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
-        $edition = FestivalEdition::query()
+        $edition = FestivalEdition::query()->publiclyVisible()
             ->whereBelongsTo($account)
             ->where('slug', $editionSlug)
             ->whereIn('status', [FestivalEditionStatus::Published->value, FestivalEditionStatus::InProgress->value])
@@ -55,7 +55,7 @@ class PublicFestivalEntranceController extends Controller
         FestivalPaymentService $payments,
     ): RedirectResponse|View {
         $account = Account::active()->where('slug', $accountSlug)->firstOrFail();
-        $edition = FestivalEdition::query()
+        $edition = FestivalEdition::query()->publiclyVisible()
             ->whereBelongsTo($account)
             ->where('slug', $editionSlug)
             ->whereIn('status', [FestivalEditionStatus::Published->value, FestivalEditionStatus::InProgress->value])

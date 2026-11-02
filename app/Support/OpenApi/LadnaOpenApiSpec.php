@@ -1041,8 +1041,8 @@ class LadnaOpenApiSpec
         return [
             'get' => [
                 'tags' => ['Festival battles'],
-                'summary' => 'Lists ready knockout matches from published or in-progress Festival editions.',
-                'description' => 'Requires an account API token with festival_battles:operate. The token supplies the account scope. Only safe aggregate competition fields are returned; applicant contacts, credentials, judge identities, and individual judge votes are never exposed.',
+                'summary' => 'Lists ready knockout matches from published Festival editions or editions in progress, excluding private editions.',
+                'description' => 'Requires an account API token with festival_battles:operate. The token supplies the account scope. Private Festival editions are excluded. Only safe aggregate competition fields are returned; applicant contacts, credentials, judge identities, and individual judge votes are never exposed.',
                 'security' => [['AccountBearerToken' => []]],
                 'responses' => [
                     '200' => $this->festivalBattleResponse(true),
@@ -1064,6 +1064,7 @@ class LadnaOpenApiSpec
             'get' => [
                 'tags' => ['Festival battles'],
                 'summary' => 'Returns the current aggregate state of one ready or completed Festival battle.',
+                'description' => 'Matches belonging to private Festival editions return 404, including requests with a valid account API token.',
                 'security' => [['AccountBearerToken' => []]],
                 'parameters' => [$this->festivalBattleMatchParameter()],
                 'responses' => [
@@ -1086,7 +1087,7 @@ class LadnaOpenApiSpec
             'put' => [
                 'tags' => ['Festival battles'],
                 'summary' => 'Idempotently records the normalized applause score and finalizes when all four judge votes permit it.',
-                'description' => 'The two integer scores must total exactly 1,000,000. Audio is never accepted or stored. Repeat the identical PUT every five seconds after a 202 response. Ladna returns 202 while judges are incomplete or an exact 50/50 tie requires a manager jury decision, 200 after official completion, and 409 for a conflicting retry.',
+                'description' => 'The two integer scores must total exactly 1,000,000. Audio is never accepted or stored. Repeat the identical PUT every five seconds after a 202 response. Ladna returns 202 while judges are incomplete or an exact 50/50 tie requires a manager jury decision, 200 after official completion, and 409 for a conflicting retry. Matches belonging to private Festival editions return 404.',
                 'security' => [['AccountBearerToken' => []]],
                 'parameters' => [$this->festivalBattleMatchParameter()],
                 'requestBody' => [

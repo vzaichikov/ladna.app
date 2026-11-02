@@ -118,7 +118,7 @@ class FestivalTelegramMiniAppController extends Controller
                 ->whereKey($targetId)
                 ->where('account_id', $series->account_id)
                 ->where('festival_series_id', $series->id)
-                ->published()
+                ->published()->publiclyVisible()
                 ->firstOrFail();
 
             return $this->privateJson(['url' => $checkoutHandoff->issueUrl($series, $edition, $authorization)]);
@@ -131,7 +131,7 @@ class FestivalTelegramMiniAppController extends Controller
                 ->whereKey($targetId)
                 ->where('account_id', $series->account_id)
                 ->where('festival_portal_user_id', $guest->id)
-                ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
+                ->whereHas('edition', fn ($query) => $query->publiclyVisible()->where('festival_series_id', $series->id))
                 ->firstOrFail();
 
             return $this->privateJson(['url' => $loginTokens->issueOrderUrl($series, $authorization, $order)]);

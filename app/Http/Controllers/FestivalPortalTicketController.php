@@ -24,6 +24,7 @@ class FestivalPortalTicketController extends Controller
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $passes = $portalUser->entrancePasses()
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->where('festival_entrance_passes.account_id', $account->id)
             ->with(['edition.series', 'participant'])
             ->orderByDesc('festival_edition_id')
@@ -36,6 +37,7 @@ class FestivalPortalTicketController extends Controller
             ->whereIn('id', $usablePassIds)
             ->mapWithKeys(fn (FestivalEntrancePass $pass): array => [$pass->id => $qr->dataUri($pass)]);
         $friendOrders = $portalUser->purchasedTicketOrders()
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->where('account_id', $account->id)
             ->with(['edition', 'tickets'])
             ->latest('id')
@@ -60,7 +62,7 @@ class FestivalPortalTicketController extends Controller
         FestivalQrToken $qr,
     ): Response {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        abort_unless($festivalEdition->account_id === $account->id, 404);
+        abort_unless($festivalEdition->account_id === $account->id && ! $festivalEdition->is_private, 404);
         $passes = $this->usablePasses($portalUser, $festivalEdition);
         abort_if($passes->isEmpty(), 404);
         $qrCodes = $passes->mapWithKeys(fn (FestivalEntrancePass $pass): array => [$pass->id => $qr->dataUri($pass)]);
@@ -83,7 +85,7 @@ class FestivalPortalTicketController extends Controller
         FestivalNotificationOutbox $notifications,
     ): RedirectResponse {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        abort_unless($festivalEdition->account_id === $account->id, 404);
+        abort_unless($festivalEdition->account_id === $account->id && ! $festivalEdition->is_private, 404);
         $passes = $this->usablePasses($portalUser, $festivalEdition);
         abort_if($passes->isEmpty(), 404);
 

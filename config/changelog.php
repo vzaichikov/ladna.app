@@ -20,6 +20,15 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.176.0',
+                'date' => '2026-11-02',
+                'title' => 'Private Festivals for organizers and judges',
+                'items' => [
+                    'Organizers can keep a Festival private while assigned judges use the normal scoring interface. Public pages, participant access, ticket links, Telegram views and automatic notifications stay closed.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.175.0',
                 'date' => '2026-10-30',
                 'title' => 'Pay online for a trial after booking your first class',
@@ -1635,6 +1644,15 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.176.0',
+                'date' => '2026-11-02',
+                'title' => 'Приватні фестивалі для організаторів і суддів',
+                'items' => [
+                    'Організатори можуть зробити фестиваль приватним, зберігши звичайне оцінювання для призначених суддів. Публічні сторінки, доступ учасників, посилання на квитки, Telegram-перегляди та автоматичні сповіщення залишаються закритими.',
+                ],
+                'meta' => 'Release commit.',
+            ],
             [
                 'version' => '0.175.0',
                 'date' => '2026-10-30',

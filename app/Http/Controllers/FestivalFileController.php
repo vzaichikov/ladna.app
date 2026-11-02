@@ -60,7 +60,8 @@ class FestivalFileController extends Controller
     public function portalSubmission(Request $request, string $accountSlug, FestivalSubmission $festivalSubmission): StreamedResponse
     {
         $account = $request->attributes->get('festivalAccount');
-        abort_unless($account instanceof Account && $account->slug === $accountSlug && $festivalSubmission->account_id === $account->id && $festivalSubmission->festival_portal_user_id === $request->user('festival')?->id, 404);
+        abort_unless($account instanceof Account && $account->slug === $accountSlug && $festivalSubmission->account_id === $account->id && $festivalSubmission->festival_portal_user_id === $request->user('festival')?->id
+            && $festivalSubmission->entry()->whereHas('edition', fn ($query) => $query->publiclyVisible())->exists(), 404);
 
         return Storage::disk($festivalSubmission->disk)->download($festivalSubmission->path, $festivalSubmission->original_name, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
@@ -68,9 +69,10 @@ class FestivalFileController extends Controller
     public function document(Request $request, string $accountSlug, FestivalDocument $festivalDocument): StreamedResponse
     {
         $account = $request->attributes->get('festivalAccount');
-        abort_unless($account instanceof Account && $account->slug === $accountSlug && $festivalDocument->account_id === $account->id && $festivalDocument->visibility === 'public', 404);
+        abort_unless($account instanceof Account && $account->slug === $accountSlug && $festivalDocument->account_id === $account->id && $festivalDocument->visibility === 'public'
+            && $festivalDocument->edition()->publiclyVisible()->exists(), 404);
 
-        return Storage::disk($festivalDocument->disk)->download($festivalDocument->path, $festivalDocument->original_name, ['Cache-Control' => 'public, max-age=600', 'X-Content-Type-Options' => 'nosniff']);
+        return Storage::disk($festivalDocument->disk)->download($festivalDocument->path, $festivalDocument->original_name, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 
     private function authorizeSubmission(Request $request, Account $account, FestivalSubmission $submission): void
@@ -89,7 +91,8 @@ class FestivalFileController extends Controller
                 ->where('is_active', true)
                 ->whereHas('categories', fn ($categories) => $categories->whereKey($submission->entry->festival_category_id))
                 ->exists();
-        $portalAllowed = $request->user('festival')?->id === $submission->festival_portal_user_id;
+        $portalAllowed = $request->user('festival')?->id === $submission->festival_portal_user_id
+            && $submission->entry()->whereHas('edition', fn ($query) => $query->publiclyVisible())->exists();
         abort_unless($staffAllowed || $judgeAllowed || $portalAllowed, 403);
     }
 }

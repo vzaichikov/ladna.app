@@ -78,6 +78,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($notification->edition?->is_private) {
+            $this->cancel($notification, 'private_festival');
+
+            return;
+        }
+
         $locale = $this->recipientLocale($notification);
         if ($locale === null) {
             $this->cancel($notification, 'recipient_state_changed');

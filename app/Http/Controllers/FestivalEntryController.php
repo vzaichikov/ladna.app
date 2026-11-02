@@ -37,7 +37,7 @@ class FestivalEntryController extends Controller
     public function create(Request $request, string $accountSlug, string $editionSlug): View
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->firstOrFail();
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)->firstOrFail();
         abort_unless($edition->registrationIsOpen(), 403);
 
         return view('festivals.portal.entry-form', [
@@ -51,7 +51,7 @@ class FestivalEntryController extends Controller
     public function store(FestivalEntryRequest $request, string $accountSlug, string $editionSlug, FestivalRuleRegistry $rules, InitializeFestivalEntryWorkflow $initialize, FestivalActivityRecorder $activity): RedirectResponse
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->where('slug', $editionSlug)->firstOrFail();
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)->firstOrFail();
         abort_unless($edition->registrationIsOpen(), 403);
         $entry = $this->saveDraft($request, $edition, $portalUser, $rules, activity: $activity);
         $initialize->execute($entry);
@@ -352,7 +352,8 @@ class FestivalEntryController extends Controller
 
     private function assertEntry(FestivalEntry $entry, FestivalPortalUser $portalUser): void
     {
-        abort_unless($entry->festival_portal_user_id === $portalUser->id && $entry->account_id === $portalUser->account_id, 404);
+        abort_unless($entry->festival_portal_user_id === $portalUser->id && $entry->account_id === $portalUser->account_id
+            && $entry->edition()->publiclyVisible()->exists(), 404);
     }
 
     private function assertBaseDetailsMutable(FestivalEntry $entry, FestivalEntryWorkflowState $workflowState): void

@@ -36,7 +36,7 @@ class FestivalTelegramMiniAppData
         $editions = FestivalEdition::query()
             ->where('account_id', $series->account_id)
             ->where('festival_series_id', $series->id)
-            ->published()
+            ->published()->publiclyVisible()
             ->with([
                 'account:id,slug',
                 'coverMedia',
@@ -106,7 +106,7 @@ class FestivalTelegramMiniAppData
         $editions = FestivalEdition::query()
             ->where('account_id', $series->account_id)
             ->where('festival_series_id', $series->id)
-            ->published()
+            ->published()->publiclyVisible()
             ->get(['id', 'account_id', 'festival_series_id', 'status', 'starts_at', 'ends_at', 'timezone']);
         $timelines = $this->timelinesForEditions($editions);
 
@@ -339,7 +339,7 @@ class FestivalTelegramMiniAppData
     {
         $participants = $registrant->participants()->active()->performers()->orderBy('last_name')->orderBy('first_name')->get();
         $entries = $registrant->entries()
-            ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible()->where('festival_series_id', $series->id))
             ->with(['edition:id,title,slug,festival_series_id', 'category:id,name'])
             ->latest('id')
             ->get();
@@ -353,6 +353,7 @@ class FestivalTelegramMiniAppData
             ->join('festival_editions', 'festival_editions.id', '=', 'festival_entries.festival_edition_id')
             ->where('festival_entries.festival_portal_user_id', $registrant->id)
             ->where('festival_editions.festival_series_id', $series->id)
+            ->where('festival_editions.is_private', false)
             ->whereIn('festival_entries.status', $countedStatuses)
             ->distinct('festival_entry_participant.festival_participant_id')
             ->count('festival_entry_participant.festival_participant_id');
@@ -387,7 +388,7 @@ class FestivalTelegramMiniAppData
     private function guest(FestivalSeries $series, FestivalPortalUser $guest): array
     {
         $orders = $guest->ticketOrders()
-            ->whereHas('edition', fn ($query) => $query->where('festival_series_id', $series->id))
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible()->where('festival_series_id', $series->id))
             ->with(['edition:id,title,festival_series_id', 'tickets.streamEntitlement'])
             ->latest('id')
             ->get();

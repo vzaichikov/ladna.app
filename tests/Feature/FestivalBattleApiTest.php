@@ -77,6 +77,23 @@ class FestivalBattleApiTest extends TestCase
             ->assertJsonMissingPath('data.0.judge_votes.identities');
     }
 
+    public function test_private_edition_matches_are_hidden_and_cannot_receive_audience_scores(): void
+    {
+        [$account, $edition, , $match] = $this->festivalMatch();
+        $token = $this->token($account);
+        $edition->update(['is_private' => true]);
+
+        $this->withToken($token->tokenValue())->getJson(route('api.v1.festival-battles.matches.index'))
+            ->assertOk()->assertJsonCount(0, 'data');
+        $this->withToken($token->tokenValue())->getJson(route('api.v1.festival-battles.matches.show', $match))
+            ->assertNotFound();
+        $this->withToken($token->tokenValue())->putJson(route('api.v1.festival-battles.matches.audience-score.update', $match), [
+            'audience_score_a' => 400000,
+            'audience_score_b' => 600000,
+        ])->assertNotFound();
+        $this->assertNull($match->refresh()->audience_score_a);
+    }
+
     public function test_token_authentication_ability_capability_and_tenant_boundaries_fail_closed(): void
     {
         [$account, , , $match] = $this->festivalMatch();

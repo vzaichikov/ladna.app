@@ -63,7 +63,7 @@ class FestivalNotificationOutbox
         abort_unless($portalUser->account_id === $edition->account_id, 404);
         $edition->loadMissing('account');
 
-        if ($edition->account->isReadOnlyDemo()) {
+        if ($edition->is_private || $edition->account->isReadOnlyDemo()) {
             return null;
         }
 
@@ -173,7 +173,7 @@ class FestivalNotificationOutbox
         $order->loadMissing(['account', 'edition', 'portalUser']);
         abort_unless($order->account_id === $order->edition->account_id, 404);
 
-        if ($order->account->isReadOnlyDemo()) {
+        if ($order->edition->is_private || $order->account->isReadOnlyDemo()) {
             return null;
         }
 
@@ -251,7 +251,7 @@ class FestivalNotificationOutbox
         abort_unless($portalUser->account_id === $edition->account_id, 404);
         $edition->loadMissing('account');
 
-        if ($edition->account->isReadOnlyDemo()
+        if ($edition->is_private || $edition->account->isReadOnlyDemo()
             || ! filter_var($portalUser->email, FILTER_VALIDATE_EMAIL)
             || ! $this->scenarioSettings->emailIsEnabled($edition->account_id, FestivalNotificationType::EntrancePassesIssued)) {
             return null;

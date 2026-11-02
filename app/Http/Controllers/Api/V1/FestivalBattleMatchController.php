@@ -27,7 +27,7 @@ class FestivalBattleMatchController extends Controller
             ->where('festival_battle_matches.status', FestivalBattleMatchStatus::Ready->value)
             ->whereNotNull('entry_a_id')
             ->whereNotNull('entry_b_id')
-            ->whereHas('edition', fn ($query) => $query->whereIn('status', [
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible()->whereIn('status', [
                 FestivalEditionStatus::Published->value,
                 FestivalEditionStatus::InProgress->value,
             ]))
@@ -108,6 +108,7 @@ class FestivalBattleMatchController extends Controller
     {
         return FestivalBattleMatch::query()
             ->where('account_id', $account->id)
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())
             ->whereIn('status', [FestivalBattleMatchStatus::Ready->value, FestivalBattleMatchStatus::Completed->value])
             ->with($this->relations())
             ->findOrFail($matchId);

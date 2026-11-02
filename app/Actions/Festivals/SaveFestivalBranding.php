@@ -10,6 +10,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SaveFestivalBranding
@@ -31,15 +32,21 @@ class SaveFestivalBranding
         $oldPaths = collect();
 
         try {
-            $newPath = $heroImage?->store("festival-media/{$account->id}/{$edition->id}", 'public');
-            $newMobilePath = $mobileHeroImage?->store("festival-media/{$account->id}/{$edition->id}", 'public');
-
-            DB::transaction(function () use ($account, $edition, $input, $actor, $newPath, $newMobilePath, &$oldPaths): void {
+            DB::transaction(function () use ($account, $edition, $input, $actor, $heroImage, $mobileHeroImage, &$newPath, &$newMobilePath, &$oldPaths): void {
                 $lockedEdition = FestivalEdition::query()
                     ->whereBelongsTo($account)
                     ->whereKey($edition->id)
                     ->lockForUpdate()
                     ->firstOrFail();
+
+                if ($lockedEdition->is_private && ($heroImage !== null || $mobileHeroImage !== null)) {
+                    throw ValidationException::withMessages([
+                        $heroImage !== null ? 'hero_image' : 'mobile_hero_image' => __('app.festival_private_marketing_upload'),
+                    ]);
+                }
+
+                $newPath = $heroImage?->store("festival-media/{$account->id}/{$edition->id}", 'public');
+                $newMobilePath = $mobileHeroImage?->store("festival-media/{$account->id}/{$edition->id}", 'public');
 
                 if (array_key_exists('landing_template', $input)) {
                     $lockedEdition->landing_template = $input['landing_template'];

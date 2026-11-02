@@ -33,7 +33,7 @@ class FestivalPortalController extends Controller
         [$account, $portalUser] = $this->context($request, $accountSlug);
         $editions = FestivalEdition::query()
             ->whereBelongsTo($account)
-            ->published()
+            ->published()->publiclyVisible()
             ->with(['series', 'coverMedia'])
             ->withCount([
                 'entries as portal_entries_count' => fn (Builder $query): Builder => $query
@@ -52,7 +52,7 @@ class FestivalPortalController extends Controller
     public function entries(Request $request, string $accountSlug): View
     {
         [$account, $portalUser] = $this->context($request, $accountSlug);
-        $entries = $portalUser->entries()->with([
+        $entries = $portalUser->entries()->whereHas('edition', fn ($query) => $query->publiclyVisible())->with([
             'edition.coverMedia',
             'category',
             'steps.charges',
@@ -63,11 +63,13 @@ class FestivalPortalController extends Controller
                 ->with('stage')
                 ->orderBy('starts_at'),
         ])->latest()->get();
-        $notifications = FestivalNotification::query()->where('festival_portal_user_id', $portalUser->id)->latest()->limit(50)->get();
+        $notifications = FestivalNotification::query()->where('festival_portal_user_id', $portalUser->id)
+            ->whereHas('edition', fn ($query) => $query->publiclyVisible())->latest()->limit(50)->get();
         $eligibleEditions = collect();
 
         if ($entries->isEmpty()) {
             $eligibleEditions = FestivalEdition::query()
+                ->publiclyVisible()
                 ->whereBelongsTo($account)
                 ->where('status', FestivalEditionStatus::Published->value)
                 ->where('registration_status', FestivalRegistrationStatus::Open->value)

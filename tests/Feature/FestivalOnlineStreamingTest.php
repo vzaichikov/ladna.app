@@ -667,6 +667,24 @@ class FestivalOnlineStreamingTest extends TestCase
         $this->assertViewerAccessDenied($access, $cookie, $stream->path);
     }
 
+    public function test_private_edition_revokes_existing_viewer_cookies_while_preserving_staff_preview(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->online($stream)->create();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        [, $entitlement] = $this->issuedOnlineOrder($stream, $type, $guest);
+        $access = app(FestivalStreamAccessService::class);
+        $access->acquireLease($entitlement, $guest, '203.0.113.40');
+        $cookie = $access->viewerCookie($entitlement, '203.0.113.40');
+
+        $edition->update(['is_private' => true]);
+
+        $this->assertViewerAccessDenied($access, $cookie, $stream->path);
+        $access->assertStaffPreviewAccessible($stream->fresh(), $owner);
+        $this->assertTrue($edition->refresh()->is_private);
+    }
+
     public function test_private_order_watch_and_release_are_exact_token_owner_and_account_scoped(): void
     {
         [$account, $edition] = $this->festival();

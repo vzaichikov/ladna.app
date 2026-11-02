@@ -109,6 +109,19 @@ class FestivalPortalTicketsTest extends TestCase
             ->assertSee(route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]), false);
     }
 
+    public function test_private_festival_passes_disappear_and_their_pdf_is_unavailable(): void
+    {
+        [$account, $edition, $portalUser, $participant] = $this->acceptedPerformer();
+        app(ReconcileFestivalEntrancePasses::class)->reconcileEdition($edition);
+        $pass = $participant->entrancePasses()->firstOrFail();
+        $edition->update(['is_private' => true]);
+
+        $this->actingAs($portalUser, 'festival')->get(route('festival.portal.tickets.index', $account->slug))
+            ->assertOk()->assertDontSee($pass->code)->assertDontSee($edition->title);
+        $this->actingAs($portalUser, 'festival')->get(route('festival.portal.tickets.passes.pdf', [$account->slug, $edition]))->assertNotFound();
+        $this->actingAs($portalUser, 'festival')->post(route('festival.portal.tickets.passes.email', [$account->slug, $edition]))->assertNotFound();
+    }
+
     /** @return array{Account, FestivalEdition, FestivalPortalUser} */
     private function festival(): array
     {

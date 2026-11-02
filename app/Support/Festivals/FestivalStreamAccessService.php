@@ -240,12 +240,14 @@ class FestivalStreamAccessService
 
     public function assertAccessible(FestivalStreamEntitlement $entitlement, ?FestivalPortalUser $portalUser = null, bool $requireOpen = true): void
     {
-        $entitlement->loadMissing(['stream.account.subscription.plan', 'ticket.order', 'ticket.admissionType', 'portalUser']);
+        $entitlement->loadMissing(['stream.account.subscription.plan', 'stream.edition', 'ticket.order', 'ticket.admissionType', 'portalUser']);
         $ticket = $entitlement->ticket;
         $stream = $entitlement->stream;
 
         if (! $ticket
             || ! $stream
+            || ! $stream->edition
+            || $stream->edition->is_private
             || ! $entitlement->portalUser?->is_active
             || ($portalUser && ($portalUser->id !== $entitlement->festival_portal_user_id || $portalUser->account_id !== $entitlement->account_id))
             || $ticket->account_id !== $entitlement->account_id

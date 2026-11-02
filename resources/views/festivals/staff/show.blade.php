@@ -13,13 +13,16 @@
                 @if ($edition->venue_name) · {{ $edition->venue_name }} @endif
             </p>
             <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                @if ($edition->is_private)
+                    <span class="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">{{ __('app.festival_private') }}</span>
+                @endif
                 <span class="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">{{ __('app.festival_status_'.$edition->status->value) }}</span>
                 <span class="rounded-full bg-brand-50 px-3 py-1.5 text-brand-700">{{ __('app.festival_registration_'.$edition->registration_status->value) }}</span>
                 <span class="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700">{{ $edition->timezone }} · {{ $account->default_currency }}</span>
             </div>
         </div>
         <div class="flex flex-wrap gap-2">
-            @if (in_array($edition->status->value, ['published', 'in_progress', 'completed'], true))
+            @if (! $edition->is_private && in_array($edition->status->value, ['published', 'in_progress', 'completed'], true))
                 <x-ui.button :href="route('public.festivals.show', [$account->slug, $edition->slug])" variant="secondary">{{ __('app.festival_public_page') }}</x-ui.button>
             @endif
             @if ($workspacePermissions['manage'])
