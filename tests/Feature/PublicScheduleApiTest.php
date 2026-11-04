@@ -11,14 +11,21 @@ use App\Models\ScheduledClass;
 use App\Models\Trainer;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Carbon;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PublicScheduleApiTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_schedule_api_returns_public_upcoming_classes_shape(): void
-    {
+    #[DataProvider('scheduleDates')]
+    public function test_schedule_api_returns_public_upcoming_classes_shape(
+        string $currentTime,
+        string $expectedStartsAt,
+        string $expectedEndsAt,
+    ): void {
+        $this->travelTo(Carbon::parse($currentTime, 'UTC'));
+
         $account = Account::factory()->create(['slug' => 'test-api-studio-nastya', 'timezone' => 'Europe/Kyiv']);
         $location = Location::factory()->for($account)->create(['slug' => 'test-location-1', 'name' => 'Location 1']);
         $room = Room::factory()->for($account)->for($location)->create(['slug' => 'big-hall', 'name' => 'Big Hall']);
@@ -68,10 +75,21 @@ class PublicScheduleApiTest extends TestCase
             ->assertJsonPath('data.0.trainer.photo_url', $trainer->photoUrl())
             ->assertJsonPath('data.0.capacity', 12)
             ->assertJsonPath('data.0.available_spots', null)
+            ->assertJsonPath('data.0.starts_at', $expectedStartsAt)
+            ->assertJsonPath('data.0.ends_at', $expectedEndsAt)
             ->assertJsonMissing(['title' => 'Hidden Class'])
             ->assertJsonMissing(['title' => 'Cancelled Class']);
+    }
 
-        $this->assertStringEndsWith('+03:00', $response->json('data.0.starts_at'));
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function scheduleDates(): array
+    {
+        return [
+            'summer time' => ['2026-07-01 12:00:00', '2026-07-02T18:00:00+03:00', '2026-07-02T19:00:00+03:00'],
+            'winter time' => ['2026-11-01 12:00:00', '2026-11-02T17:00:00+02:00', '2026-11-02T18:00:00+02:00'],
+        ];
     }
 
     public function test_classes_endpoint_alias_returns_same_public_data(): void

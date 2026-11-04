@@ -120,7 +120,7 @@ class CustomerPurchaseFlowTest extends TestCase
         $this->assertSame(0, $customer->purchases()->count());
     }
 
-    public function test_checkout_rejects_an_ineligible_trial_before_creating_payment(): void
+    public function test_checkout_rejects_a_trial_after_a_past_booking_before_creating_payment(): void
     {
         [$account, $location, $plan, $customer] = $this->purchaseContext();
         $plan->update(['is_trial' => true]);
@@ -135,7 +135,10 @@ class CustomerPurchaseFlowTest extends TestCase
             ->for($room)
             ->for($plan->classTypes()->firstOrFail())
             ->for($trainer)
-            ->create();
+            ->create([
+                'starts_at' => now()->subHours(2),
+                'ends_at' => now()->subHour(),
+            ]);
         ClassBooking::factory()
             ->for($account)
             ->for($scheduledClass)
