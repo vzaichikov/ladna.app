@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\AccountRole;
+use App\Enums\FestivalRubricSectionContribution;
 use App\Enums\StudioPermission;
 use App\Models\Account;
 use App\Models\FestivalCategory;
@@ -19,6 +20,7 @@ use App\Models\FestivalSeries;
 use App\Models\User;
 use App\Support\Festivals\FestivalTelegramMiniAppData;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FestivalResultsTableAndNominationsTest extends TestCase
@@ -56,6 +58,129 @@ class FestivalResultsTableAndNominationsTest extends TestCase
             'score' => 8.5,
             'comment' => 'Precise',
         ]);
+    }
+
+    public function test_summary_shows_each_judges_net_total_and_separates_rubric_deductions_from_other_penalties(): void
+    {
+        [$account, $edition, $category, $firstSheet, $criterion] = $this->scoredFestival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $firstAssignment = $firstSheet->assignment;
+        $firstAssignment->update(['display_name' => 'Nastia']);
+        $secondAssignment = FestivalJudgeAssignment::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'display_name' => 'Lana',
+        ]);
+        $secondAssignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        $secondSheet = $firstSheet->replicate();
+        $secondSheet->festival_judge_assignment_id = $secondAssignment->id;
+        $secondSheet->save();
+        $deductionSection = $firstSheet->rubric->sections()->create([
+            'account_id' => $account->id,
+            'name' => 'Deductions',
+            'contribution' => FestivalRubricSectionContribution::Deduction,
+        ]);
+        $deduction = $deductionSection->criteria()->create([
+            'account_id' => $account->id,
+            'name' => 'Time limit',
+            'max_score' => 5,
+        ]);
+        $firstSheet->entry->penalties()->create([
+            'account_id' => $account->id,
+            'points' => 1.5,
+            'reason' => 'Other penalty',
+        ]);
+
+        $scoreUrl = fn (FestivalScoreSheet $sheet): string => route('dashboard.accounts.festivals.judging.results.table.score-sheets.update', [$account, $edition, $category, $sheet]);
+        $this->actingAs($owner)->putJson($scoreUrl($firstSheet), [
+            'scores' => [
+                ['criterion_id' => $criterion->id, 'score' => 9],
+                ['criterion_id' => $deduction->id, 'score' => 2],
+            ],
+        ])->assertOk()->assertJsonPath('sheet_total', '7.0000');
+
+        $secondCell = 'data-result-summary-judge="'.$secondAssignment->id.'">';
+        $commentResponse = $this->putJson($scoreUrl($secondSheet), [
+            'scores' => [['criterion_id' => $criterion->id, 'comment' => 'Comment only']],
+        ])->assertOk();
+        $this->assertStringContainsString($secondCell.'—</td>', $commentResponse->json('summary_html'));
+
+        $zeroResponse = $this->putJson($scoreUrl($secondSheet), [
+            'scores' => [['criterion_id' => $criterion->id, 'score' => 0]],
+        ])->assertOk();
+        $this->assertStringContainsString($secondCell.'0.0000</td>', $zeroResponse->json('summary_html'));
+
+        $response = $this->putJson($scoreUrl($secondSheet), [
+            'scores' => [
+                ['criterion_id' => $criterion->id, 'score' => 7],
+                ['criterion_id' => $deduction->id, 'score' => 0],
+            ],
+        ])->assertOk()->assertJsonPath('sheet_total', '7.0000');
+        $expectedCells = [
+            'data-result-summary-total>5.5000</td>',
+            'data-result-summary-judge="'.$firstAssignment->id.'">7.0000</td>',
+            $secondCell.'7.0000</td>',
+            'data-result-summary-deductions>1.0000</td>',
+            'data-result-summary-other-penalties>1.5000</td>',
+        ];
+        foreach ($expectedCells as $expectedCell) {
+            $this->assertStringContainsString($expectedCell, $response->json('summary_html'));
+        }
+
+        $this->get(route('dashboard.accounts.festivals.judging.results.table', [$account, $edition, $category]))
+            ->assertOk()
+            ->assertSee('data-result-summary-judge-header="'.$firstAssignment->id.'">Nastia</th>', false)
+            ->assertSee('data-result-summary-judge-header="'.$secondAssignment->id.'">Lana</th>', false)
+            ->assertSeeText(__('app.festival_rubric_deductions_total'))
+            ->assertSeeText(__('app.festival_other_penalties_total'))
+            ->assertSeeInOrder($expectedCells, false);
+    }
+
+    #[DataProvider('tiedPlaces')]
+    public function test_only_completed_first_and_second_place_ties_are_highlighted(array $marks, int $tiedRank, bool $highlight): void
+    {
+        [$account, $edition, $category, $firstSheet, $criterion] = $this->scoredFestival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+
+        foreach ($marks as $index => $mark) {
+            $sheet = $firstSheet;
+            if ($index > 0) {
+                $entry = $this->acceptedParticipant($account, $edition, $category, 'Performer '.$index)->entries()->firstOrFail();
+                $sheet = $firstSheet->replicate();
+                $sheet->festival_entry_id = $entry->id;
+                $sheet->save();
+            }
+            if ($mark !== null) {
+                $sheet->scores()->create([
+                    'account_id' => $account->id,
+                    'festival_rubric_criterion_id' => $criterion->id,
+                    'score' => $mark,
+                ]);
+            }
+        }
+
+        $table = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.judging.results.table', [$account, $edition, $category]))
+            ->assertOk()
+            ->assertSeeText($tiedRank.'=');
+        $cards = $this->get(route('dashboard.accounts.festivals.judging.results.show', [$account, $edition, $category, 'fragment' => 1]))
+            ->assertOk()
+            ->assertSeeText(__('app.festival_results_tie'));
+
+        foreach ([$table, $cards] as $view) {
+            $this->assertSame($highlight ? 2 : 0, substr_count($view->getContent(), 'data-result-podium-tie'));
+        }
+    }
+
+    /** @return array<string, array{list<int|null>, int, bool}> */
+    public static function tiedPlaces(): array
+    {
+        return [
+            'first place' => [[9, 9, 7], 1, true],
+            'second place' => [[10, 8, 8], 2, true],
+            'third place' => [[10, 9, 8, 8], 3, false],
+            'incomplete first place' => [[0, null], 1, false],
+        ];
     }
 
     public function test_manager_can_view_but_cannot_edit_results_table(): void
@@ -137,6 +262,9 @@ class FestivalResultsTableAndNominationsTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('sheet_total', '9.0000');
+        $this->actingAs($ordinaryJudge, 'festival')
+            ->get(route('festival.portal.judging.results.table', [$account->slug, $edition, $category]))
+            ->assertForbidden();
         $this->actingAs($ordinaryJudge, 'festival')
             ->get(route('festival.portal.judging.results.nominations.index', [$account->slug, $edition]))
             ->assertForbidden();

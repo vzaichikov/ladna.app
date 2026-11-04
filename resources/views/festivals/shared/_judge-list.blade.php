@@ -150,6 +150,9 @@
                                             </span>
                                         @endif
                                         <span class="text-xs font-semibold text-slate-500">{{ __('app.festival_score_progress', ['completed' => $card['progress']['completed'], 'required' => $card['progress']['required']]) }}</span>
+                                        <span class="text-xs font-semibold text-slate-700">
+                                            {{ __('app.festival_score_total_label') }} <strong class="tabular-nums" data-judge-sheet-total>{{ $sheet->scores->whereNotNull('score')->isNotEmpty() ? \Illuminate\Support\Number::format((float) $sheet->total_score, maxPrecision: 4, locale: app()->getLocale()) : '—' }}</strong>
+                                        </span>
                                     </div>
                                 </div>
                             </div>

@@ -25,6 +25,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FestivalJudgingManagementTest extends TestCase
@@ -581,7 +582,7 @@ class FestivalJudgingManagementTest extends TestCase
             ->assertSee('A suspended duet about finding the way home.')
             ->assertSee('data-score-total>1,5</p>', false)
             ->assertSee('data-score-save-feedback', false)
-            ->assertSee('step="0.5"', false)
+            ->assertSee('step="0.01"', false)
             ->assertSee('data-score-stepper', false)
             ->assertSee('data-score-adjust="-1"', false)
             ->assertSee('data-score-adjust="1"', false)
@@ -768,6 +769,114 @@ class FestivalJudgingManagementTest extends TestCase
         $this->actingAs($judge)
             ->get(route('dashboard.accounts.festivals.judging.score-sheets.participants.photo', [$account, $edition, $activeSheet, $otherParticipant]))
             ->assertNotFound();
+    }
+
+    #[DataProvider('judgeAccessModes')]
+    public function test_save_and_next_follows_the_judges_own_enabled_performances_on_the_same_scene(bool $guest): void
+    {
+        [$account, $edition, $category] = $this->festival();
+        $judge = $guest ? FestivalPortalUser::factory()->for($account)->judge()->create() : $this->staffJudge($account);
+        $assignment = FestivalJudgeAssignment::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'user_id' => $guest ? null : $judge->id,
+            'festival_portal_user_id' => $guest ? $judge->id : null,
+        ]);
+        $assignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        $otherAssignment = FestivalJudgeAssignment::factory()->for($edition)->for($this->staffJudge($account))->create(['account_id' => $account->id]);
+        $otherAssignment->categories()->attach($category->id, ['account_id' => $account->id]);
+        [$current, $criterion] = $this->sheet($account, $edition, $category, $assignment, 'Current');
+        [$disabled] = $this->sheet($account, $edition, $category, $assignment, 'Disabled');
+        [$otherJudgesSheet] = $this->sheet($account, $edition, $category, $otherAssignment, 'Other judge');
+        [$next, $nextCriterion] = $this->sheet($account, $edition, $category, $assignment, 'Next');
+        [$otherScene] = $this->sheet($account, $edition, $category, $assignment, 'Other scene');
+        $next->scores()->create([
+            'account_id' => $account->id,
+            'festival_rubric_criterion_id' => $nextCriterion->id,
+            'score' => null,
+            'comment' => 'Comment only',
+        ]);
+
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $timeline = FestivalTimeline::factory()->for($stage, 'stage')->create([
+            'started_at' => now()->subMinute(),
+            'paused_at' => now(),
+        ]);
+        $items = [
+            [$current, true, 10],
+            [null, true, 20],
+            [$disabled, false, 30],
+            [$otherJudgesSheet, true, 40],
+            [$next, true, 50],
+        ];
+        foreach (array_reverse($items) as [$sheet, $enabled, $position]) {
+            $item = FestivalTimelineItem::factory()->for($timeline, 'timeline')->create([
+                'festival_entry_id' => $sheet?->festival_entry_id,
+                'type' => $sheet ? 'performance' : 'custom',
+                'sort_order' => $position,
+                'is_enabled' => $enabled,
+            ]);
+            if ($sheet === $current) {
+                $timeline->update(['active_item_id' => $item->id]);
+            }
+        }
+        $otherStage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $otherTimeline = FestivalTimeline::factory()->for($otherStage, 'stage')->create();
+        FestivalTimelineItem::factory()->for($otherTimeline, 'timeline')->create([
+            'festival_entry_id' => $otherScene->festival_entry_id,
+            'type' => 'performance',
+        ]);
+
+        $editUrl = fn (FestivalScoreSheet $sheet): string => $guest
+            ? route('festival.portal.judging.edit', [$account->slug, $sheet])
+            : route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $sheet]);
+        $updateUrl = $guest
+            ? route('festival.portal.judging.update', [$account->slug, $current])
+            : route('dashboard.accounts.festivals.judging.score-sheets.update', [$account, $edition, $current]);
+        $listUrl = $guest
+            ? route('festival.portal.judging.index', [$account->slug, $edition])
+            : route('dashboard.accounts.festivals.judging.score-sheets.index', [$account, $edition]);
+        $this->actingAs($judge, $guest ? 'festival' : 'web');
+
+        $this->get($editUrl($current))->assertOk()->assertSee('data-score-next-button', false);
+        $this->get($editUrl($next))->assertOk()->assertDontSee('data-score-next-button', false)->assertSee($listUrl);
+        $this->get($editUrl($otherJudgesSheet))->assertNotFound();
+        $this->get($listUrl.'?fragment=1')
+            ->assertOk()
+            ->assertSee('data-judge-sheet-total>—', false)
+            ->assertDontSee('data-judge-sheet-total>0', false)
+            ->assertDontSee($editUrl($otherJudgesSheet));
+
+        $this->putJson($updateUrl, [
+            'next' => true,
+            'scores' => [['criterion_id' => $criterion->id, 'score' => 11]],
+        ])->assertUnprocessable()->assertJsonMissingPath('next_url');
+        $this->assertSame(0, $current->scores()->count());
+
+        $this->putJson($updateUrl, [
+            'next' => true,
+            'scores' => [['criterion_id' => $criterion->id, 'score' => 0]],
+            'comments' => 'Saved before navigating',
+        ])->assertOk()->assertJsonPath('next_url', $editUrl($next));
+        $this->assertSame('Saved before navigating', $current->refresh()->comments);
+        $this->assertSame('0.00', $current->scores()->sole()->score);
+        $this->assertSame($timeline->active_item_id, $timeline->refresh()->active_item_id);
+        $this->assertNotNull($timeline->paused_at);
+        $this->get($listUrl)->assertOk()->assertSee('data-judge-sheet-total>0', false);
+        $this->get($listUrl.'?fragment=1')->assertOk()->assertSee('data-judge-sheet-total>0', false);
+
+        $this->from($editUrl($current))
+            ->put($updateUrl, ['next' => '1', 'comments' => 'Saved without JavaScript'])
+            ->assertRedirect($editUrl($next));
+        $this->assertSame('Saved without JavaScript', $current->refresh()->comments);
+
+        $timeline->items()->where('festival_entry_id', $next->festival_entry_id)->update(['is_enabled' => false]);
+        $this->putJson($updateUrl, ['next' => true])->assertOk()->assertJsonPath('next_url', $listUrl);
+    }
+
+    /** @return array<string, array{bool}> */
+    public static function judgeAccessModes(): array
+    {
+        return ['staff' => [false], 'guest' => [true]];
     }
 
     public function test_judging_sidebar_uses_the_exact_localized_group_and_four_destinations(): void

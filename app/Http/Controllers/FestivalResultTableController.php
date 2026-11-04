@@ -152,11 +152,7 @@ class FestivalResultTableController extends Controller
     private function tableData(Request $request, Account $account, FestivalEdition $edition, FestivalCategory $category, bool $editable, bool $guest): array
     {
         $results = $this->results->execute($edition, $category);
-        $assignments = $results['rubric']
-            ? $this->judgingCriteria->activeAssignments($category)
-                ->filter(fn (FestivalJudgeAssignment $assignment): bool => $this->judgingCriteria->sectionsFor($assignment, $results['rubric'])->isNotEmpty())
-                ->values()
-            : collect();
+        $assignments = $results['assignments'];
         $requestedTab = $request->string('tab')->toString();
         $activeAssignment = $assignments->first(fn (FestivalJudgeAssignment $assignment): bool => $requestedTab === 'judge-'.$assignment->id);
         $activeTab = $activeAssignment ? $requestedTab : ($requestedTab === 'penalties' ? 'penalties' : 'summary');
@@ -227,12 +223,15 @@ class FestivalResultTableController extends Controller
             return back()->with('status', __('app.festival_score_saved'));
         }
 
+        $results = $this->results->execute($edition, $category);
+
         return response()->json([
             'message' => __('app.festival_score_saved'),
             'sheet_id' => $sheet->id,
             'sheet_total' => $sheet->total_score,
             'summary_html' => view('festivals.shared.result-table._summary-rows', [
-                'results' => $this->results->execute($edition, $category),
+                'results' => $results,
+                'assignments' => $results['assignments'],
             ])->render(),
             'guest' => $guest,
         ]);

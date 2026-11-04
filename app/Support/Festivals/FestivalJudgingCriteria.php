@@ -2,13 +2,18 @@
 
 namespace App\Support\Festivals;
 
+use App\Enums\FestivalRubricSectionContribution;
 use App\Models\FestivalCategory;
+use App\Models\FestivalCriterionScore;
 use App\Models\FestivalEdition;
 use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalRubric;
+use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalRubricSection;
 use App\Models\FestivalScoreSheet;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class FestivalJudgingCriteria
 {
@@ -57,10 +62,8 @@ class FestivalJudgingCriteria
     public function scoreProgress(FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment): array
     {
         $sheet->loadMissing(['rubric.sections.criteria', 'scores']);
-        $criterionIds = $this->sectionsFor($assignment, $sheet->rubric)
-            ->flatMap(fn (FestivalRubricSection $section): Collection => $section->criteria)
-            ->pluck('id')
-            ->all();
+        $sections = $this->sectionsFor($assignment, $sheet->rubric);
+        $criterionIds = $this->requiredCriteria($sections)->pluck('id')->all();
         $required = count($criterionIds);
         $completed = $sheet->scores
             ->whereIn('festival_rubric_criterion_id', $criterionIds)
@@ -71,8 +74,42 @@ class FestivalJudgingCriteria
             'required' => $required,
             'completed' => $completed,
             'missing' => max(0, $required - $completed),
-            'ready' => $required > 0 && $completed === $required,
+            'ready' => $completed === $required && $sections->contains(fn (FestivalRubricSection $section): bool => $section->criteria->isNotEmpty()),
         ];
+    }
+
+    /**
+     * @param  Collection<int, FestivalRubricSection>  $sections
+     * @return Collection<int, FestivalRubricCriterion>
+     */
+    public function requiredCriteria(Collection $sections): Collection
+    {
+        return $sections->whereStrict('contribution', FestivalRubricSectionContribution::Award)->flatMap->criteria;
+    }
+
+    /** @param Builder<FestivalScoreSheet> $sheets */
+    public function filterByReadiness(Builder $sheets, bool $ready): Builder
+    {
+        $assignmentSections = DB::table('festival_judge_assignment_rubric_section')
+            ->whereColumn('festival_judge_assignment_id', 'festival_score_sheets.festival_judge_assignment_id');
+        $selectedSections = (clone $assignmentSections)
+            ->whereColumn('festival_rubric_section_id', 'festival_rubric_sections.id');
+        $sections = FestivalRubricSection::query()
+            ->whereColumn('festival_rubric_id', 'festival_score_sheets.festival_rubric_id')
+            ->where(fn (Builder $query) => $query->whereNotExists($assignmentSections)->orWhereExists($selectedSections));
+        $assignedCriteria = (clone $sections)->has('criteria');
+        $storedScore = FestivalCriterionScore::query()
+            ->whereColumn('festival_score_sheet_id', 'festival_score_sheets.id')
+            ->whereColumn('festival_rubric_criterion_id', 'festival_rubric_criteria.id')
+            ->whereNotNull('score');
+        $missingRequiredCriteria = $sections
+            ->where('contribution', FestivalRubricSectionContribution::Award->value)
+            ->whereHas('criteria', fn (Builder $query) => $query->whereNotExists($storedScore->toBase()));
+        $complete = fn (Builder $query) => $query
+            ->whereExists($assignedCriteria->toBase())
+            ->whereNotExists($missingRequiredCriteria->toBase());
+
+        return $ready ? $sheets->where($complete) : $sheets->whereNot($complete);
     }
 
     /**

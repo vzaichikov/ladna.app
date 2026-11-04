@@ -10345,6 +10345,7 @@ function initFestivalScoreSheets() {
         const readiness = form.querySelector('[data-score-readiness]');
         const status = form.querySelector('[data-score-save-status]');
         const saveButton = form.querySelector('[data-score-save-button]');
+        const nextButton = form.querySelector('[data-score-next-button]');
         const savedFeedback = form.querySelector('[data-score-save-feedback]');
         const fieldContainers = [...form.querySelectorAll('[data-score-autosave-field]')];
         const scoreFormatter = new Intl.NumberFormat(document.documentElement.lang || undefined, { maximumFractionDigits: 4 });
@@ -10354,8 +10355,8 @@ function initFestivalScoreSheets() {
         let debounce = null;
         let savedFeedbackTimeout = null;
         let saving = false;
-        let pending = false;
-        let pendingSaveAll = false;
+        let pendingSave = null;
+        let navigating = false;
 
         const setGlobalStatus = (label, tone = 'neutral') => {
             if (!status) {
@@ -10446,8 +10447,14 @@ function initFestivalScoreSheets() {
         const recalculate = () => {
             let calculatedTotal = 0;
             let completed = 0;
+            let required = 0;
 
             scoreInputs.forEach((input) => {
+                const deduction = input.dataset.contribution === 'deduction';
+                if (!deduction) {
+                    required++;
+                }
+
                 if (input.value.trim() === '') {
                     return;
                 }
@@ -10458,12 +10465,14 @@ function initFestivalScoreSheets() {
                     return;
                 }
 
-                completed++;
+                if (!deduction) {
+                    completed++;
+                }
                 const weightedScore = score * Number(input.dataset.criterionWeight || 1) * Number(input.dataset.sectionWeight || 1);
-                calculatedTotal += input.dataset.contribution === 'deduction' ? -weightedScore : weightedScore;
+                calculatedTotal += deduction ? -weightedScore : weightedScore;
             });
 
-            const missing = Math.max(0, scoreInputs.length - completed);
+            const missing = required - completed;
             const ready = scoreInputs.length > 0 && missing === 0;
 
             if (total) {
@@ -10473,7 +10482,7 @@ function initFestivalScoreSheets() {
             if (progress) {
                 progress.textContent = form.dataset.progressTemplate
                     .replace('__completed__', String(completed))
-                    .replace('__required__', String(scoreInputs.length));
+                    .replace('__required__', String(required));
             }
 
             if (readiness) {
@@ -10487,12 +10496,18 @@ function initFestivalScoreSheets() {
             }
         };
 
-        const save = async (saveAll = false) => {
+        const save = async (saveAll = false, goNext = false) => {
             window.clearTimeout(debounce);
 
+            if (navigating) {
+                return;
+            }
+
             if (saving) {
-                pending = true;
-                pendingSaveAll = pendingSaveAll || saveAll;
+                pendingSave = {
+                    saveAll: saveAll || pendingSave?.saveAll === true,
+                    goNext: goNext || pendingSave?.goNext === true,
+                };
 
                 return;
             }
@@ -10502,11 +10517,14 @@ function initFestivalScoreSheets() {
             }
 
             saving = true;
-            pending = false;
-            pendingSaveAll = false;
+            pendingSave = null;
             saveButton?.toggleAttribute('disabled', true);
             const savingFields = saveAll ? fieldContainers : [...dirtyFields];
             const savingRevisions = new Map(savingFields.map((field) => [field, fieldRevisions.get(field) ?? 0]));
+            const body = saveAll ? new FormData(form) : partialFormData(savingFields);
+            if (goNext) {
+                body.set('next', '1');
+            }
 
             setGlobalStatus(form.dataset.savingLabel);
             savingFields.forEach((field) => setFieldStatus(field, form.dataset.savingLabel));
@@ -10514,7 +10532,7 @@ function initFestivalScoreSheets() {
             try {
                 const response = await fetch(form.action, {
                     method: 'POST',
-                    body: saveAll ? new FormData(form) : partialFormData(savingFields),
+                    body,
                     credentials: 'same-origin',
                     headers: {
                         Accept: 'application/json',
@@ -10523,7 +10541,7 @@ function initFestivalScoreSheets() {
                 });
                 const payload = await response.json().catch(() => ({}));
 
-                if (!response.ok) {
+                if (!response.ok || (goNext && typeof payload.next_url !== 'string')) {
                     const validationMessage = Object.values(payload.errors ?? {}).flat().find((message) => typeof message === 'string');
                     throw new Error(validationMessage || payload.message || form.dataset.saveError);
                 }
@@ -10552,6 +10570,14 @@ function initFestivalScoreSheets() {
                 }
 
                 flashSavedBorder();
+                if (goNext) {
+                    if (dirtyFields.size > 0) {
+                        pendingSave = { saveAll: true, goNext: true };
+                    } else {
+                        window.location.assign(payload.next_url);
+                        navigating = true;
+                    }
+                }
             } catch (exception) {
                 const errorMessage = exception instanceof Error ? exception.message : form.dataset.saveError;
                 setGlobalStatus(errorMessage, 'error');
@@ -10561,13 +10587,18 @@ function initFestivalScoreSheets() {
                 });
             } finally {
                 saving = false;
-                saveButton?.removeAttribute('disabled');
 
-                if (pending) {
-                    const saveAllPending = pendingSaveAll;
-                    pending = false;
-                    pendingSaveAll = false;
-                    save(saveAllPending);
+                if (!navigating) {
+                    saveButton?.removeAttribute('disabled');
+                    if (!pendingSave?.goNext) {
+                        nextButton?.removeAttribute('disabled');
+                    }
+
+                    if (pendingSave) {
+                        const { saveAll, goNext } = pendingSave;
+                        pendingSave = null;
+                        save(saveAll, goNext);
+                    }
                 }
             }
         };
@@ -10597,7 +10628,7 @@ function initFestivalScoreSheets() {
                 }
 
                 const direction = Number(button.dataset.scoreAdjust);
-                const step = Number(input.step) || 0.5;
+                const step = 0.5;
                 const minimum = Number(input.min) || 0;
                 const maximum = Number(input.max);
                 const current = input.value.trim() === '' ? null : Number(input.value);
@@ -10613,7 +10644,11 @@ function initFestivalScoreSheets() {
         });
         form.addEventListener('submit', (event) => {
             event.preventDefault();
-            save(true);
+            const goNext = nextButton !== null && event.submitter === nextButton;
+            if (goNext) {
+                nextButton.toggleAttribute('disabled', true);
+            }
+            save(true, goNext);
         });
         recalculate();
     });

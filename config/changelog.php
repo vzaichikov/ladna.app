@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.177.0',
+                'date' => '2026-11-04',
+                'title' => 'Festival score sheets and results summary',
+                'items' => [
+                    'Judges can leave a deduction blank when it does not apply. Next saves the score sheet and opens the next assigned performance on the same scene. Each performance card shows the judge’s saved total.',
+                    'The private results summary shows each judge’s total, criterion deductions and additional penalties in separate columns. Shared first and second places are highlighted once the tied performances have complete scores.',
+                ],
+                'meta' => 'Release commit.',
+            ],
+            [
                 'version' => '0.176.0',
                 'date' => '2026-11-02',
                 'title' => 'Private Festivals for organizers and judges',
@@ -1644,6 +1654,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.177.0',
+                'date' => '2026-11-04',
+                'title' => 'Суддівські листи та зведені результати фестивалю',
+                'items' => [
+                    'Якщо відрахування немає, поле можна залишити порожнім. Кнопка «Далі» зберігає лист і відкриває наступний доступний виступ на тій самій сцені. На картці виступу суддя бачить власну збережену суму балів.',
+                    'У приватній зведеній таблиці окремо показано суму кожної судді, відрахування за критеріями й додаткові штрафи. Спільне перше або друге місце виділяється, коли всі оцінки учасниць із цим місцем готові.',
+                ],
+                'meta' => 'Релізний коміт.',
+            ],
             [
                 'version' => '0.176.0',
                 'date' => '2026-11-02',

@@ -70,7 +70,7 @@ class FestivalJudgingController extends Controller
 
         $sheetQuery = $permissions['manage']
             ? FestivalScoreSheet::query()->whereHas('entry', fn ($query) => $query->where('festival_edition_id', $festivalEdition->id))
-            : ($assignment?->scoreSheets() ?? FestivalScoreSheet::query()->whereRaw('1 = 0'));
+            : ($assignment?->scoreSheets()->getQuery() ?? FestivalScoreSheet::query()->whereRaw('1 = 0'));
         $sheets = $sheetQuery
             ->with([
                 'entry.category.direction',
@@ -80,7 +80,7 @@ class FestivalJudgingController extends Controller
                 'scores',
             ])
             ->when($filters['q'] !== '', fn ($query) => $query->whereHas('entry', fn ($entryQuery) => $entryQuery->where('entry_name', 'like', '%'.$filters['q'].'%')))
-            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['status'] !== '', fn ($query) => $this->judgingCriteria->filterByReadiness($query, $filters['status'] === FestivalScoreSheetStatus::Submitted->value))
             ->when($filters['category_id'], fn ($query, int $id) => $query->whereHas('entry', fn ($entryQuery) => $entryQuery->where('festival_category_id', $id)))
             ->orderByDesc('updated_at')
             ->orderBy('id')
@@ -216,7 +216,7 @@ class FestivalJudgingController extends Controller
         $assignment = $this->staffAssignment($request, $account, $festivalEdition);
         $sheet = $save->execute($festivalScoreSheet, $assignment, $request->validated(), $request->user());
 
-        return $this->scoreSaveResponse($request, $sheet, $assignment);
+        return $this->scoreSaveResponse($request, $sheet, $assignment, $account, $festivalEdition, false);
     }
 
     public function guestIndex(Request $request, string $accountSlug, FestivalEdition $festivalEdition): View|Response
@@ -260,10 +260,10 @@ class FestivalJudgingController extends Controller
 
     public function updateGuest(FestivalScoreSheetRequest $request, string $accountSlug, FestivalScoreSheet $festivalScoreSheet, SaveFestivalScoreSheet $save): JsonResponse|RedirectResponse
     {
-        [, , $assignment] = $this->guestSheetAssignment($request, $accountSlug, $festivalScoreSheet);
+        [$account, $edition, $assignment] = $this->guestSheetAssignment($request, $accountSlug, $festivalScoreSheet);
         $sheet = $save->execute($festivalScoreSheet, $assignment, $request->validated(), $request->user('festival'));
 
-        return $this->scoreSaveResponse($request, $sheet, $assignment);
+        return $this->scoreSaveResponse($request, $sheet, $assignment, $account, $edition, true);
     }
 
     private function sheetView(Account $account, FestivalEdition $edition, FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment, bool $guest): View
@@ -278,6 +278,8 @@ class FestivalJudgingController extends Controller
             'sheet' => $sheet,
             'assignment' => $assignment,
             'guest' => $guest,
+            'listUrl' => $this->scoreListUrl($account, $edition, $guest),
+            'hasNextSheet' => $this->nextScoreSheetId($edition, $sheet, $assignment) !== null,
             'scoreProgress' => $this->judgingCriteria->scoreProgress($sheet, $assignment),
         ]);
     }
@@ -322,20 +324,93 @@ class FestivalJudgingController extends Controller
         return [$account, $edition, $assignment];
     }
 
-    private function scoreSaveResponse(Request $request, FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment): JsonResponse|RedirectResponse
+    private function scoreSaveResponse(FestivalScoreSheetRequest $request, FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment, Account $account, FestivalEdition $edition, bool $guest): JsonResponse|RedirectResponse
     {
+        $nextUrl = null;
+        if ($request->boolean('next')) {
+            $nextSheetId = $this->nextScoreSheetId($edition, $sheet, $assignment);
+            $nextUrl = match (true) {
+                $nextSheetId === null => $this->scoreListUrl($account, $edition, $guest),
+                $guest => route('festival.portal.judging.edit', [$account->slug, $nextSheetId]),
+                default => route('dashboard.accounts.festivals.judging.score-sheets.edit', [$account, $edition, $nextSheetId]),
+            };
+        }
+
         if (! $request->expectsJson()) {
-            return back()->with('status', __('app.festival_score_saved'));
+            return ($nextUrl === null ? back() : redirect()->to($nextUrl))->with('status', __('app.festival_score_saved'));
         }
 
         return response()->json([
             'message' => __('app.festival_score_saved'),
             'total_score' => $sheet->total_score,
             'progress' => $this->judgingCriteria->scoreProgress($sheet, $assignment),
+            ...($nextUrl === null ? [] : ['next_url' => $nextUrl]),
         ])->withHeaders([
             'Cache-Control' => 'private, no-store, max-age=0',
             'Pragma' => 'no-cache',
         ]);
+    }
+
+    private function scoreListUrl(Account $account, FestivalEdition $edition, bool $guest): string
+    {
+        return $guest
+            ? route('festival.portal.judging.index', [$account->slug, $edition])
+            : route('dashboard.accounts.festivals.judging.score-sheets.index', [$account, $edition]);
+    }
+
+    private function nextScoreSheetId(FestivalEdition $edition, FestivalScoreSheet $sheet, FestivalJudgeAssignment $assignment): ?int
+    {
+        $matchesSheet = fn (array $item): bool => $item['model']->festival_entry_id === $sheet->festival_entry_id;
+        $matchingScenes = $this->judgingScenes($edition)
+            ->map(fn (array $scene): Collection => $this->performanceItems($scene))
+            ->filter(fn (Collection $items): bool => $items->contains($matchesSheet));
+        $items = $matchingScenes->first(fn (Collection $items): bool => $items->where('status', 'active')->contains($matchesSheet))
+            ?? $matchingScenes->first();
+
+        if ($items === null) {
+            return null;
+        }
+
+        $currentItem = $items->where('status', 'active')->first($matchesSheet) ?? $items->first($matchesSheet);
+        $followingEntries = $items
+            ->skipUntil(fn (array $item): bool => $item['id'] === $currentItem['id'])
+            ->skip(1)
+            ->pluck('model.festival_entry_id')
+            ->filter(fn (?int $entryId): bool => $entryId !== null && $entryId !== $sheet->festival_entry_id)
+            ->unique();
+
+        if ($followingEntries->isEmpty()) {
+            return null;
+        }
+
+        $sheetIds = $assignment->scoreSheets()
+            ->where('account_id', $edition->account_id)
+            ->whereIn('festival_entry_id', $followingEntries)
+            ->whereHas('entry', fn ($query) => $query->where('festival_edition_id', $edition->id))
+            ->pluck('id', 'festival_entry_id');
+        $nextEntryId = $followingEntries->first(fn (int $entryId): bool => $sheetIds->has($entryId));
+
+        return $nextEntryId === null ? null : $sheetIds->get($nextEntryId);
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private function judgingScenes(FestivalEdition $edition): Collection
+    {
+        return $this->timelinePresenter->scenes($edition->timelines()
+            ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
+            ->get());
+    }
+
+    /**
+     * @param  array<string, mixed>  $scene
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function performanceItems(array $scene): Collection
+    {
+        return collect($scene['items'])
+            ->where('enabled', true)
+            ->where('type', 'performance')
+            ->values();
     }
 
     /**
@@ -344,17 +419,10 @@ class FestivalJudgingController extends Controller
      */
     private function judgeListData(FestivalEdition $edition, Collection $sheets, FestivalJudgeAssignment $assignment): array
     {
-        $timelines = $edition->timelines()
-            ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
-            ->get();
-        $scenes = $this->timelinePresenter->scenes($timelines);
         $entryTimeline = [];
         $sheetsByEntry = $sheets->keyBy('festival_entry_id');
-        $liveScenes = $scenes->map(function (array $scene) use (&$entryTimeline, $sheetsByEntry): array {
-            $performanceItems = collect($scene['items'])
-                ->where('enabled', true)
-                ->where('type', 'performance')
-                ->values();
+        $liveScenes = $this->judgingScenes($edition)->map(function (array $scene) use (&$entryTimeline, $sheetsByEntry): array {
+            $performanceItems = $this->performanceItems($scene);
             $nextPerformance = $performanceItems->firstWhere('status', 'future');
 
             foreach ($performanceItems as $position => $item) {

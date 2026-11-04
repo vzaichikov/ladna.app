@@ -93,6 +93,9 @@
                             {{ __('app.festival_rubric_'.$section->contribution->value) }}
                         </span>
                     </div>
+                    @if ($section->contribution->value === 'deduction')
+                        <p class="mt-2 text-sm text-slate-600">{{ __('app.festival_score_optional_deduction') }}</p>
+                    @endif
                     <div class="mt-4 space-y-4">
                         @foreach ($section->criteria as $criterionIndex => $criterion)
                             @php($existing = $sheet->scores->firstWhere('festival_rubric_criterion_id', $criterion->id))
@@ -116,7 +119,7 @@
                                         >−</button>
                                         <input
                                             type="number"
-                                            step="0.5"
+                                            step="0.01"
                                             min="0"
                                             max="{{ $criterion->max_score }}"
                                             name="scores[{{ $criterion->id }}][score]"
@@ -153,10 +156,21 @@
 
             <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-crm">
                 <p class="text-sm font-semibold text-slate-500" data-score-save-status aria-live="polite">{{ __('app.festival_score_autosave_copy') }}</p>
-                <x-ui.button type="submit" data-score-save-button>
-                    <x-ui.icon name="save" class="h-4 w-4" />
-                    {{ __('app.save') }}
-                </x-ui.button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-ui.button :href="$listUrl" variant="secondary" data-score-list-link>
+                        {{ __('app.festival_score_sheets') }}
+                    </x-ui.button>
+                    <x-ui.button type="submit" data-score-save-button>
+                        <x-ui.icon name="save" class="h-4 w-4" />
+                        {{ __('app.save') }}
+                    </x-ui.button>
+                    @if ($hasNextSheet)
+                        <x-ui.button type="submit" name="next" value="1" variant="secondary" data-score-next-button>
+                            {{ __('app.festival_next_performance') }}
+                            <x-ui.icon name="chevron-right" class="h-4 w-4" />
+                        </x-ui.button>
+                    @endif
+                </div>
             </div>
         </form>
     </div>

@@ -18,6 +18,7 @@ use App\Models\FestivalRubricSection;
 use App\Models\FestivalScoreSheet;
 use App\Models\FestivalSeries;
 use App\Models\User;
+use App\Support\Festivals\FestivalJudgingCriteria;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -59,7 +60,7 @@ class FestivalSpecialistJudgingTest extends TestCase
         $partial = app(BuildFestivalResults::class)->execute($edition, $category);
         $this->assertSame('8.0000', $partial['rows']->sole()['total']);
         $this->assertSame(1, $partial['completed']);
-        $this->assertSame(2, $partial['missing']);
+        $this->assertSame(1, $partial['missing']);
         $this->assertFalse($partial['ready']);
 
         app(SaveFestivalScoreSheet::class)->execute($artisticSheet, $artisticAssignment, [
@@ -89,6 +90,67 @@ class FestivalSpecialistJudgingTest extends TestCase
         $this->assertSame($rubric->id, $technicalSheet->festival_rubric_id);
     }
 
+    public function test_blank_deductions_are_optional_and_average_as_zero(): void
+    {
+        [$account, $edition, $category, $owner] = $this->festival();
+        [, $technique, $artistry, $deductions] = $this->rubric($account, $edition, $category);
+        [$judge, $assignment] = $this->judge($account, $edition, $category, []);
+        [$specialist, $specialistAssignment] = $this->judge($account, $edition, $category, [$deductions]);
+        $entry = $this->entry($account, $edition, $category, 'Optional deduction performance');
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.score-sheets.prepare', [$account, $edition]))
+            ->assertSessionHasNoErrors();
+        $sheet = $assignment->scoreSheets()->where('festival_entry_id', $entry->id)->sole();
+        $specialistSheet = $specialistAssignment->scoreSheets()->where('festival_entry_id', $entry->id)->sole();
+        $award = $technique->criteria()->sole();
+        $otherAward = $artistry->criteria()->sole();
+        $deduction = $deductions->criteria()->sole();
+        $save = app(SaveFestivalScoreSheet::class);
+
+        $sheet = $save->execute($sheet, $assignment, ['scores' => [
+            ['criterion_id' => $award->id, 'score' => '8'],
+            ['criterion_id' => $otherAward->id, 'score' => '0'],
+            ['criterion_id' => $deduction->id, 'comment' => 'No deduction'],
+        ]], $judge);
+
+        $this->assertSame('submitted', $sheet->status->value);
+        $this->assertNull($sheet->scores->firstWhere('festival_rubric_criterion_id', $deduction->id)->score);
+        $this->assertSame([
+            'required' => 2, 'completed' => 2, 'missing' => 0, 'ready' => true,
+        ], app(FestivalJudgingCriteria::class)->scoreProgress($sheet, $assignment));
+        $this->assertTrue(app(FestivalJudgingCriteria::class)->scoreProgress($specialistSheet, $specialistAssignment)['ready']);
+
+        $sheet->update(['status' => 'draft', 'submitted_at' => null]);
+        $index = route('dashboard.accounts.festivals.judging.score-sheets.index', [$account, $edition]);
+        $this->get($index.'?status=submitted')->assertOk()
+            ->assertViewHas('sheets', fn ($sheets): bool => $sheets->total() === 2);
+        $this->get($index.'?status=draft')->assertOk()
+            ->assertViewHas('sheets', fn ($sheets): bool => $sheets->total() === 0);
+
+        $save->execute($specialistSheet, $specialistAssignment, ['scores' => [
+            ['criterion_id' => $deduction->id, 'score' => '2'],
+        ]], $specialist);
+        $results = app(BuildFestivalResults::class)->execute($edition, $category);
+        $this->assertTrue($results['ready']);
+        $this->assertSame('1.0000', $results['rows']->sole()['deduction_total']);
+        $this->assertSame('7.0000', $results['rows']->sole()['total']);
+
+        foreach (['0', null] as $score) {
+            $sheet = $save->execute($sheet, $assignment, ['scores' => [
+                ['criterion_id' => $deduction->id, 'score' => $score],
+            ]], $judge);
+            $this->assertSame('submitted', $sheet->status->value);
+            $this->assertSame('No deduction', $sheet->scores->firstWhere('festival_rubric_criterion_id', $deduction->id)->comment);
+            $this->assertSame('1.0000', app(BuildFestivalResults::class)->execute($edition, $category)['rows']->sole()['deduction_total']);
+        }
+
+        $sheet = $save->execute($sheet, $assignment, ['scores' => [
+            ['criterion_id' => $otherAward->id, 'score' => null],
+        ]], $judge);
+        $this->assertSame('draft', $sheet->status->value);
+        $this->assertFalse(app(BuildFestivalResults::class)->execute($edition, $category)['ready']);
+    }
+
     public function test_preparation_rejects_uncovered_sections_and_results_show_the_setup_issue(): void
     {
         [$account, $edition, $category, $owner] = $this->festival();
@@ -106,6 +168,34 @@ class FestivalSpecialistJudgingTest extends TestCase
         $results = app(BuildFestivalResults::class)->execute($edition, $category);
         $this->assertFalse($results['ready']);
         $this->assertTrue($results['issues']->contains(fn (string $issue): bool => str_contains($issue, $deductions->name)));
+    }
+
+    public function test_deduction_only_results_require_a_prepared_sheet(): void
+    {
+        [$account, $edition, $category, $owner] = $this->festival();
+        $rubric = FestivalRubric::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'festival_category_id' => $category->id,
+        ]);
+        $deductions = $rubric->sections()->create([
+            'account_id' => $account->id, 'name' => 'Deductions', 'contribution' => 'deduction',
+        ]);
+        $deductions->criteria()->create([
+            'account_id' => $account->id, 'name' => 'Protocol penalty', 'max_score' => 5,
+        ]);
+        $this->judge($account, $edition, $category, [$deductions]);
+        $this->entry($account, $edition, $category, 'Deduction-only performance');
+        $results = app(BuildFestivalResults::class);
+
+        $this->assertFalse($results->execute($edition, $category)['ready']);
+
+        $this->actingAs($owner)->post(route('dashboard.accounts.festivals.judging.score-sheets.prepare', [$account, $edition]))
+            ->assertSessionHasNoErrors();
+
+        $prepared = $results->execute($edition, $category);
+        $this->assertTrue($prepared['ready']);
+        $this->assertSame(0, $prepared['required']);
+        $this->assertSame('0.0000', $prepared['rows']->sole()['total']);
     }
 
     public function test_judging_preparation_and_results_enforce_the_category_minimum(): void

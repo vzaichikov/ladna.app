@@ -5,7 +5,6 @@ namespace App\Actions\Festivals;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalRubricSectionContribution;
 use App\Models\FestivalCategory;
-use App\Models\FestivalCriterionScore;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalJudgeAssignment;
@@ -23,7 +22,8 @@ class BuildFestivalResults
     /**
      * @return array{
      *     rubric: FestivalRubric|null,
-     *     rows: Collection<int, array{rank: int, tied: bool, entry: FestivalEntry, total: string, award_total: string, deduction_total: string, ad_hoc_penalties: string, required: int, completed: int, missing: int, ready: bool}>,
+     *     assignments: Collection<int, FestivalJudgeAssignment>,
+     *     rows: Collection<int, array{rank: int, tied: bool, podium_tie: bool, entry: FestivalEntry, total: string, award_total: string, deduction_total: string, ad_hoc_penalties: string, required: int, completed: int, missing: int, ready: bool}>,
      *     issues: Collection<int, string>,
      *     required: int,
      *     completed: int,
@@ -40,6 +40,7 @@ class BuildFestivalResults
         if (! $rubric) {
             return [
                 'rubric' => null,
+                'assignments' => collect(),
                 'rows' => collect(),
                 'issues' => collect([__('app.festival_results_rubric_missing')]),
                 'required' => 0,
@@ -89,17 +90,21 @@ class BuildFestivalResults
             })
             ->values();
         $scoreCounts = $rows->countBy('total');
+        $readyScoreCounts = $rows->where('ready', true)->countBy('total');
         $previousTotal = null;
         $rank = 0;
-        $rows = $rows->map(function (array $row, int $index) use (&$previousTotal, &$rank, $scoreCounts): array {
+        $rows = $rows->map(function (array $row, int $index) use (&$previousTotal, &$rank, $scoreCounts, $readyScoreCounts): array {
             if ($previousTotal === null || bccomp($row['total'], $previousTotal, 4) !== 0) {
                 $rank = $index + 1;
                 $previousTotal = $row['total'];
             }
 
+            $tied = $scoreCounts->get($row['total']) > 1;
+
             return [
                 'rank' => $rank,
-                'tied' => $scoreCounts->get($row['total'], 0) > 1,
+                'tied' => $tied,
+                'podium_tie' => $rank <= 2 && $tied && $readyScoreCounts->get($row['total']) === $scoreCounts->get($row['total']),
                 ...$row,
             ];
         });
@@ -109,12 +114,13 @@ class BuildFestivalResults
 
         return [
             'rubric' => $rubric,
+            'assignments' => $eligibleAssignments,
             'rows' => $rows,
             'issues' => $issues,
             'required' => $required,
             'completed' => $completed,
             'missing' => $missing,
-            'ready' => $issues->isEmpty() && $rows->isNotEmpty() && $required > 0 && $missing === 0,
+            'ready' => $issues->isEmpty() && $rows->isNotEmpty() && $rows->every('ready'),
         ];
     }
 
@@ -127,21 +133,22 @@ class BuildFestivalResults
         $sheets = $entry->scoreSheets->keyBy('festival_judge_assignment_id');
         $required = 0;
         $completed = 0;
+        $hasPreparedCriteria = false;
 
         foreach ($assignments as $assignment) {
             $sheet = $sheets->get($assignment->id);
 
-            foreach ($this->judgingCriteria->sectionsFor($assignment, $rubric) as $section) {
-                foreach ($section->criteria as $criterion) {
-                    $required++;
+            if ($sheet === null) {
+                $required += $this->judgingCriteria->requiredCriteria($this->judgingCriteria->sectionsFor($assignment, $rubric))->count();
 
-                    $criterionScore = $sheet?->scores->firstWhere('festival_rubric_criterion_id', $criterion->id);
-
-                    if ($criterionScore instanceof FestivalCriterionScore && $criterionScore->score !== null) {
-                        $completed++;
-                    }
-                }
+                continue;
             }
+
+            $sheet->setRelation('rubric', $rubric);
+            $progress = $this->judgingCriteria->scoreProgress($sheet, $assignment);
+            $required += $progress['required'];
+            $completed += $progress['completed'];
+            $hasPreparedCriteria = $hasPreparedCriteria || $progress['required'] > 0 || $progress['ready'];
         }
 
         $awardTotal = '0.00000000';
@@ -175,7 +182,7 @@ class BuildFestivalResults
             'required' => $required,
             'completed' => $completed,
             'missing' => $missing,
-            'ready' => $required > 0 && $missing === 0,
+            'ready' => $hasPreparedCriteria && $missing === 0,
         ];
     }
 
@@ -189,17 +196,23 @@ class BuildFestivalResults
             fn (FestivalJudgeAssignment $assignment): bool => $this->judgingCriteria->sectionsFor($assignment, $rubric)->contains('id', $section->id),
         );
         $scores = $coveringAssignments
-            ->map(fn (FestivalJudgeAssignment $assignment): ?FestivalCriterionScore => $sheets
-                ->get($assignment->id)?->scores->firstWhere('festival_rubric_criterion_id', $criterion->id))
-            ->filter(fn (?FestivalCriterionScore $score): bool => $score instanceof FestivalCriterionScore && $score->score !== null)
-            ->values();
+            ->map(function (FestivalJudgeAssignment $assignment) use ($sheets, $criterion, $section): ?string {
+                $sheet = $sheets->get($assignment->id);
+                if ($sheet === null) {
+                    return null;
+                }
+
+                return $sheet->scores->firstWhere('festival_rubric_criterion_id', $criterion->id)?->score
+                    ?? ($section->contribution === FestivalRubricSectionContribution::Deduction ? '0' : null);
+            })
+            ->filter(fn (?string $score): bool => $score !== null);
 
         if ($scores->isEmpty()) {
             return '0.00000000';
         }
 
         $scoreTotal = $scores->reduce(
-            fn (string $total, FestivalCriterionScore $score): string => bcadd($total, (string) $score->score, 8),
+            fn (string $total, string $score): string => bcadd($total, $score, 8),
             '0.00000000',
         );
         $average = bcdiv($scoreTotal, (string) $scores->count(), 8);

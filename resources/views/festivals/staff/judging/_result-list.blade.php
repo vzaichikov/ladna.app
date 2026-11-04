@@ -58,7 +58,11 @@
                 <div class="flex items-center gap-2 lg:block">
                     <p class="text-3xl font-bold tabular-nums text-slate-950">#{{ $row['rank'] }}</p>
                     @if ($row['tied'])
-                        <span class="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">{{ __('app.festival_results_tie') }}</span>
+                        <span @class([
+                            'mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold',
+                            'bg-rose-100 text-rose-900' => $row['podium_tie'],
+                            'bg-amber-100 text-amber-800' => ! $row['podium_tie'],
+                        ]) @if($row['podium_tie']) data-result-podium-tie @endif>{{ __('app.festival_results_tie') }}</span>
                     @endif
                 </div>
                 <div class="min-w-0">

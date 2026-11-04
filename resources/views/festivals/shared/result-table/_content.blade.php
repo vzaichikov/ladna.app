@@ -24,7 +24,21 @@
     @if($activeTab === 'summary')
         <div class="max-h-[calc(100vh-16rem)] overflow-auto border border-slate-300 bg-white shadow-xs scrollbar-thin" data-result-sheet-scroll>
             <table class="w-full min-w-[52rem] border-separate border-spacing-0 text-left text-xs tabular-nums" data-result-summary-grid>
-                <thead class="text-[10px] font-semibold uppercase tracking-wide text-slate-700"><tr><th class="sticky top-0 left-0 z-40 w-16 min-w-16 border-r border-b border-slate-300 bg-sky-100 px-2 py-2">#</th><th class="sticky top-0 left-16 z-40 w-40 min-w-40 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 shadow-[2px_0_0_0_#cbd5e1]">{{ __('app.festival_entry') }}</th><th class="sticky top-0 z-30 w-20 min-w-20 border-r border-b border-slate-300 bg-amber-100 px-2 py-2 text-center">{{ __('app.festival_result_total') }}</th><th class="sticky top-0 z-30 w-20 min-w-20 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.festival_result_penalty') }}</th><th class="sticky top-0 z-30 w-32 min-w-32 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.status') }}</th><th class="sticky top-0 z-30 w-16 min-w-16 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.festival_result_rank') }}</th><th class="sticky top-0 z-30 w-44 min-w-44 border-b border-slate-300 bg-sky-100 px-2 py-2">{{ __('app.festival_nominations') }}</th></tr></thead>
+                <thead class="text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                    <tr>
+                        <th scope="col" class="sticky top-0 left-0 z-40 w-16 min-w-16 border-r border-b border-slate-300 bg-sky-100 px-2 py-2">#</th>
+                        <th scope="col" class="sticky top-0 left-16 z-40 w-40 min-w-40 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 shadow-[2px_0_0_0_#cbd5e1]">{{ __('app.festival_entry') }}</th>
+                        <th scope="col" class="sticky top-0 z-30 w-20 min-w-20 border-r border-b border-slate-300 bg-amber-100 px-2 py-2 text-center">{{ __('app.festival_result_total') }}</th>
+                        @foreach($assignments as $assignment)
+                            <th scope="col" class="sticky top-0 z-30 min-w-20 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center" data-result-summary-judge-header="{{ $assignment->id }}">{{ $assignment->display_name }}</th>
+                        @endforeach
+                        <th scope="col" class="sticky top-0 z-30 w-28 min-w-28 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.festival_rubric_deductions_total') }}</th>
+                        <th scope="col" class="sticky top-0 z-30 w-24 min-w-24 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.festival_other_penalties_total') }}</th>
+                        <th scope="col" class="sticky top-0 z-30 w-32 min-w-32 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.status') }}</th>
+                        <th scope="col" class="sticky top-0 z-30 w-24 min-w-24 border-r border-b border-slate-300 bg-sky-100 px-2 py-2 text-center">{{ __('app.festival_result_rank') }}</th>
+                        <th scope="col" class="sticky top-0 z-30 w-44 min-w-44 border-b border-slate-300 bg-sky-100 px-2 py-2">{{ __('app.festival_nominations') }}</th>
+                    </tr>
+                </thead>
                 <tbody data-result-summary-rows>@include('festivals.shared.result-table._summary-rows')</tbody>
             </table>
         </div>

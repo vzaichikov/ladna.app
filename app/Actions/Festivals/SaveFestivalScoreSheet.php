@@ -79,7 +79,6 @@ class SaveFestivalScoreSheet
                 ->get()
                 ->keyBy('festival_rubric_criterion_id');
             $total = '0.00000000';
-            $completed = 0;
             foreach ($criteria as $criterion) {
                 $score = $storedScores->get($criterion->id)?->score;
 
@@ -87,7 +86,6 @@ class SaveFestivalScoreSheet
                     continue;
                 }
 
-                $completed++;
                 $weightedScore = bcmul(
                     bcmul((string) $score, (string) $criterion->weight, 8),
                     (string) $criterion->section->weight,
@@ -98,7 +96,8 @@ class SaveFestivalScoreSheet
                     : bcadd($total, $weightedScore, 8);
             }
 
-            $ready = $criteria->isNotEmpty() && $completed === $criteria->count();
+            $sheet->setRelation('scores', $storedScores->values());
+            $ready = $this->judgingCriteria->scoreProgress($sheet, $assignment)['ready'];
             $sheetAttributes = [
                 'total_score' => $this->round($total),
                 'status' => $ready ? FestivalScoreSheetStatus::Submitted : FestivalScoreSheetStatus::Draft,
