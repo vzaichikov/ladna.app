@@ -20,6 +20,18 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.178.0',
+                'date' => '2026-11-05',
+                'title' => 'Festival seating, tickets and entrance monitoring',
+                'items' => [
+                    'Create hall layouts with floors, sections, rows, tables and venue blocks, then enable exact-seat selection for ticket purchases. General-admission and online tickets remain available.',
+                    'The Tickets overview brings together ticket types, issued tickets, orders, hall layouts, invitations and promo codes. Switch between Map and List to inspect assignments or issue a complimentary ticket for a selected seat.',
+                    'Guests see their seat details beside QR codes, in ticket emails and PDFs, and can open Show my seats from their private order page.',
+                    'Entrance staff can switch between Guests and Hall, with live check-in updates and separate counts for guest tickets, performers and helpers.',
+                ],
+                'meta' => 'Assigned seating and ticket workflow release.',
+            ],
+            [
                 'version' => '0.177.0',
                 'date' => '2026-11-04',
                 'title' => 'Festival score sheets and results summary',
@@ -1654,6 +1666,18 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.178.0',
+                'date' => '2026-11-05',
+                'title' => 'Місця в залі, квитки та вхід на фестиваль',
+                'items' => [
+                    'Створюйте схеми залу з поверхами, секторами, рядами, столами та блоками сцени, бару й інших зон, а потім увімкніть вибір конкретних місць під час купівлі. Квитки без закріпленого місця та онлайн-квитки залишаються доступними.',
+                    'Огляд «Квитки» об’єднує типи квитків, видані квитки, замовлення, схему залу, запрошення та промокоди. Перемикайтеся між схемою і списком, щоб перевірити закріплення або безкоштовно видати квиток на вибране місце.',
+                    'Гості бачать своє місце поруч із QR-кодом, у листі та PDF-квитку, а кнопка «Показати мої місця» відкриває схему з приватної сторінки замовлення.',
+                    'Працівники входу можуть перемикатися між гостями та залом. Відмітки входу оновлюються наживо, а гостьові квитки, учасники та помічники мають окремі лічильники.',
+                ],
+                'meta' => 'Реліз місць у залі та роботи з квитками.',
+            ],
             [
                 'version' => '0.177.0',
                 'date' => '2026-11-04',

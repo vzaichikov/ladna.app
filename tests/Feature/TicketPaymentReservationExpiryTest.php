@@ -247,10 +247,9 @@ class TicketPaymentReservationExpiryTest extends TestCase
             'status' => FestivalTicketOrderStatus::Failed,
         ]);
 
-        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.ticket-orders.index', [
             $account,
             $edition,
-            'tab' => 'orders',
             'q' => 'EXPIRED-AUDIT',
             'status' => FestivalTicketOrderStatus::Expired->value,
             'source' => 'checkout',

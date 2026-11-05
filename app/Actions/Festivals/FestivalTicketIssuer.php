@@ -18,10 +18,15 @@ class FestivalTicketIssuer
      */
     public function execute(FestivalTicketOrder $order, array $ticketSpecifications = []): void
     {
-        $order->loadMissing(['account', 'edition', 'portalUser', 'items.admissionType.onlineStream']);
+        $order->loadMissing(['account', 'edition', 'portalUser', 'items.admissionType.onlineStream', 'items.orderSeats']);
         $specificationPosition = 0;
 
         foreach ($order->items as $item) {
+            $seatIds = $item->orderSeats->sortBy('id')->pluck('festival_seat_id')->values();
+            if ($item->admissionType->is_assigned_seating && $seatIds->count() !== $item->quantity) {
+                throw new \LogicException('Assigned Festival tickets require one seat for each ticket.');
+            }
+
             $existing = $order->tickets()->where('festival_ticket_order_item_id', $item->id)->count();
             $specificationPosition += $existing;
             for ($position = $existing; $position < $item->quantity; $position++) {
@@ -33,6 +38,7 @@ class FestivalTicketIssuer
                     'festival_ticket_order_id' => $order->id,
                     'festival_ticket_order_item_id' => $item->id,
                     'festival_admission_type_id' => $item->festival_admission_type_id,
+                    'festival_seat_id' => $seatIds->get($position),
                     'holder_name' => $specification['holder_name'] ?? null,
                     'festival_participant_id' => $specification['festival_participant_id'] ?? null,
                     'festival_judge_assignment_id' => $specification['festival_judge_assignment_id'] ?? null,
@@ -64,8 +70,16 @@ class FestivalTicketIssuer
             throw new \LogicException('Festival ticket specification count must match the number of issued tickets.');
         }
 
+        $order->load(['tickets.seat.edition', 'tickets.admissionType']);
+        $venueTickets = $order->tickets->filter(fn (FestivalTicket $ticket): bool => $ticket->admissionType?->delivery_mode === FestivalAdmissionDeliveryMode::Venue);
+        $seatLabels = $venueTickets
+            ->filter(fn (FestivalTicket $ticket): bool => $ticket->seat !== null)
+            ->map(fn (FestivalTicket $ticket): string => $ticket->seat->label($order->locale))->values()->all();
+
         $this->notifications->queueForTicketOrder($order, [
-            'tickets_count' => $order->tickets()->count(),
+            'tickets_count' => $order->tickets->count(),
+            'seat_labels' => $seatLabels,
+            'unassigned_tickets_count' => $venueTickets->whereNull('festival_seat_id')->count(),
         ]);
     }
 

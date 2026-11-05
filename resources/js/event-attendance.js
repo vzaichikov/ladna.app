@@ -45,6 +45,7 @@ export function initEventAttendance() {
         const body = document.createElement('div');
         const customer = document.createElement('div');
         const type = document.createElement('div');
+        const seat = document.createElement('div');
         const code = document.createElement('div');
         const action = document.createElement('div');
 
@@ -54,11 +55,13 @@ export function initEventAttendance() {
         customer.dataset.attendanceCustomer = '';
         type.className = 'mt-0.5 truncate text-[11px] opacity-75';
         type.dataset.attendanceType = '';
+        seat.className = 'mt-1 hidden break-words text-xs leading-relaxed';
+        seat.dataset.attendanceSeat = '';
         code.className = 'truncate font-mono text-[10px] leading-tight opacity-70';
         code.dataset.attendanceCode = '';
         action.className = 'mt-2';
         action.dataset.attendanceAction = '';
-        body.append(customer, type, code);
+        body.append(customer, type, seat, code);
         ticket.append(body, action);
 
         return ticket;
@@ -134,6 +137,9 @@ export function initEventAttendance() {
             ticket.querySelector('[data-attendance-type]').textContent = [ticketData.kind_label, ticketData.type ?? ticketData.ticket_type]
                 .filter((value, index, values) => value && values.indexOf(value) === index)
                 .join(' · ');
+            const seat = ticket.querySelector('[data-attendance-seat]');
+            seat.textContent = String(ticketData.seat_label ?? '');
+            seat.classList.toggle('hidden', !ticketData.seat_label);
             ticket.querySelector('[data-attendance-code]').textContent = String(ticketData.code ?? '');
             setTicketState(ticket, ticketData);
             fragment.append(ticket);

@@ -1,4 +1,6 @@
+import { initFestivalSeatMaps } from './festival-seat-map';
 import { createIcons, icons } from 'lucide';
+import { initFestivalAssignedAdmissionType, initFestivalHallLayout } from './festival-hall-layout';
 import { initFestivalPaymentRecovery } from './festival-payment-recovery';
 import Panzoom from '@panzoom/panzoom';
 import SimplePhoneMask from 'simple-phone-mask';
@@ -10,6 +12,7 @@ import { initFestivalStreamPlayer } from './festival-stream-player';
 import { initFestivalTelegramMiniApp } from './festival-telegram-mini-app';
 import { initFestivalMediaDuplicates } from './festival-media-duplicates';
 import { initFestivalSponsors } from './festival-sponsors';
+import { initFestivalSeatCheckout } from './festival-seat-checkout';
 import { initCustomerCart, initCustomerCartPayment } from './customer-cart';
 import { initStudioPromoCodes } from './studio-promo-codes';
 
@@ -1205,6 +1208,13 @@ function initPhoneMasks(root = document) {
 
         input.addEventListener('input', validatePhoneMask);
         input.addEventListener('blur', validatePhoneMask);
+        input.form?.addEventListener('formdata', (event) => {
+            const digits = input.value.replace(/\D/g, '');
+
+            if (!input.required && !input.disabled && input.name && digits === phoneMask.countryCode) {
+                event.formData.set(input.name, '');
+            }
+        });
         wrapper?.addEventListener('click', (event) => {
             if (!(event.target instanceof Element) || !event.target.closest('.spm-dropdown-option')) {
                 return;
@@ -9841,7 +9851,7 @@ function initPromoCodeCheckouts(root = document) {
         });
         form.addEventListener('promotion-input-changed', scheduleRefresh);
 
-        if (hiddenInput.value) {
+        if (hiddenInput.value && !form.querySelector('[data-festival-seat-picker]')) {
             requestQuote();
         } else {
             hideQuote();
@@ -9930,12 +9940,15 @@ function initEventTicketCheckouts(root = document) {
         };
 
         const sync = () => {
-            const quantity = totalQuantity();
-            const subtotalCents = counters.reduce(
+            const seats = form.festivalSeats;
+            const quantity = totalQuantity() + (seats?.count ?? 0);
+            form.festivalGeneralSubtotalCents = counters.reduce(
                 (total, counter) => total + quantityFor(counter) * unitPriceFor(counter),
                 0,
             );
-            const promotionQuote = form.promotionQuote;
+            const subtotalCents = seats?.quote?.subtotal_cents
+                ?? (form.festivalGeneralSubtotalCents + (seats?.estimatedSubtotal ?? 0));
+            const promotionQuote = seats?.count > 0 ? seats.quote : form.promotionQuote;
             const totalCents = promotionQuote && Number(promotionQuote.subtotal_cents) === subtotalCents
                 ? Number(promotionQuote.total_cents)
                 : subtotalCents;
@@ -9948,6 +9961,7 @@ function initEventTicketCheckouts(root = document) {
                 const value = quantityFor(counter);
                 const maximum = Number.parseInt(counter.dataset.maxQuantity || '0', 10);
                 const capacityReached = Number.isFinite(eventCapacity) && quantity >= eventCapacity;
+                const conflictsWithSeats = counterIsExclusive(counter) && seats?.count > 0;
 
                 if (input) {
                     input.value = String(value);
@@ -9963,7 +9977,7 @@ function initEventTicketCheckouts(root = document) {
                 }
 
                 if (increment) {
-                    increment.disabled = Boolean(input?.disabled) || value >= maximum || capacityReached;
+                    increment.disabled = Boolean(input?.disabled) || value >= maximum || capacityReached || conflictsWithSeats;
                 }
             });
 
@@ -9986,11 +10000,11 @@ function initEventTicketCheckouts(root = document) {
             requiredFieldsHelp.forEach((message) => message.classList.toggle('hidden', !hasSelection || requiredDetailsComplete));
 
             if (freeAction) {
-                freeAction.disabled = !isFree || !requiredDetailsComplete;
+                freeAction.disabled = !isFree || !requiredDetailsComplete || Boolean(seats?.blocked);
             }
 
             paidActions.forEach((button) => {
-                button.disabled = !hasSelection || isFree || !requiredDetailsComplete;
+                button.disabled = !hasSelection || isFree || !requiredDetailsComplete || Boolean(seats?.blocked);
             });
         };
 
@@ -10046,6 +10060,7 @@ function initEventTicketCheckouts(root = document) {
         }
 
         form.addEventListener('promo-code:quote', sync);
+        form.addEventListener('festival-seats:change', sync);
         sync();
     });
 }
@@ -10858,6 +10873,8 @@ function initFestivalNominationAssignments(root = document.querySelector('[data-
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initFestivalAssignedAdmissionType();
+    initFestivalHallLayout();
     initCustomerCart();
     initCustomerCartPayment();
     initStudioPromoCodes();
@@ -10885,6 +10902,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventScanner();
     initEventForms();
     initEventTicketCheckouts();
+    initFestivalSeatCheckout();
+    initFestivalSeatMaps();
     initPromoCodeCheckouts();
     initEventMonopayIframes();
     initEventOrderReturnNavigation();

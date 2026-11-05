@@ -6,7 +6,6 @@ use App\Models\Account;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Promotions\PromotionCodeNormalizer;
 use Closure;
-use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -69,24 +68,15 @@ class FestivalAdmissionOrderRequest extends FormRequest
             ],
             'provider' => ['nullable', 'string', Rule::in(['monopay', 'liqpay', 'wayforpay'])],
             'promo_code' => ['nullable', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
-            'items' => ['required', 'array', 'min:1', 'max:25'],
+            'items' => ['required_without:seat_ids', 'array', 'max:25'],
             'items.*.admission_type_id' => ['required', 'integer', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
+            'seat_ids' => ['nullable', 'array', 'list', 'max:20'],
+            'seat_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'seat_checkout_id' => ['nullable', 'required_with:seat_ids', 'string', 'regex:/^[A-Za-z0-9]{48}$/'],
+            'seat_quote' => ['nullable', 'required_with:seat_ids', 'string', 'regex:/^[a-f0-9]{64}$/'],
+            'seat_quote_total' => ['nullable', 'required_with:seat_ids', 'integer', 'min:0'],
             'terms' => ['accepted'],
-        ];
-    }
-
-    /** @return array<int, callable> */
-    public function after(): array
-    {
-        return [
-            function (Validator $validator): void {
-                if (collect($this->input('items', []))->contains(fn (mixed $item): bool => is_array($item) && (int) ($item['quantity'] ?? 0) > 0)) {
-                    return;
-                }
-
-                $validator->errors()->add('items', __('app.festival_admission_unavailable'));
-            },
         ];
     }
 

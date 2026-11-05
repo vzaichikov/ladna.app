@@ -3,9 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\IssueManualFestivalTickets;
-use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalPortalRole;
-use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\IssueFestivalAudienceTicketsRequest;
 use App\Http\Requests\IssueFestivalTicketRequest;
 use App\Jobs\IssueFestivalJudgeTickets;
@@ -16,6 +14,8 @@ use App\Models\FestivalJudgeAssignment;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrderItem;
+use App\Support\Festivals\FestivalSeatReservations;
+use App\Support\Festivals\FestivalStaffSeating;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +29,8 @@ class FestivalTicketIssuanceController extends Controller
     public function __construct(
         private readonly FestivalWorkspaceAccess $workspaceAccess,
         private readonly PhoneNumberNormalizer $phones,
+        private readonly FestivalSeatReservations $reservations,
+        private readonly FestivalStaffSeating $seating,
     ) {}
 
     public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
@@ -56,15 +58,13 @@ class FestivalTicketIssuanceController extends Controller
             ->whereBelongsTo($account)
             ->forRole(FestivalPortalRole::Guest)
             ->active()
-            ->find($request->integer('selected_guest_id'));
-        $admissionTypes = FestivalAdmissionType::query()
-            ->where('account_id', $account->id)
-            ->where('festival_edition_id', $festivalEdition->id)
-            ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+            ->find($request->integer('selected_guest_id', (int) old('festival_portal_user_id')));
+        $admissionTypes = $this->seating->types($festivalEdition);
+        $seatChart = $this->seating->chart($festivalEdition, $admissionTypes);
+
+        $selectedSeatId = (int) old('seat_id', $request->integer('seat_id'));
+        $selectedSeat = $selectedSeatId > 0 ? $festivalEdition->seats()->where('account_id', $account->id)->findOrFail($selectedSeatId) : null;
+        $selectedTypeId = old('festival_admission_type_id', $selectedSeat?->festival_admission_type_id);
 
         $judgeGroups = $this->judgeGroups($festivalEdition);
         $judgeAutomationKeys = $judgeGroups->pluck('automation_key');
@@ -79,7 +79,10 @@ class FestivalTicketIssuanceController extends Controller
             'guests' => $guests,
             'selectedGuest' => $selectedGuest,
             'admissionTypes' => $admissionTypes,
-            'capacityByType' => $this->capacityByType($festivalEdition, $admissionTypes),
+            'judgeAdmissionTypes' => $admissionTypes->where('is_assigned_seating', false),
+            'seatChart' => $seatChart,
+            'selectedSeatId' => $selectedSeatId, 'selectedTypeId' => $selectedTypeId,
+            'capacityByType' => $this->capacityByType($festivalEdition, $admissionTypes, $seatChart),
             'filters' => $filters,
             'judgeStats' => [
                 'eligible' => $judgeGroups->count(),
@@ -101,9 +104,9 @@ class FestivalTicketIssuanceController extends Controller
         $admissionType = FestivalAdmissionType::query()->findOrFail($request->integer('festival_admission_type_id'));
         $order = $issueTickets->execute($festivalEdition, $guest, $admissionType, $request->user(), [[
             'holder_name' => $request->string('holder_name')->trim()->toString(),
-        ]]);
+        ]], $request->filled('seat_id') ? [$request->integer('seat_id')] : []);
 
-        return redirect()->route('dashboard.accounts.festivals.tickets', [$account, $festivalEdition, 'tab' => 'sold'])
+        return redirect()->route('dashboard.accounts.festivals.tickets.sold', [$account, $festivalEdition])
             ->with('status', __('app.festival_manual_ticket_issued', ['order' => $order?->order_id]));
     }
 
@@ -175,8 +178,11 @@ class FestivalTicketIssuanceController extends Controller
         });
     }
 
-    /** @param Collection<int, FestivalAdmissionType> $admissionTypes */
-    private function capacityByType(FestivalEdition $edition, Collection $admissionTypes): Collection
+    /**
+     * @param  Collection<int, FestivalAdmissionType>  $admissionTypes
+     * @param  array<string, mixed>|null  $seatChart
+     */
+    private function capacityByType(FestivalEdition $edition, Collection $admissionTypes, ?array $seatChart): Collection
     {
         $purchase = $edition->purchase()->with('package')->first();
         $packageRemaining = PHP_INT_MAX;
@@ -184,14 +190,13 @@ class FestivalTicketIssuanceController extends Controller
             $heldQuantity = (int) FestivalTicketOrderItem::query()
                 ->whereHas('order', fn ($query) => $query
                     ->where('festival_edition_id', $edition->id)
-                    ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                    ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-                ->sum('quantity');
+                    ->countsAgainstInventory())
+                ->sum('quantity') + $this->reservations->preholdCount($edition);
             $packageRemaining = max(0, $purchase->package->max_tickets - $heldQuantity);
         }
 
         return $admissionTypes->mapWithKeys(fn (FestivalAdmissionType $type): array => [
-            $type->id => min($type->remainingQuantity(), $packageRemaining),
+            $type->id => min($this->seating->remaining($type, $seatChart), $packageRemaining),
         ]);
     }
 

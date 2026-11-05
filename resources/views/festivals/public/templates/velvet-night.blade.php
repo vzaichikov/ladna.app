@@ -49,7 +49,9 @@
                     @if ($edition->rules_html)
                         <a href="#festival-rules">{{ __('app.festival_rules') }}</a>
                     @endif
-                    <a href="#festival-admission">{{ __('app.festival_admission') }}</a>
+                    @if (($festivalSeatPickerAvailable ?? false) || $festivalAdmissionOptions->isNotEmpty())
+                        <a href="#festival-admission">{{ __('app.festival_admission') }}</a>
+                    @endif
                 </nav>
             </header>
 
@@ -75,9 +77,11 @@
                             {{ __('app.festival_apply') }}
                         </a>
                     @endif
-                    <a href="#festival-admission" class="velvet-button velvet-button-outline">
-                        {{ __('app.buy_tickets') }}
-                    </a>
+                    @if (($festivalSeatPickerAvailable ?? false) || $festivalAdmissionOptions->isNotEmpty())
+                        <a href="#festival-admission" class="velvet-button velvet-button-outline">
+                            {{ __('app.buy_tickets') }}
+                        </a>
+                    @endif
                     @if ($festivalTelegramBotUrl)
                         <a
                             href="{{ $festivalTelegramBotUrl }}"

@@ -153,7 +153,7 @@ export function initFestivalTelegramMiniApp() {
             actions.append(actionButton(labels.my_applications_count.replace('__count__', String(applicationCount)), 'entries', null, true));
         }
         actions.append(linkButton(labels.open_page, edition.public_url));
-        if (state.authorized) actions.append(actionButton(labels.tickets, 'ticket_checkout', edition.id, true));
+        if (state.authorized && edition.admission_available) actions.append(actionButton(labels.tickets, 'ticket_checkout', edition.id, true));
 
         return actions;
     };

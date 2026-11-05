@@ -26,7 +26,7 @@
                     <p class="mt-1 text-lg">{{ $edition->starts_at->timezone($edition->timezone)->format('H:i') }}–{{ $edition->ends_at->timezone($edition->timezone)->format('H:i') }}</p>
                     <p class="mt-4 text-sm leading-6">{{ $edition->venue_name }}<br>{{ $edition->venue_address }}</p>
                     @if ($edition->venue_map_url)<a href="{{ $edition->venue_map_url }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-block text-sm font-semibold underline">{{ __('app.open_map') }}</a>@endif
-                    @if ($festivalAdmissionOptions->isNotEmpty())
+                    @if (($festivalSeatPickerAvailable ?? false) || $festivalAdmissionOptions->isNotEmpty())
                         <x-ui.button href="#festival-admission" class="festival-primary-button mt-5 w-full">{{ __('app.buy_tickets') }}</x-ui.button>
                     @endif
                 </aside>

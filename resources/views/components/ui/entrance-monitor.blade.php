@@ -94,6 +94,7 @@
                 $customerName = data_get($ticket, 'customer_name', data_get($ticket, 'customer', __('app.entrance_guest')));
                 $ticketCode = data_get($ticket, 'code');
                 $ticketType = collect([data_get($ticket, 'kind_label'), data_get($ticket, 'type', data_get($ticket, 'ticket_type'))])->filter()->unique()->join(' · ');
+                $seatLabel = data_get($ticket, 'seat_label');
                 $undoUrl = data_get($ticket, 'undo_url');
             @endphp
             <article
@@ -108,6 +109,7 @@
                 <div class="min-w-0">
                     <div class="truncate text-sm font-semibold" data-attendance-customer>{{ $customerName }}</div>
                     <div class="mt-0.5 truncate text-[11px] opacity-75" data-attendance-type>{{ $ticketType }}</div>
+                    <div @class(['mt-1 break-words text-xs leading-relaxed', 'hidden' => blank($seatLabel)]) data-attendance-seat>{{ $seatLabel }}</div>
                     <div class="truncate font-mono text-[10px] leading-tight opacity-70" data-attendance-code>{{ $ticketCode }}</div>
                 </div>
                 <div class="mt-2" data-attendance-action>

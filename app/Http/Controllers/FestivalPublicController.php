@@ -14,6 +14,7 @@ use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTimeline;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
+use App\Support\Festivals\FestivalHallOccupancy;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTimelinePresenter;
@@ -49,7 +50,7 @@ class FestivalPublicController extends Controller
     ): View {
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)
-            ->with(['series.telegramBotInstallation', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->with(['series.telegramBotInstallation', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->where('is_assigned_seating', false)->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
@@ -100,6 +101,11 @@ class FestivalPublicController extends Controller
                 'exclusive' => $type->delivery_mode === FestivalAdmissionDeliveryMode::OnlineStream,
             ];
         });
+        $festivalSeatPickerAvailable = $edition->assigned_seating_enabled
+            && filled($edition->seating_floors)
+            && in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
+            && $edition->cancelled_at === null
+            && $edition->ends_at->isFuture();
         $festivalPaymentSettings = $gateways->availableSettingsFor($account);
         $festivalGoogleEmailPrefillAvailable = $authAvailability->googleSetting() !== null;
         $telegramInstallation = $edition->series->telegramBotInstallation;
@@ -128,6 +134,7 @@ class FestivalPublicController extends Controller
             'timelineWithinDates',
             'timelinePollingUrl',
             'festivalAdmissionOptions',
+            'festivalSeatPickerAvailable',
             'festivalPaymentSettings',
             'festivalGoogleEmailPrefillAvailable',
             'festivalTelegramBotUrl',
@@ -144,6 +151,7 @@ class FestivalPublicController extends Controller
             'items',
             'tickets.admissionType',
             'tickets.orderItem',
+            'tickets.seat.edition',
             'tickets.streamEntitlement.stream',
         ]);
         $qrCodes = $this->ticketsAreAvailable($order)
@@ -152,6 +160,8 @@ class FestivalPublicController extends Controller
                     && $ticket->admissionType?->delivery_mode === FestivalAdmissionDeliveryMode::Venue)
                 ->mapWithKeys(fn ($ticket): array => [$ticket->id => $qr->dataUri($ticket)])
             : collect();
+        $ownSeatIds = $order->tickets->whereIn('id', $qrCodes->keys())->pluck('festival_seat_id')->filter()->values()->all();
+        $ownSeatMap = $ownSeatIds !== [] ? app(FestivalHallOccupancy::class)->forOrder($order->edition, $ownSeatIds) : null;
         $statusUrl = route('public.festival-orders.status', [$account->slug, $accessToken]);
         $pdfUrl = route('public.festival-orders.pdf', [$account->slug, $accessToken]);
         $paymentUrl = $this->paymentIsAvailable($order) && $this->paymentLauncherData($order) !== null
@@ -159,7 +169,7 @@ class FestivalPublicController extends Controller
             : null;
 
         return response()
-            ->view('festivals.public.order', compact('account', 'order', 'qrCodes', 'statusUrl', 'pdfUrl', 'paymentUrl'))
+            ->view('festivals.public.order', compact('account', 'order', 'qrCodes', 'statusUrl', 'pdfUrl', 'paymentUrl', 'ownSeatMap'))
             ->withHeaders($this->privateHeaders());
     }
 
@@ -269,7 +279,7 @@ class FestivalPublicController extends Controller
                 'tickets' => fn ($query) => $query
                     ->where('status', FestivalTicketStatus::Valid->value)
                     ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value))
-                    ->with(['admissionType', 'orderItem']),
+                    ->with(['admissionType', 'orderItem', 'seat.edition']),
             ])
             ->firstOrFail();
 

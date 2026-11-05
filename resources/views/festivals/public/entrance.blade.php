@@ -16,4 +16,7 @@
     'paymentProviders' => $entranceProviders,
     'storeUrl' => route('public.festivals.entrance.store', [$account->slug, $festivalEdition->slug]),
     'promoQuoteUrl' => route('public.festivals.entrance.promo-code', [$account->slug, $festivalEdition->slug]),
+    'reservedSeatsUrl' => $festivalEdition->assigned_seating_enabled
+        ? route('public.festivals.show', [$account->slug, $festivalEdition->slug]).'#festival-admission'
+        : null,
 ])

@@ -15,17 +15,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'show_on_studio_page', 'is_private', 'description_html', 'rules_html', 'landing_template', 'landing_palette', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'max_entries_per_participant', 'published_at', 'completed_at', 'cancelled_at', 'archived_at'])]
+#[Fillable(['account_id', 'festival_series_id', 'slug', 'title', 'status', 'registration_status', 'summary', 'show_on_studio_page', 'is_private', 'description_html', 'rules_html', 'landing_template', 'landing_palette', 'venue_name', 'venue_address', 'venue_map_url', 'venue_directions', 'timezone', 'currency', 'starts_at', 'ends_at', 'age_reference_date', 'registration_opens_at', 'registration_closes_at', 'max_entries_per_participant', 'published_at', 'completed_at', 'cancelled_at', 'archived_at', 'assigned_seating_enabled', 'seating_floors'])]
 class FestivalEdition extends Model
 {
     /** @use HasFactory<FestivalEditionFactory> */
     use HasFactory;
 
-    protected $attributes = ['status' => 'draft', 'registration_status' => 'closed', 'currency' => 'UAH', 'show_on_studio_page' => false, 'is_private' => false, 'landing_template' => 'general', 'landing_palette' => 'general'];
+    protected $attributes = ['status' => 'draft', 'registration_status' => 'closed', 'currency' => 'UAH', 'show_on_studio_page' => false, 'is_private' => false, 'landing_template' => 'general', 'landing_palette' => 'general', 'assigned_seating_enabled' => false];
 
     protected function casts(): array
     {
         return [
+            'assigned_seating_enabled' => 'boolean',
+            'seating_floors' => 'array',
             'status' => FestivalEditionStatus::class,
             'registration_status' => FestivalRegistrationStatus::class,
             'show_on_studio_page' => 'boolean',
@@ -267,6 +269,11 @@ class FestivalEdition extends Model
     public function festivalTickets(): HasMany
     {
         return $this->hasMany(FestivalTicket::class);
+    }
+
+    public function seats(): HasMany
+    {
+        return $this->hasMany(FestivalSeat::class);
     }
 
     public function admissionTypes(): HasMany

@@ -135,7 +135,7 @@ class FestivalPortalUserController extends Controller
         }, 3);
 
         if ($portalRole === FestivalPortalRole::Guest && $request->string('return_to')->toString() === 'ticket-issuance') {
-            return redirect()->route('dashboard.accounts.festivals.tickets.issue', [$account, $festivalEdition, 'selected_guest_id' => $portalUser->id])
+            return redirect()->route('dashboard.accounts.festivals.tickets.issue', [$account, $festivalEdition, 'selected_guest_id' => $portalUser->id, 'seat_id' => $request->integer('seat_id')])
                 ->with('status', __('app.festival_user_saved'));
         }
 

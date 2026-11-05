@@ -1,13 +1,14 @@
 @php
     $oldItems = collect(old('items', []));
     $festivalCheckoutPrefill = $festivalCheckoutPrefill ?? [];
-    $hasPaidTicketOptions = $festivalAdmissionOptions->contains(fn (array $option): bool => $option['regular_price_cents'] > 0 || ($option['early_bird_price_cents'] ?? 0) > 0);
+    $festivalSeatPickerAvailable = $festivalSeatPickerAvailable ?? false;
+    $hasPaidTicketOptions = $festivalSeatPickerAvailable || $festivalAdmissionOptions->contains(fn (array $option): bool => $option['regular_price_cents'] > 0 || ($option['early_bird_price_cents'] ?? 0) > 0);
     $festivalRulesUrl = route('public.festivals.show', [$account->slug, $edition->slug]).'#festival-rules';
     $studioOfferUrl = route('public.studio-offer', ['accountSlug' => $account->slug, 'return_to' => request()->fullUrl()]);
 @endphp
 
 <section id="festival-admission" class="mt-8 scroll-mt-6" data-festival-admission-checkout>
-    @if ($festivalAdmissionOptions->isEmpty())
+    @if ($festivalAdmissionOptions->isEmpty() && ! $festivalSeatPickerAvailable)
         <div class="rounded-2xl border festival-border festival-surface p-6 text-sm font-semibold festival-muted shadow-crm">
             {{ __('app.festival_admission_unavailable') }}
         </div>
@@ -15,7 +16,7 @@
         <form
             method="POST"
             action="{{ route('public.festivals.admission.store', [$account->slug, $edition->slug]) }}"
-            class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]"
+            class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]"
             data-event-ticket-checkout
             data-festival-ticket-checkout
             data-currency="{{ $account->default_currency }}"
@@ -28,7 +29,7 @@
             @if ($festivalFriendPurchase ?? false)
                 <input type="hidden" name="friends" value="1">
             @endif
-            <div class="rounded-2xl border festival-border festival-surface p-5 shadow-crm sm:p-7">
+            <div class="min-w-0 rounded-2xl border festival-border festival-surface p-5 shadow-crm sm:p-7">
                 <h2 class="text-2xl font-semibold festival-text">{{ __('app.event_choose_tickets') }}</h2>
 
                 @if ($errors->any())
@@ -39,6 +40,10 @@
                             @endforeach
                         </ul>
                     </div>
+                @endif
+
+                @if ($festivalSeatPickerAvailable)
+                    @include('festivals.public._seat-picker')
                 @endif
 
                 <div class="mt-5 grid gap-3">
@@ -93,7 +98,7 @@
                     @endforeach
                 </div>
 
-                <div class="mt-6 grid gap-4 sm:grid-cols-2">
+                <div class="mt-6 grid gap-4 sm:grid-cols-2" @if ($festivalSeatPickerAvailable) data-festival-seat-details @endif>
                     <label class="block sm:col-span-2">
                         <span class="crm-label">{{ __('app.person_name') }}</span>
                         <input name="buyer_name" value="{{ old('buyer_name', data_get($festivalCheckoutPrefill, 'buyer_name')) }}" required autocomplete="name" class="crm-field">
@@ -130,7 +135,7 @@
                 </div>
             </div>
 
-            <aside class="rounded-2xl border festival-border festival-surface p-5 shadow-crm lg:sticky lg:top-6 lg:self-start">
+            <aside class="min-w-0 rounded-2xl border festival-border festival-surface p-5 shadow-crm lg:sticky lg:top-6 lg:self-start" @if ($festivalSeatPickerAvailable) data-festival-seat-details @endif>
                 <h2 class="text-lg font-semibold festival-text">{{ __('app.payment_method') }}</h2>
                 <dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl festival-page p-4 text-sm">
                     <div>

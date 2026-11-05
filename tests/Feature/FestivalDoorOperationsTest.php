@@ -20,12 +20,14 @@ use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCashEntry;
 use App\Models\FestivalEdition;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalSeat;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
 use App\Models\StudioCashEntry;
 use App\Models\User;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentGatewayRegistry;
 use App\Support\Promotions\PromotionCodeNormalizer;
@@ -160,6 +162,110 @@ class FestivalDoorOperationsTest extends TestCase
         $this->assertSame(0, $order->tickets()->count());
         $this->assertSame(0, FestivalCashEntry::query()->count());
         $this->assertSame(0, StudioCashEntry::query()->count());
+    }
+
+    public function test_assigned_cash_sale_replays_only_for_the_same_seat_and_scanner_shows_its_label(): void
+    {
+        [$account, $edition, $type, $operator] = $this->festivalDoor();
+        [$seat, $otherSeat] = $this->assignedSeats($edition, $type);
+        $route = route('dashboard.accounts.festivals.entrance.cash', [$account, $edition]);
+        $input = [
+            'ticket_type_id' => $type->id,
+            'guest_name' => 'Reserved Door Guest',
+            'idempotency_key' => (string) Str::uuid(),
+        ];
+        $this->actingAs($operator)->postJson($route, $input)
+            ->assertUnprocessable();
+
+        $response = $this->postJson($route, $input + ['seat_id' => $seat->id])
+            ->assertCreated()
+            ->assertJsonPath('tickets.0.seat_label', $seat->label());
+        $this->getJson(route('dashboard.accounts.festivals.entrance.seats', [$account, $edition]))
+            ->assertOk()
+            ->assertJsonPath('unavailable', [$seat->id]);
+        $this->postJson($route, $input + ['seat_id' => $seat->id])
+            ->assertCreated()
+            ->assertJsonPath('order.id', $response->json('order.id'));
+        $this->postJson(route('dashboard.accounts.festivals.entrance.card', [$account, $edition]), $input + [
+            'seat_id' => $seat->id,
+            'provider' => 'monopay',
+        ])->assertUnprocessable()->assertJsonValidationErrors('idempotency_key');
+        $this->postJson($route, $input + ['seat_id' => $otherSeat->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('idempotency_key');
+        $this->postJson($route, array_replace($input, ['idempotency_key' => (string) Str::uuid(), 'seat_id' => $seat->id]))
+            ->assertUnprocessable();
+
+        $this->postJson(route('dashboard.accounts.festivals.scanner.scan', [$account, $edition]), [
+            'code' => $response->json('tickets.0.code'),
+        ])->assertOk()->assertJsonPath('ticket.seat_label', $seat->label());
+    }
+
+    public function test_manual_issuance_uses_the_selected_seat_and_bulk_issuance_rejects_assigned_types(): void
+    {
+        [$account, $edition, $type] = $this->festivalDoor();
+        [$seat] = $this->assignedSeats($edition, $type);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $guest = FestivalPortalUser::factory()->for($account)->guest()->create();
+
+        $this->actingAs($owner)
+            ->get(route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'selected_guest_id' => $guest->id]))
+            ->assertOk()
+            ->assertSee('data-festival-staff-seat-picker', false);
+
+        $this->actingAs($owner)
+            ->postJson(route('dashboard.accounts.festivals.tickets.issue.audience', [$account, $edition]), [
+                'festival_admission_type_id' => $type->id,
+                'audience' => 'judges',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('festival_admission_type_id');
+
+        $this->post(route('dashboard.accounts.festivals.tickets.issue.store', [$account, $edition]), [
+            'festival_portal_user_id' => $guest->id,
+            'festival_admission_type_id' => $type->id,
+            'seat_id' => $seat->id,
+            'holder_name' => 'Complimentary Guest',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertTrue($edition->tickets()->firstOrFail()->seat->is($seat));
+    }
+
+    public function test_assigned_card_sale_respects_the_buyers_hold_and_reserves_its_own_seat_until_paid(): void
+    {
+        [$account, $edition, $type, $operator] = $this->festivalDoor();
+        [$buyerSeat, $cardSeat] = $this->assignedSeats($edition, $type);
+        $reservations = app(FestivalSeatReservations::class);
+        $reservations->hold($edition, hash('sha256', 'buyers-seat'), [$buyerSeat->id]);
+        $input = [
+            'ticket_type_id' => $type->id,
+            'guest_name' => 'Reserved Card Guest',
+            'provider' => 'monopay',
+            'idempotency_key' => (string) Str::uuid(),
+        ];
+
+        $this->assertThrows(fn () => app(FestivalDoorTicketSale::class)->execute(
+            $account,
+            $edition,
+            $operator,
+            $input + ['seat_id' => $buyerSeat->id],
+            FestivalDoorTicketSale::ModeCard,
+            'en',
+        ), ValidationException::class);
+
+        $order = $this->festivalDoorSaleWithProvider($account, 'monopay')->execute(
+            $account,
+            $edition,
+            $operator,
+            $input + ['seat_id' => $cardSeat->id],
+            FestivalDoorTicketSale::ModeCard,
+            'en',
+        );
+
+        $this->assertSame(FestivalTicketOrderStatus::Pending, $order->status);
+        $this->assertSame($cardSeat->id, $order->orderSeats()->firstOrFail()->festival_seat_id);
+        $this->assertSame(0, $order->tickets()->count());
+        $this->assertSame([$buyerSeat->id, $cardSeat->id], $reservations->live($edition)->orderBy('id')->pluck('id')->all());
     }
 
     public function test_festival_door_guest_reuses_only_an_active_guest_with_the_same_account_and_role(): void
@@ -354,6 +460,31 @@ class FestivalDoorOperationsTest extends TestCase
             app(FiscalReceiptService::class),
             app(FestivalPromoCodePricing::class),
             app(PromotionCodeNormalizer::class),
+            app(FestivalSeatReservations::class),
         );
+    }
+
+    /** @return array{FestivalSeat, FestivalSeat} */
+    private function assignedSeats(FestivalEdition $edition, FestivalAdmissionType $type): array
+    {
+        $edition->forceFill([
+            'assigned_seating_enabled' => true,
+            'seating_floors' => [['id' => 'main', 'label' => 'Main floor', 'width' => 800, 'height' => 600, 'background' => null, 'stage' => 'Stage']],
+        ])->save();
+        $type->forceFill(['is_assigned_seating' => true, 'inventory' => 2])->save();
+        $attributes = [
+            'account_id' => $edition->account_id,
+            'festival_admission_type_id' => $type->id,
+            'floor_key' => 'main',
+            'section' => 'Stalls',
+            'group_kind' => 'row',
+            'group_label' => 'A',
+            'y' => 1000,
+        ];
+
+        return [
+            $edition->seats()->create($attributes + ['x' => 2000, 'seat_number' => '1']),
+            $edition->seats()->create($attributes + ['x' => 3000, 'seat_number' => '2']),
+        ];
     }
 }

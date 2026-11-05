@@ -53,6 +53,7 @@ class StoreDoorTicketSaleRequest extends FormRequest
     {
         return [
             'ticket_type_id' => ['required', 'integer', 'min:1'],
+            ...($this->route('festivalEdition') instanceof FestivalEdition ? ['seat_id' => ['nullable', 'integer', 'min:1']] : []),
             'guest_name' => ['required', 'string', 'max:160'],
             'guest_email' => ['nullable', 'email:rfc', 'max:255'],
             'provider' => ['nullable', 'string', 'max:40'],

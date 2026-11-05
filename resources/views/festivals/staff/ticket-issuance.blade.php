@@ -6,16 +6,12 @@
 <x-festivals.staff.workspace :$account :$edition :permissions="$workspacePermissions">
     <x-ui.page-header :title="__('app.festival_issue_tickets')" :copy="__('app.festival_issue_tickets_copy')">
         <x-slot:actions>
-            <x-ui.button :href="route('dashboard.accounts.festivals.users.create', [$account, $edition, 'guest', 'return_to' => 'ticket-issuance'])" variant="secondary">
+            <x-ui.button :href="route('dashboard.accounts.festivals.users.create', [$account, $edition, 'guest', 'return_to' => 'ticket-issuance', 'seat_id' => $selectedSeatId])" variant="secondary" data-preserve-staff-seat>
                 <x-ui.icon name="plus" class="h-4 w-4" />
                 {{ __('app.festival_add_guest') }}
             </x-ui.button>
         </x-slot:actions>
     </x-ui.page-header>
-
-    @if (session('status'))
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">{{ session('status') }}</div>
-    @endif
 
     <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
         <div><h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_manual_ticket_capacity') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_manual_ticket_capacity_copy') }}</p></div>
@@ -32,15 +28,16 @@
     </section>
 
     <section class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div class="space-y-4">
+        <div class="space-y-4" data-festival-guest-selection>
             <div><h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_select_guest') }}</h2><p class="mt-1 text-sm text-slate-600">{{ __('app.festival_select_guest_copy') }}</p></div>
             <x-ui.filter-bar :action="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition])" :reset-href="route('dashboard.accounts.festivals.tickets.issue', [$account, $edition])" class="sm:grid-cols-1">
                 @if ($selectedGuest)<input type="hidden" name="selected_guest_id" value="{{ $selectedGuest->id }}">@endif
+                <input type="hidden" name="seat_id" value="{{ $selectedSeatId }}" data-preserve-seat-input>
                 <label><span class="crm-label">{{ __('app.search') }}</span><input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_guest_search_placeholder') }}"></label>
             </x-ui.filter-bar>
             <x-ui.panel padding="none" class="overflow-hidden">
                 @forelse ($guests as $guest)
-                    <a href="{{ route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'selected_guest_id' => $guest->id, 'q' => $filters['q']]) }}" class="crm-row block transition hover:bg-slate-50 {{ $selectedGuest?->is($guest) ? 'bg-amber-50' : '' }}">
+                    <a href="{{ route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'seat_id' => $selectedSeatId, 'selected_guest_id' => $guest->id, 'q' => $filters['q']]) }}" data-preserve-staff-seat class="crm-row block transition hover:bg-slate-50 {{ $selectedGuest?->is($guest) ? 'bg-amber-50' : '' }}">
                         <p class="font-semibold text-slate-950">{{ $guest->displayName() }}</p>
                         <p class="mt-1 break-words text-sm text-slate-500">{{ $guest->email }}@if($guest->phone) · {{ $guest->phone }}@endif</p>
                     </a>
@@ -55,6 +52,7 @@
             @csrf
             <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_handmade_ticket') }}</h2>
             <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_handmade_ticket_copy') }}</p>
+            <p class="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">{{ __('app.festival_journey.selection_hint') }}</p>
 
             @if ($selectedGuest)
                 <input type="hidden" name="festival_portal_user_id" value="{{ $selectedGuest->id }}">
@@ -69,7 +67,8 @@
             @error('festival_portal_user_id')<span class="crm-help">{{ $message }}</span>@enderror
 
             <div class="mt-5 space-y-5">
-                <label><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="festival_admission_type_id" required class="crm-field"><option value="">{{ __('app.select') }}</option>@foreach($admissionTypes as $admissionType)<option value="{{ $admissionType->id }}" @selected(old('festival_admission_type_id') == $admissionType->id)>{{ $admissionType->name }} · {{ $capacityByType[$admissionType->id] }}</option>@endforeach</select>@error('festival_admission_type_id')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                <label class="block"><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="festival_admission_type_id" required class="crm-field"><option value="">{{ __('app.select') }}</option>@foreach($admissionTypes as $admissionType)<option value="{{ $admissionType->id }}" @selected($selectedTypeId == $admissionType->id)>{{ $admissionType->name }} · {{ $capacityByType[$admissionType->id] }}</option>@endforeach</select>@error('festival_admission_type_id')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                <x-festivals.staff.seat-picker :selected-seat-id="$selectedSeatId" :large="true" :chart="$seatChart" type-field="festival_admission_type_id" :availability-url="route('dashboard.accounts.festivals.entrance.seats', [$account, $edition])" />
                 <label><span class="crm-label">{{ __('app.festival_ticket_holder_name') }}</span><input name="holder_name" value="{{ old('holder_name', $selectedGuest?->displayName()) }}" required maxlength="255" class="crm-field">@error('holder_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
             </div>
 
@@ -90,8 +89,8 @@
                             <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">{{ __('app.festival_ticket_stat_'.$stat) }}</p><p class="mt-1 text-xl font-semibold text-slate-950">{{ $stats[$stat] }}</p></div>
                         @endforeach
                     </div>
-                    <label class="mt-5 block"><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="festival_admission_type_id" required class="crm-field"><option value="">{{ __('app.select') }}</option>@foreach($admissionTypes as $admissionType)<option value="{{ $admissionType->id }}">{{ $admissionType->name }} · {{ $capacityByType[$admissionType->id] }}</option>@endforeach</select></label>
-                    <div class="mt-5 flex justify-end"><x-ui.button type="submit" :disabled="$stats['remaining'] === 0 || $admissionTypes->isEmpty()">{{ __('app.festival_issue_missing_action') }}</x-ui.button></div>
+                    <label class="mt-5 block"><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="festival_admission_type_id" required class="crm-field"><option value="">{{ __('app.select') }}</option>@foreach($judgeAdmissionTypes as $admissionType)<option value="{{ $admissionType->id }}">{{ $admissionType->name }} · {{ $capacityByType[$admissionType->id] }}</option>@endforeach</select></label>
+                    <div class="mt-5 flex justify-end"><x-ui.button type="submit" :disabled="$stats['remaining'] === 0 || $judgeAdmissionTypes->isEmpty()">{{ __('app.festival_issue_missing_action') }}</x-ui.button></div>
                 </form>
             @endforeach
         </div>

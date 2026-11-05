@@ -41,7 +41,7 @@
     <form method="POST" enctype="multipart/form-data" action="{{ $portalUser->exists ? route('dashboard.accounts.festivals.users.update', [$account, $edition, $portalUser]) : route('dashboard.accounts.festivals.users.store', [$account, $edition, $portalUser->role->value]) }}" class="max-w-4xl space-y-6">
         @csrf
         @if ($portalUser->exists) @method('PUT') @endif
-        @if (($returnTo ?? null) === 'ticket-issuance')<input type="hidden" name="return_to" value="ticket-issuance">@endif
+        @if (($returnTo ?? null) === 'ticket-issuance')<input type="hidden" name="return_to" value="ticket-issuance"><input type="hidden" name="seat_id" value="{{ old('seat_id', request()->integer('seat_id')) }}">@endif
 
         <section class="rounded-2xl border border-stone-200 bg-white p-5 shadow-crm sm:p-6">
             <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_profile_personal_details') }}</h2>
@@ -120,7 +120,7 @@
         </section>
 
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <x-ui.button :href="($returnTo ?? null) === 'ticket-issuance' ? route('dashboard.accounts.festivals.tickets.issue', [$account, $edition]) : route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => $directoryTab])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
+            <x-ui.button :href="($returnTo ?? null) === 'ticket-issuance' ? route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'seat_id' => request()->integer('seat_id')]) : route('dashboard.accounts.festivals.users.index', [$account, $edition, 'tab' => $directoryTab])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
             <x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" />{{ __('app.save') }}</x-ui.button>
         </div>
     </form>

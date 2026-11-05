@@ -19,7 +19,7 @@
     @endif
 
     <x-ui.panel class="max-w-4xl">
-        <form method="POST" action="{{ $admissionType->exists ? route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $admissionType]) : route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]) }}" class="space-y-6">
+        <form method="POST" action="{{ $admissionType->exists ? route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $admissionType]) : route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]) }}" class="space-y-6" data-assigned-admission-form>
             @csrf
             @if ($admissionType->exists) @method('PUT') @endif
 
@@ -29,9 +29,18 @@
                 <div class="grid gap-5 md:grid-cols-2">
                     <label class="md:col-span-2">
                         <span class="crm-label">{{ __('app.festival_admission_delivery_mode') }}</span>
+                        @php
+                            $assigned = (bool) old('is_assigned_seating', $admissionType->is_assigned_seating);
+                            $deliveryValue = $assigned ? 'assigned_venue' : old('delivery_mode', $admissionType->delivery_mode?->value ?? 'venue');
+                        @endphp
                         <select name="delivery_mode" required class="crm-field">
-                            <option value="venue" @selected(old('delivery_mode', $admissionType->delivery_mode?->value ?? 'venue') === 'venue')>{{ __('app.festival_admission_delivery_venue') }}</option>
-                            <option value="online_stream" @selected(old('delivery_mode', $admissionType->delivery_mode?->value) === 'online_stream') @disabled(! $onlineStream?->is_enabled)>{{ __('app.festival_admission_delivery_online_stream') }}</option>
+                            @unless ($admissionType->exists && $admissionType->is_assigned_seating)
+                            <option value="venue" @selected($deliveryValue === 'venue')>{{ __('app.festival_admission_delivery_venue') }}</option>
+                            <option value="online_stream" @selected($deliveryValue === 'online_stream') @disabled(! $onlineStream?->is_enabled)>{{ __('app.festival_admission_delivery_online_stream') }}</option>
+                            @endunless
+                            @if (! $admissionType->exists || $admissionType->is_assigned_seating)
+                            <option value="assigned_venue" @selected($deliveryValue === 'assigned_venue')>{{ __('app.festival_seating_admin.assigned_type') }}</option>
+                            @endif
                         </select>
                         <span class="crm-help">{{ $onlineStream?->is_enabled ? __('app.festival_online_ticket_separate_order') : __('app.festival_online_ticket_requires_stream') }}</span>
                         @error('delivery_mode') <span class="crm-help text-rose-600">{{ $message }}</span> @enderror
@@ -48,7 +57,8 @@
                     </label>
                     <label>
                         <span class="crm-label">{{ __('app.festival_inventory') }}</span>
-                        <input type="number" name="inventory" min="1" value="{{ old('inventory', $admissionType->inventory) }}" required class="crm-field">
+                        <input type="number" name="inventory" min="1" value="{{ old('inventory', $admissionType->inventory) }}" @disabled($assigned) @required(! $assigned) class="crm-field">
+                        <span class="crm-help" data-assigned-inventory-hint @if (! $assigned) hidden @endif>{{ __('app.festival_seating_admin.seat_inventory') }}</span>
                         @error('inventory') <span class="crm-help">{{ $message }}</span> @enderror
                     </label>
                     <label>
@@ -99,7 +109,7 @@
                 @unless ($isLocked)
                     <x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" /> {{ __('app.save') }}</x-ui.button>
                 @endunless
-                <x-ui.button :href="route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types'])" variant="secondary">{{ $isLocked ? __('app.back') : __('app.cancel') }}</x-ui.button>
+                <x-ui.button :href="route('dashboard.accounts.festivals.admission-types.index', [$account, $edition])" variant="secondary">{{ $isLocked ? __('app.back') : __('app.cancel') }}</x-ui.button>
             </div>
         </form>
     </x-ui.panel>

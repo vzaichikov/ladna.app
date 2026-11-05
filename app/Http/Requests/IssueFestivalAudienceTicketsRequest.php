@@ -37,6 +37,7 @@ class IssueFestivalAudienceTicketsRequest extends FormRequest
                     ->where('account_id', $account instanceof Account ? $account->id : 0)
                     ->where('festival_edition_id', $edition instanceof FestivalEdition ? $edition->id : 0)
                     ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
+                    ->where('is_assigned_seating', false)
                     ->where('is_active', true)),
             ],
         ];

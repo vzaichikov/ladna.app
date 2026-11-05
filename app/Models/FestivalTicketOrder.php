@@ -8,15 +8,17 @@ use App\Enums\PromoCodeDiscountType;
 use Database\Factories\FestivalTicketOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
-#[Fillable(['account_id', 'festival_edition_id', 'festival_promo_code_id', 'festival_portal_user_id', 'purchaser_festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'subtotal_cents', 'discount_cents', 'promo_email_hash', 'promo_phone_hash', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason'])]
-#[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash'])]
+#[Fillable(['account_id', 'festival_edition_id', 'festival_promo_code_id', 'festival_portal_user_id', 'purchaser_festival_portal_user_id', 'source', 'issued_by_user_id', 'issued_at', 'provider', 'order_id', 'status', 'buyer_name', 'buyer_email', 'buyer_phone', 'locale', 'promo_name', 'promo_code', 'promo_discount_type', 'promo_discount_value', 'subtotal_cents', 'discount_cents', 'promo_email_hash', 'promo_phone_hash', 'amount_cents', 'currency', 'access_token_encrypted', 'access_token_hash', 'gateway_invoice_id', 'gateway_payment_id', 'gateway_status', 'gateway_checkout_payload', 'last_callback_payload', 'failure_reason', 'payment_expires_at', 'expires_at', 'paid_at', 'failed_at', 'terms_accepted_at', 'terms_hash', 'refunded_by', 'refunded_at', 'refund_reason', 'seat_hold_key'])]
+#[Hidden(['access_token_encrypted', 'access_token_hash', 'gateway_checkout_payload', 'last_callback_payload', 'promo_email_hash', 'promo_phone_hash', 'seat_hold_key'])]
 class FestivalTicketOrder extends Model
 {
     /** @use HasFactory<FestivalTicketOrderFactory> */
@@ -80,6 +82,23 @@ class FestivalTicketOrder extends Model
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by_user_id');
+    }
+
+    public function scopeCountsAgainstInventory(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $orders) => $orders
+            ->where('status', FestivalTicketOrderStatus::Paid->value)
+            ->orWhere(fn (Builder $pending) => $pending
+                ->where('status', FestivalTicketOrderStatus::Pending->value)
+                ->where('expires_at', '>', now()))
+            ->orWhere(fn (Builder $refund) => $refund
+                ->where('status', FestivalTicketOrderStatus::PaidRequiresRefund->value)
+                ->whereDoesntHave('orderSeats')));
+    }
+
+    public function orderSeats(): HasManyThrough
+    {
+        return $this->hasManyThrough(FestivalTicketOrderSeat::class, FestivalTicketOrderItem::class);
     }
 
     public function items(): HasMany

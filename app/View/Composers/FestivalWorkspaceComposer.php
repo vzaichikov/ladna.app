@@ -49,9 +49,13 @@ class FestivalWorkspaceComposer
                 'groups' => [[
                     'label' => __('app.festival_workspace_group_operations'),
                     'items' => [
+                        $this->item('timeline', 'dashboard.accounts.festivals.timeline.index', 'festival_staff_live_timeline', 'timer', true, $active, $account, $edition),
+                    ],
+                ], [
+                    'label' => __('app.festival_journey.sidebar'),
+                    'items' => [
                         $this->item('scanner', 'dashboard.accounts.festivals.scanner', 'festival_staff_scanner', 'qr-code', true, $active, $account, $edition),
                         $this->item('entrance', 'dashboard.accounts.festivals.attendance', 'festival_staff_entrance_monitor', 'scan-line', true, $active, $account, $edition),
-                        $this->item('timeline', 'dashboard.accounts.festivals.timeline.index', 'festival_staff_live_timeline', 'timer', true, $active, $account, $edition),
                         $this->item('online-stream', 'dashboard.accounts.festivals.online-stream.edit', 'festival_staff_online_translation', 'video', true, $active, $account, $edition),
                     ],
                 ]],
@@ -82,10 +86,17 @@ class FestivalWorkspaceComposer
                 'items' => [
                     $this->item('program', 'dashboard.accounts.festivals.program', 'festival_tab_program', 'calendar-days', $permissions['schedule'], $active, $account, $edition),
                     $this->item('timeline', 'dashboard.accounts.festivals.timeline.index', 'festival_timeline_title', 'timer', $permissions['schedule'], $active, $account, $edition),
-                    $this->item('tickets', 'dashboard.accounts.festivals.tickets', 'festival_tab_tickets_entrance', 'qr-code', $permissions['finance'] || $permissions['ticket_check_in'] || $permissions['door_staff'], $active, $account, $edition),
+                    $this->item('communication', 'dashboard.accounts.festivals.communication', 'festival_tab_communication', 'bell', $permissions['manage'], $active, $account, $edition),
+                ],
+            ],
+            [
+                'label' => __('app.festival_journey.sidebar'),
+                'items' => [
+                    $this->item('tickets', 'dashboard.accounts.festivals.tickets', 'festival_tickets', 'qr-code', $permissions['finance'] || $permissions['ticket_check_in'] || $permissions['door_staff'], $active, $account, $edition),
+                    $this->item('sold-tickets', 'dashboard.accounts.festivals.tickets.sold', 'festival_bought_tickets_tab', 'ticket', $permissions['finance'], $active, $account, $edition),
+                    $this->item('scanner', 'dashboard.accounts.festivals.scanner', 'festival_open_scanner', 'qr-code', $permissions['ticket_check_in'] || $permissions['door_staff'], $active, $account, $edition),
                     $this->item('entrance', 'dashboard.accounts.festivals.attendance', 'festival_entrance_monitor', 'scan-line', $permissions['door_staff'], $active, $account, $edition),
                     $this->item('online-stream', 'dashboard.accounts.festivals.online-stream.edit', 'festival_stream_settings', 'video', $permissions['finance'], $active, $account, $edition),
-                    $this->item('communication', 'dashboard.accounts.festivals.communication', 'festival_tab_communication', 'bell', $permissions['manage'], $active, $account, $edition),
                 ],
             ],
             [
@@ -165,9 +176,10 @@ class FestivalWorkspaceComposer
             request()->routeIs('dashboard.accounts.festivals.judging.battles.*') => 'judging-battles',
             request()->routeIs('dashboard.accounts.festivals.judging.results.nominations.*') => 'judging-nominations',
             request()->routeIs('dashboard.accounts.festivals.judging.results.*') => 'judging-results',
-            request()->routeIs('dashboard.accounts.festivals.scanner*') => ($permissions['event_festival_staff'] ?? false) ? 'scanner' : 'tickets',
+            request()->routeIs('dashboard.accounts.festivals.scanner*') => 'scanner',
+            request()->routeIs('dashboard.accounts.festivals.tickets.sold') => 'sold-tickets',
             request()->routeIs('dashboard.accounts.festivals.attendance*', 'dashboard.accounts.festivals.entrance.*') => 'entrance',
-            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.promo-codes.*') => 'tickets',
+            request()->routeIs('dashboard.accounts.festivals.tickets', 'dashboard.accounts.festivals.tickets.issue*', 'dashboard.accounts.festivals.ticket-orders.*', 'dashboard.accounts.festivals.admission-types.*', 'dashboard.accounts.festivals.hall-layout.*', 'dashboard.accounts.festivals.promo-codes.*') => 'tickets',
             request()->routeIs('dashboard.accounts.festivals.online-stream.*') => 'online-stream',
             request()->routeIs('dashboard.accounts.festivals.communication*') => 'communication',
             request()->routeIs('dashboard.accounts.festivals.settings.stages', 'dashboard.accounts.festivals.stages.*') => 'settings-stages',

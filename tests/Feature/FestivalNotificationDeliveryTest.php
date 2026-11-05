@@ -63,6 +63,22 @@ class FestivalNotificationDeliveryTest extends TestCase
         Mail::fake();
     }
 
+    public function test_ticket_seat_summary_is_localized_and_sms_and_old_payloads_stay_compatible(): void
+    {
+        $renderer = app(FestivalNotificationRenderer::class);
+        foreach (['en' => 'General admission', 'uk' => 'Вільний вхід'] as $locale => $generalLabel) {
+            $payload = ['festival' => 'Festival', 'order_id' => 'ORDER', 'tickets_count' => 3, 'seat_labels' => ['Balcony · VIP · Table A · Seat 2', 'Main · Row B · Seat 4'], 'unassigned_tickets_count' => 1];
+            $message = $renderer->render(FestivalNotificationType::TicketsIssued, $locale, 'Guest', $payload);
+            $this->assertStringContainsString($payload['seat_labels'][0], $message->emailText());
+            $this->assertStringContainsString($payload['seat_labels'][1], $message->telegramText());
+            $this->assertStringContainsString($generalLabel, $message->emailText());
+            $this->assertStringNotContainsString('Balcony', $message->smsText);
+            $old = $renderer->render(FestivalNotificationType::TicketsIssued, $locale, 'Guest', ['tickets_count' => 3, 'festival' => 'Festival']);
+            $this->assertNotEmpty($old->emailText());
+            $this->assertStringNotContainsString($generalLabel, $old->emailText());
+        }
+    }
+
     public function test_email_and_sms_are_independent_per_scenario_channels(): void
     {
         [$account, $edition, $portalUser] = $this->festival(locale: 'en');

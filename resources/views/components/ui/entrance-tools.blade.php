@@ -10,6 +10,8 @@
     'searchHint' => null,
     'searchPlaceholder' => null,
     'noPeopleLabel' => null,
+    'seatChart' => null,
+    'seatAvailabilityUrl' => null,
 ])
 
 @php
@@ -126,6 +128,7 @@
                         @endforeach
                     </select>
                 </label>
+                <x-festivals.staff.seat-picker :chart="$seatChart" type-field="ticket_type_id" :availability-url="$seatAvailabilityUrl" />
                 <label class="block hidden" data-entrance-sale-provider-field>
                     <span class="crm-label">{{ __('app.payment_method') }}</span>
                     <select name="provider" class="crm-field min-h-12 text-base" data-entrance-sale-provider>

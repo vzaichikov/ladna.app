@@ -8,9 +8,10 @@ use App\Http\Requests\QuoteFestivalPromoCodeRequest;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
-use App\Models\FestivalTicketOrderItem;
 use App\Support\Festivals\FestivalPromoCodePricing;
 use App\Support\Festivals\FestivalPromotionQuote;
+use App\Support\Festivals\FestivalSeatCheckout;
+use App\Support\Festivals\FestivalSeatReservations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 
@@ -21,9 +22,29 @@ class FestivalPromoCodeQuoteController extends Controller
         string $accountSlug,
         string $editionSlug,
         FestivalPromoCodePricing $pricing,
+        FestivalSeatCheckout $seatCheckout,
+        FestivalSeatReservations $reservations,
     ): JsonResponse {
         [$account, $edition] = $this->scope($request->attributes->get('festivalAccount'), $accountSlug, $editionSlug);
-        $requested = collect($request->validated('items'))->keyBy('admission_type_id');
+        $items = $request->validated('items', []);
+        $seatIds = array_map(intval(...), $request->validated('seat_ids') ?? []);
+        $generalTypeIds = collect($items)->pluck('admission_type_id');
+        $requested = collect($items)->keyBy('admission_type_id');
+        if ($seatIds !== []) {
+            $draft = $request->validated('seat_checkout_id');
+            $key = $seatCheckout->key($request, $edition, $draft);
+            if (! $edition->assigned_seating_enabled || $key === null || $draft !== $seatCheckout->draft($request, $edition)) {
+                throw ValidationException::withMessages(['seat_ids' => __('app.festival_seating.hold_expired')]);
+            }
+
+            $seats = $reservations->held($edition, $key);
+            if ($seats->count() !== count($seatIds) || $seats->whereIn('id', $seatIds)->count() !== count($seatIds)) {
+                throw ValidationException::withMessages(['seat_ids' => __('app.festival_seating.hold_expired')]);
+            }
+
+            $requested = $reservations->checkoutItems($items, $seats);
+        }
+
         $types = FestivalAdmissionType::query()
             ->where('account_id', $account->id)
             ->where('festival_edition_id', $edition->id)
@@ -32,14 +53,15 @@ class FestivalPromoCodeQuoteController extends Controller
             ->orderBy('id')
             ->get();
 
-        if ($types->count() !== $requested->count()) {
+        if ($types->count() !== $requested->count()
+            || $types->contains(fn (FestivalAdmissionType $type): bool => $type->is_assigned_seating && $generalTypeIds->contains($type->id))) {
             throw ValidationException::withMessages(['items' => __('app.festival_admission_invalid')]);
         }
 
         $requestedQuantity = (int) $requested->sum(fn (array $item): int => (int) $item['quantity']);
         $onlineTypes = $types->where('delivery_mode', FestivalAdmissionDeliveryMode::OnlineStream);
         if ($onlineTypes->isNotEmpty()) {
-            if ($types->count() !== 1 || $requestedQuantity !== 1) {
+            if ($seatIds !== [] || $types->count() !== 1 || $requestedQuantity !== 1) {
                 throw ValidationException::withMessages(['items' => __('app.festival_online_ticket_separate_order')]);
             }
 
@@ -55,29 +77,19 @@ class FestivalPromoCodeQuoteController extends Controller
         }
 
         $lineSubtotals = [];
+        $unitPrices = [];
+        $quotePrices = [];
         foreach ($types as $type) {
             $quantity = (int) $requested[$type->id]['quantity'];
-            if (! $type->saleIsOpen() || $quantity > $type->max_per_order || $quantity > $type->remainingQuantity()) {
+            if (! $type->saleIsOpen()
+                || $quantity > $type->max_per_order
+                || (! $type->is_assigned_seating && $quantity > $type->remainingQuantity())) {
                 throw ValidationException::withMessages(['items' => __('app.festival_admission_unavailable')]);
             }
 
-            $price = $type->currentPrice();
-            if ($price['tier'] === 'early_bird' && $type->early_bird_quota !== null) {
-                $earlyHeld = (int) FestivalTicketOrderItem::query()
-                    ->where('festival_admission_type_id', $type->id)
-                    ->where('price_tier', 'early_bird')
-                    ->whereHas('order', fn ($query) => $query
-                        ->whereIn('status', ['pending', 'paid'])
-                        ->where(fn ($query) => $query
-                            ->where('status', '!=', 'pending')
-                            ->orWhere('expires_at', '>', now())))
-                    ->sum('quantity');
-
-                if ($quantity > $type->early_bird_quota - $earlyHeld) {
-                    $price = ['price_cents' => $type->price_cents, 'tier' => 'regular'];
-                }
-            }
-
+            $price = $type->currentPrice($quantity);
+            $quotePrices[$type->id] = ['quantity' => $quantity, ...$price];
+            $unitPrices[$type->id] = $price['price_cents'];
             $lineSubtotals[$type->id] = $price['price_cents'] * $quantity;
         }
 
@@ -90,7 +102,7 @@ class FestivalPromoCodeQuoteController extends Controller
             $request->validated('buyer_phone'),
         );
 
-        return $this->response($quote, $account->default_currency);
+        return $this->response($quote, $account->default_currency, $seatIds === [] ? null : $reservations->quoteFingerprint($edition->id, $account->default_currency, $seatIds, $quotePrices), $unitPrices);
     }
 
     public function entrance(
@@ -105,6 +117,7 @@ class FestivalPromoCodeQuoteController extends Controller
             ->where('festival_edition_id', $edition->id)
             ->whereKey($request->integer('ticket_type_id'))
             ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
+            ->where('is_assigned_seating', false)
             ->where('is_active', true)
             ->first();
 
@@ -138,9 +151,10 @@ class FestivalPromoCodeQuoteController extends Controller
         return [$attribute, $edition];
     }
 
-    private function response(FestivalPromotionQuote $quote, string $currency): JsonResponse
+    private function response(FestivalPromotionQuote $quote, string $currency, ?string $seatQuote = null, array $unitPrices = []): JsonResponse
     {
         return response()->json([
+            ...($seatQuote === null ? [] : ['seat_quote' => $seatQuote, 'unit_prices_cents' => (object) $unitPrices]),
             'subtotal_cents' => $quote->amounts->subtotalCents,
             'eligible_subtotal_cents' => $quote->amounts->eligibleSubtotalCents,
             'discount_cents' => $quote->amounts->discountCents,

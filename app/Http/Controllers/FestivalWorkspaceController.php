@@ -29,6 +29,7 @@ use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationSetting;
 use App\Models\FestivalScheduleSlot;
+use App\Models\FestivalSeat;
 use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Models\FestivalTicketOrderItem;
@@ -37,15 +38,18 @@ use App\Support\Festivals\FestivalActivityLogPresenter;
 use App\Support\Festivals\FestivalApplicationHistoryTypes;
 use App\Support\Festivals\FestivalApplicationIndex;
 use App\Support\Festivals\FestivalEntryFinalConfirmation;
+use App\Support\Festivals\FestivalHallOccupancy;
 use App\Support\Festivals\FestivalProgramOrder;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Telegram\Alerts\QueueFestivalOwnerTelegramAlert;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class FestivalWorkspaceController extends Controller
@@ -305,12 +309,74 @@ class FestivalWorkspaceController extends Controller
         ]);
     }
 
-    public function tickets(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    public function tickets(Request $request, Account $account, FestivalEdition $festivalEdition): View|RedirectResponse
     {
         $permissions = $this->permissions($request, $account, $festivalEdition);
-        abort_unless($permissions['finance'] || $permissions['ticket_check_in'], 403);
-        $requestedTab = $request->query('tab');
-        $tab = $permissions['finance'] && in_array($requestedTab, ['types', 'sold', 'orders'], true) ? (string) $requestedTab : 'types';
+        abort_unless($permissions['finance'] || $permissions['ticket_check_in'] || $permissions['door_staff'], 403);
+        $destinations = ['types' => 'admission-types.index', 'sold' => 'tickets.sold', 'orders' => 'ticket-orders.index'];
+        $tab = $request->query('tab');
+        if (is_string($tab) && isset($destinations[$tab])) {
+            abort_unless($permissions['finance'], 403);
+
+            return redirect()->route('dashboard.accounts.festivals.'.$destinations[$tab], array_merge([$account, $festivalEdition], $request->except('tab')));
+        }
+
+        return view('festivals.staff.tickets', [
+            'account' => $account,
+            'edition' => $festivalEdition,
+            'workspacePermissions' => $permissions,
+            'admissionReport' => ['tickets' => $permissions['finance'] ? $festivalEdition->tickets()->count() : null],
+        ]);
+    }
+
+    public function seatMap(Request $request, Account $account, FestivalEdition $festivalEdition, FestivalHallOccupancy $occupancy): JsonResponse
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['finance'], 403);
+        $request->validate(['state_only' => ['sometimes', 'boolean']]);
+
+        return response()->json($this->salesHall($request, $account, $festivalEdition, ! $request->boolean('state_only')))
+            ->withHeaders(['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
+    }
+
+    /** @return array<string, mixed> */
+    private function salesHall(Request $request, Account $account, FestivalEdition $edition, bool $includeLayout = true): array
+    {
+        $hall = app(FestivalHallOccupancy::class)->present($edition, $includeLayout);
+        $filtered = collect($request->only(['q', 'status', 'type', 'source', 'ticket']))->contains(fn ($value) => filled($value));
+        $matching = $filtered ? array_fill_keys($this->soldTicketQuery($request, $edition)->pluck('id')->all(), true) : [];
+        $hall['seats'] = array_map(function (array $seat) use ($account, $edition, $matching, $filtered): array {
+            $seat['ticket_href'] = $seat['ticket_id'] ? route('dashboard.accounts.festivals.tickets.sold', [$account, $edition, 'view' => 'list', 'ticket' => $seat['ticket_id']]) : null;
+            $seat['issue_href'] = $seat['sellable'] ? route('dashboard.accounts.festivals.tickets.issue', [$account, $edition, 'seat_id' => $seat['id']]) : null;
+            if ($filtered) {
+                $seat['match'] = isset($matching[$seat['ticket_id']]);
+            }
+
+            return $seat;
+        }, $hall['seats']);
+
+        return $hall;
+    }
+
+    public function ticketTypes(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        return $this->ticketPage($request, $account, $festivalEdition, 'types');
+    }
+
+    public function soldTickets(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        return $this->ticketPage($request, $account, $festivalEdition, 'sold');
+    }
+
+    public function ticketOrders(Request $request, Account $account, FestivalEdition $festivalEdition): View
+    {
+        return $this->ticketPage($request, $account, $festivalEdition, 'orders');
+    }
+
+    private function ticketPage(Request $request, Account $account, FestivalEdition $festivalEdition, string $tab): View
+    {
+        $permissions = $this->permissions($request, $account, $festivalEdition);
+        abort_unless($permissions['finance'], 403);
         $revenueByCurrency = $permissions['finance']
             ? $festivalEdition->ticketOrders()
                 ->whereIn('source', [FestivalTicketOrderSource::Checkout->value, FestivalTicketOrderSource::Entrance->value])
@@ -367,25 +433,7 @@ class FestivalWorkspaceController extends Controller
                 'provider' => '',
             ];
             $ticketTypeOptions = $festivalEdition->admissionTypes()->orderBy('name')->get(['id', 'festival_edition_id', 'name']);
-            $tickets = FestivalTicket::query()
-                ->where('festival_edition_id', $festivalEdition->id)
-                ->with(['admissionType', 'orderItem', 'order.fiscalReceipt', 'order.tickets', 'order.issuer'])
-                ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
-                    ->where('code', 'like', '%'.$filters['q'].'%')
-                    ->orWhere('holder_name', 'like', '%'.$filters['q'].'%')
-                    ->orWhereHas('order', fn ($query) => $query
-                        ->where('order_id', 'like', '%'.$filters['q'].'%')
-                        ->orWhere('buyer_name', 'like', '%'.$filters['q'].'%')
-                        ->orWhere('buyer_email', 'like', '%'.$filters['q'].'%')
-                        ->orWhere('buyer_phone', 'like', '%'.$filters['q'].'%')
-                        ->orWhere('gateway_invoice_id', 'like', '%'.$filters['q'].'%')
-                        ->orWhere('gateway_payment_id', 'like', '%'.$filters['q'].'%'))))
-                ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
-                ->when($filters['type'] !== '', fn ($query) => $query->where('festival_admission_type_id', (int) $filters['type']))
-                ->when($filters['source'] !== '', fn ($query) => $query->whereHas('order', fn ($orders) => $orders->where('source', $filters['source'])))
-                ->latest('id')
-                ->paginate(20)
-                ->withQueryString();
+            $tickets = $this->soldTicketQuery($request, $festivalEdition)->latest('id')->paginate(20)->withQueryString();
             $refundRequiredOrders = $festivalEdition->ticketOrders()
                 ->whereIn('source', [FestivalTicketOrderSource::Checkout->value, FestivalTicketOrderSource::Entrance->value])
                 ->where('status', FestivalTicketOrderStatus::PaidRequiresRefund->value)
@@ -427,10 +475,45 @@ class FestivalWorkspaceController extends Controller
                 ->withQueryString();
         }
 
-        return view('festivals.staff.tickets', compact('account', 'tab', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'tickets', 'orders', 'ticketTypeOptions', 'orderProviderOptions', 'filters', 'refundRequiredOrders') + [
+        $hall = $tab === 'sold' ? $this->salesHall($request, $account, $festivalEdition) : null;
+        $requestedView = $request->query('view');
+        $showMap = $requestedView === 'map' || (! in_array($requestedView, ['map', 'list'], true) && $festivalEdition->assigned_seating_enabled);
+        $ticketView = $hall && $hall['applicable'] && $showMap ? 'map' : 'list';
+
+        return view('festivals.staff.'.['types' => 'ticket-types', 'sold' => 'sold-tickets', 'orders' => 'ticket-orders'][$tab], compact('account', 'hall', 'ticketView', 'tab', 'admissionTypes', 'admissionAvailability', 'admissionReport', 'tickets', 'orders', 'ticketTypeOptions', 'orderProviderOptions', 'filters', 'refundRequiredOrders') + [
             'edition' => $festivalEdition,
             'workspacePermissions' => $permissions,
         ]);
+    }
+
+    /** @return Builder<FestivalTicket> */
+    private function soldTicketQuery(Request $request, FestivalEdition $festivalEdition): Builder
+    {
+        $filters = [
+            'q' => $request->string('q')->trim()->toString(),
+            'status' => in_array($request->query('status'), array_column(FestivalTicketStatus::cases(), 'value'), true) ? $request->query('status') : '',
+            'source' => in_array($request->query('source'), array_column(FestivalTicketOrderSource::cases(), 'value'), true) ? $request->query('source') : '',
+            'type' => $request->integer('type') > 0 ? $request->integer('type') : '',
+        ];
+
+        return FestivalTicket::query()
+            ->where('festival_edition_id', $festivalEdition->id)
+            ->with(['seat.edition', 'admissionType', 'orderItem', 'order.fiscalReceipt', 'order.tickets', 'order.issuer'])
+            ->when($filters['q'] !== '', fn ($query) => $query->where(fn ($query) => $query
+                ->where('code', 'like', '%'.$filters['q'].'%')
+                ->orWhereHas('seat', fn ($seats) => $seats->where('section', 'like', '%'.$filters['q'].'%')->orWhere('group_label', 'like', '%'.$filters['q'].'%')->orWhere('seat_number', 'like', '%'.$filters['q'].'%')->orWhere('floor_key', 'like', '%'.$filters['q'].'%'))
+                ->orWhere('holder_name', 'like', '%'.$filters['q'].'%')
+                ->orWhereHas('order', fn ($query) => $query
+                    ->where('order_id', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('buyer_name', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('buyer_email', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('buyer_phone', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('gateway_invoice_id', 'like', '%'.$filters['q'].'%')
+                    ->orWhere('gateway_payment_id', 'like', '%'.$filters['q'].'%'))))
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['type'] !== '', fn ($query) => $query->where('festival_admission_type_id', (int) $filters['type']))
+            ->when($request->integer('ticket') > 0, fn ($query) => $query->whereKey($request->integer('ticket')))
+            ->when($filters['source'] !== '', fn ($query) => $query->whereHas('order', fn ($orders) => $orders->where('source', $filters['source'])));
     }
 
     public function refundTicketOrder(
@@ -442,10 +525,17 @@ class FestivalWorkspaceController extends Controller
     ): RedirectResponse {
         $this->assertTicketOrderScope($account, $festivalEdition, $festivalTicketOrder);
 
-        DB::transaction(function () use ($festivalTicketOrder, $request, $cashEntries): void {
+        DB::transaction(function () use ($festivalTicketOrder, $festivalEdition, $request, $cashEntries): void {
+            FestivalEdition::query()->whereKey($festivalEdition->id)->lockForUpdate()->firstOrFail();
             $order = FestivalTicketOrder::query()->whereKey($festivalTicketOrder->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($order->source, [FestivalTicketOrderSource::Checkout, FestivalTicketOrderSource::Entrance], true), 422);
             abort_unless(in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::PaidRequiresRefund], true), 422);
+            if ($order->orderSeats()->exists()) {
+                $tickets = $order->tickets()->orderBy('id')->lockForUpdate()->get(['id', 'is_checked_in']);
+                if ($tickets->contains('is_checked_in', true)) {
+                    throw ValidationException::withMessages(['reason' => __('app.festival_seating.checked_in_refund')]);
+                }
+            }
             $order->forceFill([
                 'status' => FestivalTicketOrderStatus::Refunded,
                 'refunded_by' => $request->user()->id,
@@ -480,6 +570,9 @@ class FestivalWorkspaceController extends Controller
         DB::transaction(function () use ($festivalTicket, $request): void {
             $ticket = FestivalTicket::query()->whereKey($festivalTicket->id)->lockForUpdate()->firstOrFail();
             abort_unless($ticket->status === FestivalTicketStatus::Valid, 422);
+            if ($ticket->festival_seat_id !== null && $ticket->is_checked_in) {
+                throw ValidationException::withMessages(['reason' => __('app.festival_seating.checked_in_void')]);
+            }
             $ticket->forceFill([
                 'status' => FestivalTicketStatus::Voided,
                 'is_checked_in' => false,
@@ -603,22 +696,28 @@ class FestivalWorkspaceController extends Controller
     private function admissionAvailability(Collection $admissionTypes): Collection
     {
         $typeIds = $admissionTypes->pluck('id');
-        $quantities = fn (array $statuses, bool $pendingOnly = false) => FestivalTicketOrderItem::query()
+        $quantities = fn (array $statuses) => FestivalTicketOrderItem::query()
             ->whereIn('festival_admission_type_id', $typeIds)
             ->whereHas('order', fn ($query) => $query
-                ->whereIn('status', $statuses)
-                ->when($pendingOnly, fn ($query) => $query->where('expires_at', '>', now())))
+                ->countsAgainstInventory()
+                ->whereIn('status', $statuses))
             ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
             ->groupBy('festival_admission_type_id')
             ->pluck('aggregate', 'festival_admission_type_id');
         $sold = $quantities([FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value]);
-        $held = $quantities([FestivalTicketOrderStatus::Pending->value], true);
+        $held = $quantities([FestivalTicketOrderStatus::Pending->value]);
+        $seatCounts = FestivalSeat::query()
+            ->whereIn('festival_admission_type_id', $typeIds)
+            ->selectRaw('festival_admission_type_id, sum(is_blocked) as blocked, sum(hold_expires_at > ?) as preheld', [now()])
+            ->groupBy('festival_admission_type_id')
+            ->get()
+            ->keyBy('festival_admission_type_id');
         $early = FestivalTicketOrderItem::query()
             ->whereIn('festival_admission_type_id', $typeIds)
             ->where('price_tier', 'early_bird')
             ->whereHas('order', fn ($query) => $query
-                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
+                ->countsAgainstInventory()
+                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value]))
             ->selectRaw('festival_admission_type_id, sum(quantity) as aggregate')
             ->groupBy('festival_admission_type_id')
             ->pluck('aggregate', 'festival_admission_type_id');
@@ -629,16 +728,17 @@ class FestivalWorkspaceController extends Controller
             ->unique();
         $historyIds = FestivalTicketOrderItem::query()->whereIn('festival_admission_type_id', $typeIds)->pluck('festival_admission_type_id')->unique();
 
-        return $admissionTypes->mapWithKeys(function (FestivalAdmissionType $type) use ($sold, $held, $early, $lockedIds, $historyIds): array {
+        return $admissionTypes->mapWithKeys(function (FestivalAdmissionType $type) use ($sold, $held, $seatCounts, $early, $lockedIds, $historyIds): array {
             $soldQuantity = (int) ($sold[$type->id] ?? 0);
-            $heldQuantity = (int) ($held[$type->id] ?? 0);
+            $heldQuantity = (int) ($held[$type->id] ?? 0) + (int) ($seatCounts[$type->id]->preheld ?? 0);
+            $blockedQuantity = (int) ($seatCounts[$type->id]->blocked ?? 0);
             $earlyQuantity = (int) ($early[$type->id] ?? 0);
             $earlyAvailable = $type->early_bird_price_cents !== null
                 && (! $type->early_bird_ends_at || $type->early_bird_ends_at->isFuture())
                 && ($type->early_bird_quota === null || $earlyQuantity < $type->early_bird_quota);
 
             return [$type->id => [
-                'remaining' => max(0, $type->inventory - $soldQuantity - $heldQuantity),
+                'remaining' => max(0, $type->inventory - $soldQuantity - $heldQuantity - $blockedQuantity),
                 'sold' => $soldQuantity,
                 'held' => $heldQuantity,
                 'current_price_cents' => $earlyAvailable ? (int) $type->early_bird_price_cents : $type->price_cents,

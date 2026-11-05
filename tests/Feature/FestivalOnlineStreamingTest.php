@@ -26,6 +26,7 @@ use App\Models\User;
 use App\Support\Festivals\FestivalMediaMtxGateway;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalStreamAccessService;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentCallbackResult;
@@ -986,6 +987,8 @@ class FestivalOnlineStreamingTest extends TestCase
             app(ResolveFestivalGuest::class),
             app(FestivalTelegramIdentityLinker::class),
             app(FestivalPromoCodePricing::class),
+            app(FestivalSeatReservations::class),
+            app(FestivalTicketIssuer::class),
         );
     }
 

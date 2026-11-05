@@ -42,6 +42,55 @@ class FestivalWorkspaceTabsTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_promo_pages_have_a_clickable_ticket_hub_ancestor(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.promo-codes.index', [$account, $edition]))->assertOk();
+        $document = new \DOMDocument;
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new \DOMXPath($document);
+        $hub = route('dashboard.accounts.festivals.tickets', [$account, $edition]);
+        $this->assertSame(1, $xpath->query('//nav[@data-app-breadcrumbs]//a[@href="'.$hub.'"]')->length);
+    }
+
+    public function test_orders_page_has_one_description_inside_the_workspace(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.ticket-orders.index', [$account, $edition]));
+        $response->assertOk();
+        $this->assertSame(1, substr_count($response->getContent(), __('app.festival_ticket_orders_copy')));
+    }
+
+    public function test_manual_issuance_shows_one_status_message_after_guest_creation(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $message = __('app.festival_user_saved');
+        $response = $this->actingAs($owner)->withSession(['status' => $message])
+            ->get(route('dashboard.accounts.festivals.tickets.issue', [$account, $edition]))->assertOk();
+        $this->assertSame(1, substr_count($response->getContent(), $message));
+    }
+
+    public function test_ticket_hub_and_legacy_destinations(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]))
+            ->assertOk()->assertSee('data-festival-ticket-hub', false)
+            ->assertDontSee('aria-label="'.__('app.festival_ticket_tabs').'"', false);
+        foreach (['types' => 'admission-types.index', 'sold' => 'tickets.sold', 'orders' => 'ticket-orders.index'] as $tab => $destination) {
+            $this->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => $tab, 'q' => 'needle', 'page' => 2]))
+                ->assertRedirect(route('dashboard.accounts.festivals.'.$destination, [$account, $edition, 'q' => 'needle', 'page' => 2]));
+            $this->get(route('dashboard.accounts.festivals.'.$destination, [$account, $edition]))->assertOk();
+        }
+    }
+
     public function test_owner_can_deep_link_to_each_workflow_with_one_active_sidebar_item(): void
     {
         [$account, $edition] = $this->festival();
@@ -62,8 +111,8 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.judging.criteria.create' => 'festival_criteria',
             'dashboard.accounts.festivals.judging.score-sheets.index' => 'festival_score_sheets',
             'dashboard.accounts.festivals.judging.results.index' => 'festival_results',
-            'dashboard.accounts.festivals.tickets' => 'festival_tab_tickets_entrance',
-            'dashboard.accounts.festivals.admission-types.create' => 'festival_tab_tickets_entrance',
+            'dashboard.accounts.festivals.tickets' => 'festival_tickets',
+            'dashboard.accounts.festivals.admission-types.create' => 'festival_tickets',
             'dashboard.accounts.festivals.communication.history' => 'festival_tab_communication',
             'dashboard.accounts.festivals.communication.announcements' => 'festival_tab_communication',
             'dashboard.accounts.festivals.communication.settings' => 'festival_tab_communication',
@@ -88,7 +137,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'dashboard.accounts.festivals.settings.content.media' => 'festival_content_media',
             'dashboard.accounts.festivals.media.create' => 'festival_content_media',
             'dashboard.accounts.festivals.edit' => 'festival_settings_overview',
-            'dashboard.accounts.festivals.scanner' => 'festival_tab_tickets_entrance',
+            'dashboard.accounts.festivals.scanner' => 'festival_open_scanner',
         ];
 
         foreach ($routes as $route => $activeLabel) {
@@ -108,7 +157,6 @@ class FestivalWorkspaceTabsTest extends TestCase
                 'dashboard.accounts.festivals.communication.announcements',
                 'dashboard.accounts.festivals.communication.settings',
                 'dashboard.accounts.festivals.edit',
-                'dashboard.accounts.festivals.tickets',
             ], true) ? 3 : 2;
             $this->assertSame($expectedCurrentItems, substr_count($response->getContent(), 'aria-current="page"'), $route);
         }
@@ -318,10 +366,10 @@ class FestivalWorkspaceTabsTest extends TestCase
             ->assertDontSee(__('app.festival_application_review'));
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.performances', [$account, $edition]))->assertForbidden();
         $this->actingAs($financeStaff)
-            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']))
+            ->get(route('dashboard.accounts.festivals.tickets.sold', [$account, $edition]))
             ->assertOk()
             ->assertSee('finance-buyer-secret@example.test')
-            ->assertSee(__('app.festival_admission_revenue'));
+            ->assertSee(__('app.festival_bought_tickets_tab'));
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings', [$account, $edition]))->assertOk();
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings.fees', [$account, $edition]))->assertOk();
         $this->actingAs($financeStaff)->get(route('dashboard.accounts.festivals.settings.categories', [$account, $edition]))->assertForbidden();
@@ -344,10 +392,9 @@ class FestivalWorkspaceTabsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'invalid']))
             ->assertOk()
-            ->assertViewHas('tab', 'types')
-            ->assertViewHas('tickets', null);
+            ->assertSee('data-festival-ticket-hub', false);
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']))
+            ->get(route('dashboard.accounts.festivals.tickets.sold', [$account, $edition]))
             ->assertOk()
             ->assertViewHas('tab', 'sold')
             ->assertViewHas('admissionTypes', null);
@@ -575,7 +622,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [$account, $edition]));
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.ticket-orders.index', [$account, $edition]));
 
         $response->assertOk()
             ->assertSee('1 500 ₴')
@@ -614,10 +661,9 @@ class FestivalWorkspaceTabsTest extends TestCase
         ]);
         app(FestivalTicketIssuer::class)->execute($order);
 
-        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets', [
+        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets.sold', [
             $account,
             $edition,
-            'tab' => 'sold',
             'q' => 'Pagination Buyer',
             'type' => $type->id,
             'status' => 'valid',
@@ -1533,7 +1579,7 @@ class FestivalWorkspaceTabsTest extends TestCase
             'inventory' => 20,
             'price' => '500.00',
             'max_per_order' => 4,
-        ])->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+        ])->assertRedirect(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]));
 
         $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.entries.review', [$account, $edition, $entry]), [
             'status' => 'accepted',

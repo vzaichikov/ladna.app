@@ -1,3 +1,5 @@
+import { initFestivalStaffSeatPickers } from './festival-staff-seat-picker';
+
 function normalizeCollection(payload, keys) {
     for (const key of keys) {
         if (Array.isArray(payload?.[key])) {
@@ -32,6 +34,7 @@ async function jsonRequest(url, { method = 'GET', csrfToken = '', body = null, s
         const error = new Error(validationMessage || payload?.message || `HTTP ${response.status}`);
 
         error.payload = payload;
+        error.status = response.status;
         throw error;
     }
 
@@ -61,6 +64,7 @@ function contactLabel(guest) {
 }
 
 export function initEntranceOperations() {
+    initFestivalStaffSeatPickers();
     document.querySelectorAll('[data-entrance-tools]').forEach((root) => {
         if (root.dataset.entranceToolsReady === 'true') {
             return;
@@ -101,6 +105,7 @@ export function initEntranceOperations() {
         let modalOpener = null;
         let paymentPollTimer = null;
         let paymentPollStartedAt = 0;
+        let saleAttempt = null;
 
         const setSearchOpen = (open) => {
             searchPanel?.classList.toggle('hidden', !open);
@@ -169,7 +174,7 @@ export function initEntranceOperations() {
             button.className = 'flex w-full items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left transition hover:border-brand-200 hover:bg-brand-50 disabled:pointer-events-none disabled:opacity-55 crm-focus';
             body.className = 'min-w-0';
             name.className = 'block truncate text-sm font-semibold text-slate-950';
-            name.textContent = [ticket.kind_label, ticket.type || ticket.ticket_type]
+            name.textContent = [ticket.kind_label, ticket.type || ticket.ticket_type, ticket.seat_label]
                 .filter((value, index, values) => value && values.indexOf(value) === index)
                 .join(' · ') || root.dataset.ticketFallback;
             code.className = 'mt-1 block truncate font-mono text-xs text-slate-500';
@@ -319,6 +324,7 @@ export function initEntranceOperations() {
         };
 
         const resetSale = () => {
+            saleAttempt = null;
             window.clearTimeout(paymentPollTimer);
             paymentPollTimer = null;
             saleForm?.reset();
@@ -334,6 +340,7 @@ export function initEntranceOperations() {
             activeSaleMode = mode;
             activeSaleUrl = mode === 'cash' ? root.dataset.cashSaleUrl : root.dataset.cardSaleUrl;
             resetSale();
+            saleForm?.dispatchEvent(new Event('festival:refresh-staff-seats'));
 
             if (saleTitle) {
                 saleTitle.textContent = mode === 'cash' ? root.dataset.cashTitle : root.dataset.cardTitle;
@@ -415,9 +422,16 @@ export function initEntranceOperations() {
 
             const submit = saleForm.querySelector('[type="submit"]');
             const data = Object.fromEntries(new FormData(saleForm));
+            const seatLabel = data.seat_id
+                ? saleForm.elements.namedItem('seat_id')?.selectedOptions[0]?.textContent
+                : null;
 
             data.mode = activeSaleMode;
-            data.idempotency_key = idempotencyKey();
+            const fingerprint = JSON.stringify(data);
+            if (saleAttempt?.fingerprint !== fingerprint) {
+                saleAttempt = { fingerprint, key: idempotencyKey() };
+            }
+            data.idempotency_key = saleAttempt.key;
             submit && (submit.disabled = true);
             saleError?.classList.add('hidden');
 
@@ -428,7 +442,7 @@ export function initEntranceOperations() {
                 saleForm.classList.add('hidden');
                 saleResult?.classList.remove('hidden');
                 if (saleResultMessage) {
-                    saleResultMessage.textContent = payload.message || (activeSaleMode === 'cash' ? root.dataset.cashSuccessLabel : root.dataset.cardReadyLabel);
+                    saleResultMessage.textContent = [payload.message || (activeSaleMode === 'cash' ? root.dataset.cashSuccessLabel : root.dataset.cardReadyLabel), ticket?.seat_label || seatLabel].filter(Boolean).join(' · ');
                 }
 
                 if (ticket?.code && activeSaleMode === 'cash' && saleAdmit) {
@@ -465,6 +479,10 @@ export function initEntranceOperations() {
 
                 root.dispatchEvent(new CustomEvent('entrance:changed', { bubbles: true, detail: { payload } }));
             } catch (error) {
+                if (error.status && error.status < 500) {
+                    saleAttempt = null;
+                }
+                saleForm.dispatchEvent(new Event('festival:refresh-staff-seats'));
                 if (saleError) {
                     saleError.textContent = error.message || root.dataset.requestError;
                     saleError.classList.remove('hidden');

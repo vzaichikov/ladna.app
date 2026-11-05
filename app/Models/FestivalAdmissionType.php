@@ -13,17 +13,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['account_id', 'festival_edition_id', 'delivery_mode', 'festival_online_stream_id', 'name', 'description', 'inventory', 'price_cents', 'early_bird_price_cents', 'early_bird_ends_at', 'early_bird_quota', 'sales_starts_at', 'sales_ends_at', 'max_per_order', 'is_active', 'sort_order'])]
+#[Fillable(['account_id', 'festival_edition_id', 'delivery_mode', 'festival_online_stream_id', 'name', 'description', 'inventory', 'price_cents', 'early_bird_price_cents', 'early_bird_ends_at', 'early_bird_quota', 'sales_starts_at', 'sales_ends_at', 'max_per_order', 'is_active', 'sort_order', 'is_assigned_seating'])]
 class FestivalAdmissionType extends Model
 {
     /** @use HasFactory<FestivalAdmissionTypeFactory> */
     use HasFactory;
 
-    protected $attributes = ['delivery_mode' => 'venue', 'max_per_order' => 10, 'is_active' => true, 'sort_order' => 0];
+    protected $attributes = ['delivery_mode' => 'venue', 'max_per_order' => 10, 'is_active' => true, 'sort_order' => 0, 'is_assigned_seating' => false];
 
     protected function casts(): array
     {
         return [
+            'is_assigned_seating' => 'boolean',
             'delivery_mode' => FestivalAdmissionDeliveryMode::class,
             'inventory' => 'integer',
             'price_cents' => 'integer',
@@ -43,6 +44,13 @@ class FestivalAdmissionType extends Model
         return $query
             ->where('is_active', true)
             ->where(fn (Builder $query) => $query
+                ->where('is_assigned_seating', false)
+                ->orWhere(fn (Builder $assigned) => $assigned
+                    ->where('is_assigned_seating', true)
+                    ->where('inventory', '>', 0)
+                    ->whereHas('edition', fn (Builder $edition) => $edition
+                        ->where('assigned_seating_enabled', true)->whereNotNull('seating_floors'))))
+            ->where(fn (Builder $query) => $query
                 ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
                 ->orWhereHas('onlineStream', fn (Builder $stream) => $stream->where('is_enabled', true)))
             ->where(fn (Builder $query) => $query->whereNull('sales_starts_at')->orWhere('sales_starts_at', '<=', now()))
@@ -57,22 +65,24 @@ class FestivalAdmissionType extends Model
             && (! $this->sales_ends_at || $this->sales_ends_at->isFuture());
     }
 
-    public function soldOrHeldQuantity(): int
+    public function soldOrHeldQuantity(?string $excludingHoldKey = null): int
     {
-        return (int) $this->orderItems()
-            ->whereHas('order', fn ($query) => $query
-                ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-            ->sum('quantity');
+        $ordered = (int) $this->orderItems()->whereHas('order', fn (Builder $query) => $query->countsAgainstInventory())->sum('quantity');
+
+        return $ordered + ($this->is_assigned_seating
+            ? $this->seats()->where('hold_expires_at', '>', now())
+                ->when($excludingHoldKey !== null, fn (Builder $query) => $query->where('hold_key', '!=', $excludingHoldKey))
+                ->count()
+            : 0);
     }
 
-    public function remainingQuantity(): int
+    public function remainingQuantity(?string $excludingHoldKey = null): int
     {
-        return max(0, $this->inventory - $this->soldOrHeldQuantity());
+        return max(0, $this->inventory - $this->soldOrHeldQuantity($excludingHoldKey));
     }
 
     /** @return array{price_cents: int, tier: string} */
-    public function currentPrice(): array
+    public function currentPrice(int $quantity = 1): array
     {
         $earlySold = (int) $this->orderItems()
             ->where('price_tier', 'early_bird')
@@ -80,7 +90,7 @@ class FestivalAdmissionType extends Model
             ->sum('quantity');
         $earlyAvailable = $this->early_bird_price_cents !== null
             && (! $this->early_bird_ends_at || $this->early_bird_ends_at->isFuture())
-            && ($this->early_bird_quota === null || $earlySold < $this->early_bird_quota);
+            && ($this->early_bird_quota === null || $earlySold + $quantity <= $this->early_bird_quota);
 
         return $earlyAvailable
             ? ['price_cents' => $this->early_bird_price_cents, 'tier' => 'early_bird']
@@ -95,6 +105,11 @@ class FestivalAdmissionType extends Model
     public function festivalEdition(): BelongsTo
     {
         return $this->edition();
+    }
+
+    public function seats(): HasMany
+    {
+        return $this->hasMany(FestivalSeat::class);
     }
 
     public function orderItems(): HasMany

@@ -70,11 +70,22 @@ final class FestivalNotificationRenderer
             $locale,
         );
         $body = __('app.festival_notification_template_'.$type->value.'_body', $replacements, $locale);
+        $lines = [$body];
+        if ($type === FestivalNotificationType::TicketsIssued) {
+            foreach (($payload['seat_labels'] ?? []) as $label) {
+                if (is_string($label) && filled($label)) {
+                    $lines[] = $label;
+                }
+            }
+            if (($payload['unassigned_tickets_count'] ?? 0) > 0) {
+                $lines[] = __('app.festival_journey.general_admission', locale: $locale).' × '.(int) $payload['unassigned_tickets_count'];
+            }
+        }
 
         return new FestivalNotificationMessage(
             subject: $subject,
             greeting: __('app.festival_notification_greeting', ['name' => $recipientName], $locale),
-            lines: $this->emailLines([$body], $payload, $locale),
+            lines: $this->emailLines($lines, $payload, $locale),
             smsText: __('app.festival_notification_template_'.$type->value.'_sms', $replacements, $locale),
             actionLabel: $this->actionLabel($type, $actionUrl, $locale),
             actionUrl: $actionUrl,

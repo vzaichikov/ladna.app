@@ -6,7 +6,6 @@ use App\Actions\Festivals\FestivalDoorTicketSale;
 use App\Actions\Festivals\FestivalEntrancePassEligibility;
 use App\Actions\Festivals\FestivalEntrancePassScanner;
 use App\Actions\Festivals\FestivalTicketScanner;
-use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntrancePassStatus;
 use App\Enums\FestivalTeamMemberType;
@@ -26,7 +25,9 @@ use App\Models\User;
 use App\Support\Entrance\EntrancePresenter;
 use App\Support\Entrance\EntranceQrCode;
 use App\Support\EventFestivalStaffAccess;
+use App\Support\Festivals\FestivalHallOccupancy;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalStaffSeating;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\MoneyFormatter;
 use App\Support\Payments\PaymentGatewayRegistry;
@@ -43,6 +44,7 @@ class FestivalEntranceController extends Controller
         private readonly EventFestivalStaffAccess $staffAccess,
         private readonly FestivalEntrancePassScanner $entrancePassScanner,
         private readonly FestivalEntrancePassEligibility $entrancePassEligibility,
+        private readonly FestivalStaffSeating $seating,
     ) {}
 
     public function attendance(
@@ -59,6 +61,9 @@ class FestivalEntranceController extends Controller
             'edition' => $festivalEdition,
             'festivalEdition' => $festivalEdition,
             'overview' => $this->overview($festivalEdition),
+            'hall' => app(FestivalHallOccupancy::class)->present($festivalEdition),
+            'generalAdmissionCount' => $this->generalAdmissionCount($festivalEdition),
+            'attendanceView' => $request->query('view') === 'hall' ? 'hall' : 'guests',
             'workspacePermissions' => $workspaceAccess->permissions($request->user(), $account, $festivalEdition),
             'entranceTools' => $this->entranceTools($account, $festivalEdition, $gateways),
         ]);
@@ -68,7 +73,18 @@ class FestivalEntranceController extends Controller
     {
         $this->authorizeDoorStaff($request, $account, $festivalEdition);
 
-        return response()->json($this->overview($festivalEdition))
+        return response()->json($request->query('view') === 'hall' ? $this->hallOverview($festivalEdition) : $this->overview($festivalEdition))
+            ->withHeaders($this->privateHeaders());
+    }
+
+    public function seatAvailability(Request $request, Account $account, FestivalEdition $festivalEdition): JsonResponse
+    {
+        $this->assertEditionScope($account, $festivalEdition);
+        if (! $request->user()?->can('manageFestivalFinance', $account)) {
+            $this->authorizeDoorStaff($request, $account, $festivalEdition);
+        }
+
+        return response()->json(['unavailable' => $this->seating->unavailable($festivalEdition)])
             ->withHeaders($this->privateHeaders());
     }
 
@@ -142,7 +158,7 @@ class FestivalEntranceController extends Controller
                         [$value],
                     ));
             })
-            ->with(['tickets.admissionType'])
+            ->with(['tickets.admissionType', 'tickets.seat'])
             ->latest('id')
             ->limit(12)
             ->get();
@@ -164,7 +180,7 @@ class FestivalEntranceController extends Controller
             ->limit(12)
             ->get()
             ->filter(fn (FestivalEntrancePass $pass): bool => $passScanner->canBeUsed($pass));
-        $results = $orders->map(fn (FestivalTicketOrder $order): array => $this->orderResult($order))
+        $results = $orders->map(fn (FestivalTicketOrder $order): array => $this->orderResult($order->setRelation('edition', $festivalEdition)))
             ->concat($passes->map(fn (FestivalEntrancePass $pass): array => $this->passSearchResult($pass)))
             ->values();
 
@@ -273,7 +289,7 @@ class FestivalEntranceController extends Controller
     /** @return array<string, mixed> */
     private function saleResult(Account $account, FestivalTicketOrder $order): array
     {
-        $order->loadMissing(['tickets.admissionType']);
+        $order->loadMissing(['tickets.admissionType', 'tickets.seat']);
 
         return [
             'order' => [
@@ -315,6 +331,7 @@ class FestivalEntranceController extends Controller
             'kind_label' => __('app.festival_guest_ticket'),
             'code' => $ticket->code,
             'type' => $ticket->admissionType?->name,
+            'seat_label' => $ticket->seat?->setRelation('edition', $order->edition)->label(),
             'holder_name' => $ticket->holder_name ?: $order->buyer_name,
             'status' => $ticket->status->value,
             'passed' => $ticket->is_checked_in,
@@ -347,13 +364,39 @@ class FestivalEntranceController extends Controller
     }
 
     /** @return array<string, mixed> */
+    private function hallOverview(FestivalEdition $edition): array
+    {
+        $eligible = ($edition->ends_at?->isPast() || in_array($edition->status, [FestivalEditionStatus::Cancelled, FestivalEditionStatus::Archived], true))
+            ? [] : $this->entrancePassEligibility->queryForEdition($edition)->pluck('id')->all();
+        $passes = $edition->entrancePasses()->where('status', FestivalEntrancePassStatus::Valid->value)
+            ->whereIn('festival_participant_id', $eligible)->with('participant')->get();
+        $counts = fn (FestivalTeamMemberType $type): array => [
+            'total' => $passes->filter(fn ($pass) => $pass->participant->member_type === $type)->count(),
+            'passed' => $passes->filter(fn ($pass) => $pass->participant->member_type === $type && $pass->is_checked_in)->count(),
+        ];
+
+        return [
+            'hall' => app(FestivalHallOccupancy::class)->present($edition, ! request()->boolean('state_only')),
+            'general_admission' => $this->generalAdmissionCount($edition),
+            'participants' => $counts(FestivalTeamMemberType::Performer), 'helpers' => $counts(FestivalTeamMemberType::Helper),
+        ];
+    }
+
+    private function generalAdmissionCount(FestivalEdition $edition): int
+    {
+        return $edition->tickets()->whereNull('festival_seat_id')->where('status', FestivalTicketStatus::Valid->value)
+            ->whereHas('order', fn ($orders) => $orders->where('status', FestivalTicketOrderStatus::Paid->value))
+            ->whereHas('admissionType', fn ($types) => $types->where('delivery_mode', 'venue'))->count();
+    }
+
+    /** @return array<string, mixed> */
     private function overview(FestivalEdition $edition): array
     {
         $tickets = FestivalTicket::query()
             ->where('festival_edition_id', $edition->id)
             ->where('status', FestivalTicketStatus::Valid->value)
             ->whereHas('order', fn ($query) => $query->where('status', FestivalTicketOrderStatus::Paid->value))
-            ->with(['order:id,buyer_name,status', 'admissionType:id,name'])
+            ->with(['order:id,buyer_name,status', 'admissionType:id,name', 'seat.edition'])
             ->orderByDesc('is_checked_in')
             ->orderByDesc('checked_in_at')
             ->orderBy('code')
@@ -407,6 +450,7 @@ class FestivalEntranceController extends Controller
             'customer_name' => $ticket->holder_name ?: ($ticket->order?->buyer_name ?? __('app.unknown')),
             'code' => $ticket->code,
             'type' => $ticket->admissionType?->name,
+            'seat_label' => $ticket->seat?->label(),
             'passed' => $ticket->is_checked_in,
             'checked_in_at' => $ticket->checked_in_at?->toIso8601String(),
             'checked_in_at_label' => $ticket->checked_in_at?->timezone($edition->timezone)->format('d.m.Y H:i'),
@@ -487,24 +531,22 @@ class FestivalEntranceController extends Controller
     private function entranceTools(Account $account, FestivalEdition $edition, PaymentGatewayRegistry $gateways): array
     {
         $providers = $gateways->availableSettingsFor($account);
-        $ticketTypes = $edition->admissionTypes()
-            ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn ($ticketType): array => [
-                'id' => $ticketType->id,
-                'name' => $ticketType->name,
-                'price_label' => MoneyFormatter::format($ticketType->price_cents, $edition->currency),
-                'remaining' => $ticketType->remainingQuantity(),
-            ]);
+        $types = $this->seating->types($edition);
+        $seatChart = $this->seating->chart($edition, $types);
+        $ticketTypes = $types->map(fn ($ticketType): array => [
+            'id' => $ticketType->id,
+            'name' => $ticketType->name,
+            'price_label' => MoneyFormatter::format($ticketType->price_cents, $edition->currency),
+            'remaining' => $this->seating->remaining($ticketType, $seatChart),
+        ]);
 
         return [
             'search_url' => route('dashboard.accounts.festivals.entrance.search', [$account, $edition]),
             'cash_sale_url' => route('dashboard.accounts.festivals.entrance.cash', [$account, $edition]),
             'card_sale_url' => route('dashboard.accounts.festivals.entrance.card', [$account, $edition]),
             'ticket_types' => $ticketTypes,
+            'seat_chart' => $seatChart,
+            'seat_availability_url' => route('dashboard.accounts.festivals.entrance.seats', [$account, $edition]),
             'payment_providers' => $providers->map(fn (IntegrationSetting $setting): array => [
                 'value' => $setting->provider->value,
                 'label' => config('integrations.providers.'.$setting->provider->value.'.label', $setting->provider->value),

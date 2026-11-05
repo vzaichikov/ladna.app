@@ -31,13 +31,14 @@ class FestivalTicketScanner
         }
 
         return DB::transaction(function () use ($ticket, $edition, $actor, $source, $ip, $confirmed): array {
-            $ticketQuery = FestivalTicket::query()->with(['order', 'admissionType', 'participant'])->whereKey($ticket->id);
+            $ticketQuery = FestivalTicket::query()->with(['order', 'admissionType', 'participant', 'seat'])->whereKey($ticket->id);
 
             if ($confirmed) {
                 $ticketQuery->lockForUpdate();
             }
 
             $ticket = $ticketQuery->firstOrFail();
+            $ticket->seat?->setRelation('edition', $edition);
             if ($confirmed && $ticket->festival_participant_id) {
                 FestivalParticipant::query()->whereKey($ticket->festival_participant_id)->lockForUpdate()->firstOrFail();
             }
@@ -111,12 +112,13 @@ class FestivalTicketScanner
         ]);
     }
 
-    /** @return array{code: string, type: string|null, customer: string, kind: string, kind_label: string} */
+    /** @return array{code: string, type: string|null, seat_label: string|null, customer: string, kind: string, kind_label: string} */
     private function ticketSummary(FestivalTicket $ticket): array
     {
         return [
             'code' => $ticket->code,
             'type' => $ticket->admissionType?->name,
+            'seat_label' => $ticket->seat?->label(),
             'customer' => $ticket->holder_name ?: ($ticket->order?->buyer_name ?? __('app.unknown')),
             'kind' => 'guest_ticket',
             'kind_label' => __('app.festival_guest_ticket'),

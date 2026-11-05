@@ -48,6 +48,7 @@ class IssueFestivalTicketRequest extends FormRequest
                     ->where('is_active', true)),
             ],
             'holder_name' => ['required', 'string', 'max:255'],
+            'seat_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

@@ -39,6 +39,10 @@
                 <dt class="text-sm font-medium text-slate-500">{{ __('app.ticket_scanner_ticket_type') }}</dt>
                 <dd class="break-words text-sm font-semibold text-slate-950" data-scanner-modal-type></dd>
             </div>
+            <div hidden class="grid gap-1 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4" data-scanner-modal-seat-row>
+                <dt class="text-sm font-medium text-slate-500">{{ __('app.festival_seating_staff.seat') }}</dt>
+                <dd class="break-words text-sm font-semibold text-slate-950" data-scanner-modal-seat></dd>
+            </div>
             <div class="grid gap-1 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4" data-scanner-modal-code-row>
                 <dt class="text-sm font-medium text-slate-500">{{ __('app.ticket_scanner_ticket_code') }}</dt>
                 <dd class="break-all font-mono text-sm font-semibold text-slate-950" data-scanner-modal-code></dd>

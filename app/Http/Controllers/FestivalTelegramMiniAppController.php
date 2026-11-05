@@ -118,7 +118,8 @@ class FestivalTelegramMiniAppController extends Controller
                 ->whereKey($targetId)
                 ->where('account_id', $series->account_id)
                 ->where('festival_series_id', $series->id)
-                ->published()->publiclyVisible()
+                ->published()->publiclyVisible()->upcoming()
+                ->whereHas('admissionTypes', fn ($query) => $query->availableForSale())
                 ->firstOrFail();
 
             return $this->privateJson(['url' => $checkoutHandoff->issueUrl($series, $edition, $authorization)]);

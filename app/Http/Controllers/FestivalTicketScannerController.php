@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Festivals\FestivalTicketScanner;
-use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTicket;
 use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\EventFestivalStaffAccess;
+use App\Support\Festivals\FestivalStaffSeating;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\MoneyFormatter;
 use App\Support\Payments\PaymentGatewayRegistry;
@@ -19,7 +19,10 @@ use Illuminate\View\View;
 
 class FestivalTicketScannerController extends Controller
 {
-    public function __construct(private readonly EventFestivalStaffAccess $staffAccess) {}
+    public function __construct(
+        private readonly EventFestivalStaffAccess $staffAccess,
+        private readonly FestivalStaffSeating $seating,
+    ) {}
 
     public function show(
         Request $request,
@@ -108,18 +111,14 @@ class FestivalTicketScannerController extends Controller
     private function entranceTools(Account $account, FestivalEdition $edition, PaymentGatewayRegistry $gateways, bool $canSell = true): array
     {
         $providers = $gateways->availableSettingsFor($account);
-        $ticketTypes = $edition->admissionTypes()
-            ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get()
-            ->map(fn ($ticketType): array => [
-                'id' => $ticketType->id,
-                'name' => $ticketType->name,
-                'price_label' => MoneyFormatter::format($ticketType->price_cents, $edition->currency),
-                'remaining' => $ticketType->remainingQuantity(),
-            ]);
+        $types = $this->seating->types($edition);
+        $seatChart = $canSell ? $this->seating->chart($edition, $types) : null;
+        $ticketTypes = $types->map(fn ($ticketType): array => [
+            'id' => $ticketType->id,
+            'name' => $ticketType->name,
+            'price_label' => MoneyFormatter::format($ticketType->price_cents, $edition->currency),
+            'remaining' => $this->seating->remaining($ticketType, $seatChart),
+        ]);
 
         return [
             'search_url' => route('dashboard.accounts.festivals.entrance.search', [$account, $edition]),
@@ -127,6 +126,8 @@ class FestivalTicketScannerController extends Controller
             'cash_sale_url' => route('dashboard.accounts.festivals.entrance.cash', [$account, $edition]),
             'card_sale_url' => route('dashboard.accounts.festivals.entrance.card', [$account, $edition]),
             'ticket_types' => $ticketTypes,
+            'seat_chart' => $seatChart,
+            'seat_availability_url' => route('dashboard.accounts.festivals.entrance.seats', [$account, $edition]),
             'payment_providers' => $providers->map(fn (IntegrationSetting $setting): array => [
                 'value' => $setting->provider->value,
                 'label' => config('integrations.providers.'.$setting->provider->value.'.label', $setting->provider->value),

@@ -13,6 +13,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalPortalUser;
 use App\Support\Festivals\FestivalGoogleEmailPrefill;
 use App\Support\Festivals\FestivalPaymentService;
+use App\Support\Festivals\FestivalSeatCheckout;
 use App\Support\Festivals\FestivalTelegramAuthorizationResolver;
 use App\Support\Festivals\FestivalTelegramCheckoutHandoff;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -26,17 +27,24 @@ use Throwable;
 
 class FestivalAdmissionController extends Controller
 {
-    public function store(FestivalAdmissionOrderRequest $request, string $accountSlug, string $editionSlug, CreateFestivalTicketOrder $createOrder, FestivalPaymentService $payments, FestivalTicketIssuer $tickets, FestivalTelegramCheckoutHandoff $telegramHandoff, FestivalTelegramAuthorizationResolver $telegramAuthorizations): RedirectResponse|View
+    public function store(FestivalAdmissionOrderRequest $request, string $accountSlug, string $editionSlug, CreateFestivalTicketOrder $createOrder, FestivalPaymentService $payments, FestivalTicketIssuer $tickets, FestivalTelegramCheckoutHandoff $telegramHandoff, FestivalTelegramAuthorizationResolver $telegramAuthorizations, FestivalSeatCheckout $seatCheckout): RedirectResponse|View
     {
         $account = $request->attributes->get('festivalAccount');
         abort_unless($account instanceof Account && $account->slug === $accountSlug, 404);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)->with('series')->firstOrFail();
         $input = $request->orderInput();
         $input['locale'] = app()->getLocale();
+        $hasSeats = ! empty($input['seat_ids']);
+        if ($hasSeats) {
+            $input['seat_ids'] = array_map(intval(...), $input['seat_ids']);
+            $input['seat_hold_key'] = $seatCheckout->key($request, $edition, $input['seat_checkout_id']);
+            $input['seat_quote_total'] = (int) $input['seat_quote_total'];
+        }
         $hadTelegramHandoff = $telegramHandoff->hasSession($request, $edition);
-        $telegramAuthorization = $telegramHandoff->pullSessionAuthorization($request, $edition);
+        $telegramAuthorization = $telegramHandoff->pullSessionAuthorization($request, $edition, consume: ! $hasSeats);
 
         if ($hadTelegramHandoff && ! $telegramAuthorization) {
+            $telegramHandoff->forgetSession($request, $edition);
             throw ValidationException::withMessages(['telegram' => __('app.festival_telegram_checkout_expired')]);
         }
 
@@ -58,6 +66,14 @@ class FestivalAdmissionController extends Controller
             telegramAuthorization: $telegramAuthorization,
             purchaser: $purchaser,
         );
+
+        if ($hasSeats && $telegramAuthorization) {
+            $telegramHandoff->forgetSession($request, $edition);
+        }
+
+        if ($order->status !== FestivalTicketOrderStatus::Pending) {
+            return redirect()->route('public.festival-orders.show', [$accountSlug, $order->access_token_encrypted]);
+        }
 
         if ($order->amount_cents === 0) {
             DB::transaction(function () use ($order, $tickets): void {

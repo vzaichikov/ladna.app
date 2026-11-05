@@ -33,6 +33,23 @@ class AuthenticatedBreadcrumbsTest extends TestCase
 {
     use DatabaseTransactions;
 
+    public function test_festival_attendance_has_a_clickable_tickets_ancestor(): void
+    {
+        [$account, $edition, $owner] = $this->festival();
+
+        foreach (['', '?view=guests', '?view=hall'] as $query) {
+            $response = $this->withSession(['locale' => 'en'])->actingAs($owner)
+                ->get(route('dashboard.accounts.festivals.attendance', [$account, $edition]).$query)->assertOk();
+
+            $this->assertSame([
+                ['label' => __('app.festivals'), 'href' => route('dashboard.accounts.festivals.index', $account), 'current' => false],
+                ['label' => $edition->title, 'href' => route('dashboard.accounts.festivals.show', [$account, $edition]), 'current' => false],
+                ['label' => __('app.festival_tickets'), 'href' => route('dashboard.accounts.festivals.tickets', [$account, $edition]), 'current' => false],
+                ['label' => __('app.festival_entrance_monitor'), 'href' => null, 'current' => true],
+            ], $this->breadcrumbItems($response));
+        }
+    }
+
     public function test_unreserved_class_booking_report_has_reports_breadcrumb(): void
     {
         $account = Account::factory()->create(['default_language' => 'en']);

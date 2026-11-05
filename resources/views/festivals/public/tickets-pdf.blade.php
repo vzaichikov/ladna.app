@@ -14,6 +14,7 @@
         .ticket-type { margin: 10mm 0 0; font-size: 17pt; font-weight: bold; }
         .qr { display: block; width: 82mm; height: 82mm; margin: 7mm auto 0; }
         .code { margin: 6mm 0 0; font-family: DejaVu Sans Mono, monospace; font-size: 16pt; font-weight: bold; letter-spacing: 1px; }
+        .seat { margin: 4mm 0 0; font-size: 14pt; line-height: 1.4; font-weight: bold; }
         .hint { margin: 3mm 0 0; color: #64748b; font-size: 10pt; }
         .number { margin: 10mm 0 0; color: #78716c; font-size: 9pt; }
     </style>
@@ -32,6 +33,7 @@
             @if ($venue !== '')<div>{{ $venue }}</div>@endif
         </div>
         <p class="ticket-type">{{ $ticket->orderItem?->admission_name ?? $ticket->admissionType?->name ?? __('app.festival_tickets') }}</p>
+        <p class="seat">{{ $ticket->seat?->label() ?? __('app.festival_journey.general_admission') }}</p>
         <img class="qr" src="{{ $qrCodes[$ticket->id] }}" alt="{{ __('app.festival_ticket_qr') }}">
         <p class="code">{{ $ticket->code }}</p>
         <p class="hint">{{ __('app.festival_ticket_present_at_entrance') }}</p>

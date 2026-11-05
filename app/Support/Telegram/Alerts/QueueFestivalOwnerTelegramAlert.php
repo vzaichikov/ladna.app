@@ -119,7 +119,7 @@ class QueueFestivalOwnerTelegramAlert
         }
 
         if ($type === FestivalNotificationType::TicketsIssued) {
-            return route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold']);
+            return route('dashboard.accounts.festivals.tickets.sold', [$account, $edition]);
         }
 
         return route('dashboard.accounts.festivals.communication.history', [$account, $edition]);

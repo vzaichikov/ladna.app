@@ -58,7 +58,8 @@ class FestivalTelegramLoginController extends Controller
             ->where('account_id', $account->id)
             ->where('festival_series_id', $series->id)
             ->where('slug', $editionSlug)
-            ->published()->publiclyVisible()
+            ->published()->publiclyVisible()->upcoming()
+            ->whereHas('admissionTypes', fn ($query) => $query->availableForSale())
             ->firstOrFail();
         abort_unless($handoff->consumeIntoSession($request, $series, $edition, $token), 403);
 

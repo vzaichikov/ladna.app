@@ -18,6 +18,7 @@ use App\Http\Controllers\FestivalPortalTicketController;
 use App\Http\Controllers\FestivalPromoCodeQuoteController;
 use App\Http\Controllers\FestivalPublicController;
 use App\Http\Controllers\FestivalResultTableController;
+use App\Http\Controllers\FestivalSeatCheckoutController;
 use App\Http\Controllers\FestivalStreamAccessController;
 use App\Http\Controllers\FestivalSubmissionController;
 use App\Http\Controllers\FestivalTelegramLoginController;
@@ -55,6 +56,11 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
     Route::get('/{accountSlug}/festivals/{editionSlug}/timeline', [FestivalTimelineController::class, 'publicFragment'])->name('public.festivals.timeline');
     Route::post('/{accountSlug}/festivals/{editionSlug}/admission', [FestivalAdmissionController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.admission.store');
     Route::post('/{accountSlug}/festivals/{editionSlug}/admission/promo-code', [FestivalPromoCodeQuoteController::class, 'admission'])->middleware('throttle:festival-checkout')->name('public.festivals.admission.promo-code');
+    Route::get('/{accountSlug}/festivals/{editionSlug}/admission/seats', [FestivalSeatCheckoutController::class, 'show'])->middleware('throttle:120,1,festival-seat-map')->name('public.festivals.admission.seats');
+    Route::post('/{accountSlug}/festivals/{editionSlug}/admission/seat-hold', [FestivalSeatCheckoutController::class, 'hold'])
+        ->middleware([PreventReadOnlyDemoMutations::class, 'throttle:12,1,festival-seat-hold'])->block(10, 10)->name('public.festivals.admission.seat-hold');
+    Route::post('/{accountSlug}/festivals/{editionSlug}/admission/seat-quote', [FestivalPromoCodeQuoteController::class, 'admission'])
+        ->middleware('throttle:45,1,festival-seat-quote')->name('public.festivals.admission.seat-quote');
     Route::post('/{accountSlug}/festivals/{editionSlug}/admission/google', [FestivalAdmissionController::class, 'google'])->middleware('throttle:festival-login')->name('public.festivals.admission.google');
     Route::get('/{accountSlug}/festival-orders/{accessToken}', [FestivalPublicController::class, 'order'])->name('public.festival-orders.show');
     Route::get('/{accountSlug}/festival-orders/{accessToken}/payment', [FestivalPublicController::class, 'orderPayment'])->middleware('throttle:120,1')->name('public.festival-orders.payment');

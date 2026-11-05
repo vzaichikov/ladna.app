@@ -79,7 +79,7 @@ class MultiLocationPageSmokeTest extends TestCase
         ];
 
         $this->assertEqualsCanonicalizing($actualRouteNames, $classifiedRouteNames);
-        $this->assertCount(229, $classifiedRouteNames);
+        $this->assertCount(236, $classifiedRouteNames);
     }
 
     public function test_every_account_html_page_renders_for_single_and_multi_location_studios(): void
@@ -558,6 +558,7 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.communication.announcements' => 'festival_edition',
             'dashboard.accounts.festivals.communication.settings' => 'festival_edition',
             'dashboard.accounts.festivals.edit' => 'festival_edition',
+            'dashboard.accounts.festivals.hall-layout.edit' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.index' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.create' => 'festival_edition',
             'dashboard.accounts.festivals.judging.judges.edit' => 'festival_judge_assignment',
@@ -620,6 +621,9 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.festivals.settings.workflows' => 'festival_edition',
             'dashboard.accounts.festivals.show' => 'festival_edition',
             'dashboard.accounts.festivals.tickets' => 'festival_edition',
+            'dashboard.accounts.festivals.tickets.sold' => 'festival_edition',
+            'dashboard.accounts.festivals.admission-types.index' => 'festival_edition',
+            'dashboard.accounts.festivals.ticket-orders.index' => 'festival_edition',
             'dashboard.accounts.festivals.tickets.issue' => 'festival_edition',
             'dashboard.accounts.festivals.timeline.show' => 'festival_stage',
             'dashboard.accounts.festivals.users.create' => 'festival_edition',
@@ -651,8 +655,11 @@ class MultiLocationPageSmokeTest extends TestCase
             'dashboard.accounts.events.entrance.poster',
             'dashboard.accounts.events.entrance.search',
             'dashboard.accounts.festivals.attendance.data',
+            'dashboard.accounts.festivals.tickets.seat-map',
             'dashboard.accounts.festivals.applications.fully-confirm.preview',
             'dashboard.accounts.festivals.entrance.poster',
+            'dashboard.accounts.festivals.entrance.seats',
+            'dashboard.accounts.festivals.hall-layout.template',
             'dashboard.accounts.festivals.entrance.search',
             'dashboard.accounts.festivals.judging.score-sheets.participants.photo',
             'dashboard.accounts.festivals.users.participants.photo',

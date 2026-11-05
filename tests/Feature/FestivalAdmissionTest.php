@@ -22,6 +22,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
@@ -263,7 +264,7 @@ class FestivalAdmissionTest extends TestCase
                 'sales_starts_at' => '2026-08-20T10:00',
                 'sales_ends_at' => '2026-08-20T18:00',
             ]))
-            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+            ->assertRedirect(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]));
 
         $type = $edition->admissionTypes()->where('name', 'Evening balcony')->firstOrFail();
         $this->assertSame(30000, $type->price_cents);
@@ -275,7 +276,7 @@ class FestivalAdmissionTest extends TestCase
                 'name' => 'Updated balcony',
                 'inventory' => 80,
             ]))
-            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+            ->assertRedirect(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]));
 
         $this->assertDatabaseHas('festival_admission_types', [
             'id' => $type->id,
@@ -285,7 +286,7 @@ class FestivalAdmissionTest extends TestCase
 
         $this->actingAs($owner)
             ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
-            ->assertRedirect(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+            ->assertRedirect(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]));
 
         $this->assertDatabaseMissing('festival_admission_types', ['id' => $type->id]);
     }
@@ -329,7 +330,7 @@ class FestivalAdmissionTest extends TestCase
 
         $this->assertSame('Locked admission', $type->refresh()->name);
         $this->actingAs($owner)
-            ->from(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']))
+            ->from(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]))
             ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
             ->assertSessionHasErrors('admission_type');
         $this->assertDatabaseHas('festival_admission_types', ['id' => $type->id]);
@@ -476,6 +477,8 @@ class FestivalAdmissionTest extends TestCase
             app(ResolveFestivalGuest::class),
             app(FestivalTelegramIdentityLinker::class),
             app(FestivalPromoCodePricing::class),
+            app(FestivalSeatReservations::class),
+            app(FestivalTicketIssuer::class),
         );
     }
 

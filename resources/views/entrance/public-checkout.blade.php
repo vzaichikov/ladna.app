@@ -21,11 +21,17 @@
             <p class="mt-4 max-w-2xl text-sm leading-6 text-slate-300">{{ __('app.entrance_public_checkout_help') }}</p>
         </header>
 
-        @if ($ticketTypes->isEmpty())
+        @if (! empty($reservedSeatsUrl))
+            <x-ui.button :href="$reservedSeatsUrl" variant="secondary" class="mt-6">
+                {{ __('app.festival_seating_staff.choose_reserved_seats') }}
+            </x-ui.button>
+        @endif
+
+        @if ($ticketTypes->isEmpty() && empty($reservedSeatsUrl))
             <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm font-semibold leading-6 text-amber-950 shadow-crm sm:p-7" role="status">
                 {{ __('app.entrance_no_ticket_types_available') }}
             </div>
-        @else
+        @elseif ($ticketTypes->isNotEmpty())
         <form
             method="POST"
             action="{{ $storeUrl }}"

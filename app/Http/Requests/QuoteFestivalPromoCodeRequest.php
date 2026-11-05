@@ -33,7 +33,7 @@ class QuoteFestivalPromoCodeRequest extends FormRequest
             ->all();
 
         $this->merge([
-            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')),
+            'promo_code' => app(PromotionCodeNormalizer::class)->normalize($this->input('promo_code')) ?: null,
             'buyer_email' => mb_strtolower(trim((string) $this->input('buyer_email'))) ?: null,
             'buyer_phone' => trim((string) $this->input('buyer_phone')) ?: null,
             'items' => $items,
@@ -43,12 +43,15 @@ class QuoteFestivalPromoCodeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'promo_code' => ['required', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
+            'promo_code' => ['nullable', 'required_without:seat_ids', 'string', 'min:3', 'max:64', 'regex:/^[A-Z0-9_-]+$/'],
             'buyer_email' => ['nullable', 'email:rfc', 'max:255'],
             'buyer_phone' => ['nullable', 'string', 'max:50'],
-            'items' => ['required', 'array', 'min:1', 'max:25'],
+            'items' => ['required_without:seat_ids', 'array', 'max:25'],
             'items.*.admission_type_id' => ['required', 'integer', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
+            'seat_ids' => ['nullable', 'array', 'list', 'max:20'],
+            'seat_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'seat_checkout_id' => ['nullable', 'required_with:seat_ids', 'string', 'regex:/^[A-Za-z0-9]{48}$/'],
         ];
     }
 }

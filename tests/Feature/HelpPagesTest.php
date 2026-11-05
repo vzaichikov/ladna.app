@@ -7,6 +7,12 @@ use Tests\TestCase;
 
 class HelpPagesTest extends TestCase
 {
+    public function test_festival_ticket_help_covers_hub_sales_map_wayfinding_and_hall_admission(): void
+    {
+        $this->get(route('help.show', 'festival-tickets-entrance', false))->assertOk()
+            ->assertSee('Показати мої місця')->assertSee('Гості та Зал')->assertSee('шість карток')->assertSee('не фізичне перебування');
+    }
+
     public function test_help_index_is_public_and_links_to_all_pages(): void
     {
         $response = $this->get(route('help.index', absolute: false));
@@ -368,7 +374,7 @@ class HelpPagesTest extends TestCase
             ],
             'festival-tickets-entrance' => [
                 'без входу та OTP',
-                'Квитки та вхід → Промокоди',
+                'Квитки та вхід → Квитки → Промокоди',
                 'приватним посиланням із листа',
                 'Видати відсутні',
                 'Повторний запуск не дублює',

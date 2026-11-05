@@ -9,6 +9,7 @@ use App\Actions\Festivals\ReconcileFestivalPaymentAttempt;
 use App\Actions\Festivals\SubmitFestivalEntryStep;
 use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalChargeStatus;
+use App\Enums\FestivalEditionPurchaseStatus;
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalEntryStepStatus;
@@ -20,6 +21,7 @@ use App\Enums\IntegrationProvider;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCharge;
+use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalEntryStep;
 use App\Models\FestivalOnlineStream;
@@ -60,6 +62,7 @@ class FestivalPaymentService
         private readonly MonopayCheckoutSettings $monopayCheckoutSettings,
         private readonly MonopayIframeCompatibility $monopayIframeCompatibility,
         private readonly TicketPaymentTiming $ticketPaymentTiming,
+        private readonly FestivalSeatReservations $seatReservations,
     ) {}
 
     public function startCharge(FestivalCharge $charge, string $provider): PaymentCheckout
@@ -291,10 +294,17 @@ class FestivalPaymentService
             $setting = $this->setting($order->account, (string) $order->provider);
             $gateway = $this->gateways->get((string) $order->provider);
             $timing = $this->ticketPaymentTiming->resolve($setting);
-            $order->forceFill([
-                'payment_expires_at' => $timing['payment_expires_at'],
-                'expires_at' => $timing['expires_at'],
-            ])->save();
+            if ($order->orderSeats()->exists()) {
+                if ($checkout = $this->claimSeatedPayment($order, $timing)) {
+                    return $checkout;
+                }
+            } else {
+                $order->forceFill([
+                    'payment_expires_at' => $timing['payment_expires_at'],
+                    'expires_at' => $timing['expires_at'],
+                ])->save();
+            }
+
             $checkout = $gateway->start(new PaymentCheckoutRequest(
                 reference: $order->order_id,
                 amountCents: $order->amount_cents,
@@ -343,6 +353,46 @@ class FestivalPaymentService
         }
 
         return $checkout;
+    }
+
+    /**
+     * @param  array{validity_seconds: int, payment_expires_at: CarbonInterface, expires_at: CarbonInterface}  $timing
+     */
+    private function claimSeatedPayment(FestivalTicketOrder $order, array $timing): ?PaymentCheckout
+    {
+        return DB::transaction(function () use ($order, $timing): ?PaymentCheckout {
+            $edition = FestivalEdition::query()->whereKey($order->festival_edition_id)->lockForUpdate()->firstOrFail();
+            $locked = FestivalTicketOrder::query()->with('items.admissionType')->lockForUpdate()->findOrFail($order->id);
+            $locked->setRelation('edition', $edition);
+            $return = PaymentCheckout::redirect(route('public.festival-orders.show', [$order->account->slug, $order->access_token_encrypted]));
+
+            if (! in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
+                || $edition->cancelled_at !== null || ! $edition->ends_at?->isFuture()
+                || ! $this->seatReservations->ownsPendingSeats($locked)) {
+                return $return;
+            }
+
+            if ($locked->payment_expires_at !== null) {
+                $launcher = $locked->gateway_checkout_payload['_launcher'] ?? null;
+                if (! $locked->payment_expires_at->isFuture() || ! is_array($launcher)) {
+                    return $return;
+                }
+
+                return match ($launcher['type']) {
+                    'iframe' => PaymentCheckout::iframe($launcher['url']),
+                    'redirect' => PaymentCheckout::redirect($launcher['url']),
+                    'form' => PaymentCheckout::form($launcher['url'], $launcher['fields'], method: $launcher['method']),
+                    default => $return,
+                };
+            }
+
+            $locked->update([
+                'payment_expires_at' => $timing['payment_expires_at'],
+                'expires_at' => $timing['expires_at'],
+            ]);
+
+            return null;
+        }, 3);
     }
 
     public function completeAttempt(FestivalPaymentAttempt $attempt, PaymentCallbackResult $callback): FestivalPaymentAttempt
@@ -516,6 +566,7 @@ class FestivalPaymentService
     public function completeOrder(FestivalTicketOrder $order, PaymentCallbackResult $callback): FestivalTicketOrder
     {
         [$completed, $transition] = DB::transaction(function () use ($order, $callback): array {
+            FestivalEdition::query()->whereKey($order->festival_edition_id)->lockForUpdate()->firstOrFail();
             $order = FestivalTicketOrder::query()->with(['items.admissionType', 'edition'])->whereKey($order->id)->lockForUpdate()->firstOrFail();
             $this->assertCallback($order->order_id, $order->amount_cents, $order->currency, $callback);
 
@@ -523,10 +574,11 @@ class FestivalPaymentService
                 return [$order, null];
             }
 
+            $seatedOrder = $order->orderSeats()->exists();
             $isTerminal = $order->refunded_at !== null
                 || in_array($order->status, [FestivalTicketOrderStatus::Paid, FestivalTicketOrderStatus::Refunded], true)
                 || ($order->status === FestivalTicketOrderStatus::PaidRequiresRefund
-                    && $order->provider !== IntegrationProvider::Monopay->value);
+                    && ($seatedOrder || $order->provider !== IntegrationProvider::Monopay->value));
 
             if ($isTerminal
                 || ($order->status === FestivalTicketOrderStatus::PaidRequiresRefund && $callback->status !== PaymentCallbackStatus::Paid)) {
@@ -542,7 +594,7 @@ class FestivalPaymentService
                     && ($order->status !== FestivalTicketOrderStatus::Pending
                         || $order->payment_expires_at?->isPast()
                         || $order->expires_at?->isPast());
-                $lateMonopayVenuePayment = $lateMonopayPayment && $onlineItems->isEmpty();
+                $lateMonopayVenuePayment = ! $seatedOrder && $lateMonopayPayment && $onlineItems->isEmpty();
                 $editionAcceptsPayment = in_array($order->edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
                     && $order->edition->cancelled_at === null
                     && $order->edition->ends_at->isFuture();
@@ -553,10 +605,14 @@ class FestivalPaymentService
                         $other = (int) FestivalTicketOrderItem::query()
                             ->where('festival_admission_type_id', $item->festival_admission_type_id)
                             ->where('festival_ticket_order_id', '!=', $order->id)
-                            ->whereHas('order', fn ($query) => $query->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
+                            ->whereHas('order', fn ($query) => $query->countsAgainstInventory())
                             ->sum('quantity');
 
-                        return $other + $item->quantity <= $item->admissionType->inventory;
+                        $preholds = $item->admissionType->is_assigned_seating
+                            ? $this->seatReservations->preholdCount($order->edition, $item->festival_admission_type_id)
+                            : 0;
+
+                        return $other + $preholds + $item->quantity <= $item->admissionType->inventory;
                     });
                 }
 
@@ -600,7 +656,13 @@ class FestivalPaymentService
                         && $stream?->is_enabled
                         && ! $hasConflict;
                 }
-                $canIssue = $editionAcceptsPayment && $capacity && $onlineAccess;
+                $ownsSeats = ! $seatedOrder || $this->seatReservations->ownsPendingSeats($order);
+                if ($seatedOrder) {
+                    $purchase = $order->edition->purchase()->lockForUpdate()->first();
+                    $editionAcceptsPayment = $editionAcceptsPayment
+                        && $purchase?->status !== FestivalEditionPurchaseStatus::PaymentReversed;
+                }
+                $canIssue = $editionAcceptsPayment && $capacity && $onlineAccess && $ownsSeats;
                 $order->forceFill([
                     'status' => $canIssue ? FestivalTicketOrderStatus::Paid : FestivalTicketOrderStatus::PaidRequiresRefund,
                     'paid_at' => $callback->paidAt ?? now(),
@@ -611,6 +673,7 @@ class FestivalPaymentService
                     'last_callback_payload' => $callback->payload,
                     'failure_reason' => $canIssue ? null : match (true) {
                         ! $editionAcceptsPayment => 'festival_unavailable',
+                        ! $ownsSeats => 'seat_reservation_expired',
                         ! $capacity => 'late_payment_no_inventory',
                         default => 'online_access_conflict',
                     },
@@ -626,6 +689,10 @@ class FestivalPaymentService
                 }
 
                 return [$order->refresh(), $canIssue ? 'paid' : 'requires_refund'];
+            }
+
+            if ($seatedOrder && $order->status !== FestivalTicketOrderStatus::Pending) {
+                return [$order, null];
             }
 
             $order->forceFill([

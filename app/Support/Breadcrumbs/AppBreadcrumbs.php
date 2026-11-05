@@ -426,8 +426,27 @@ final class AppBreadcrumbs
             return $this->festivalJudging($request, $routeName, $account, $edition, $base);
         }
 
+        if ($routeName === 'dashboard.accounts.festivals.hall-layout.edit') {
+            return [
+                ...$base,
+                $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition])),
+                $this->item(__('app.festival_seating_admin.title')),
+            ];
+        }
+
+        $ticketPages = [
+            'dashboard.accounts.festivals.admission-types.index' => 'festival_ticket_types_tab',
+            'dashboard.accounts.festivals.tickets.sold' => 'festival_bought_tickets_tab',
+            'dashboard.accounts.festivals.ticket-orders.index' => 'festival_ticket_orders_tab',
+            'dashboard.accounts.festivals.attendance' => 'festival_entrance_monitor',
+        ];
+        if (isset($ticketPages[$routeName])) {
+            return [...$base, $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition])), $this->item(__('app.'.$ticketPages[$routeName]))];
+        }
+
         if (Str::startsWith($routeName, 'dashboard.accounts.festivals.admission-types.')) {
-            $tickets = $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types']));
+            $base[] = $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition]));
+            $tickets = $this->item(__('app.festival_ticket_types_tab'), route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]));
 
             if ($routeName === 'dashboard.accounts.festivals.admission-types.create') {
                 return [...$base, $tickets, $this->item(__('app.festival_add_admission_type'))];
@@ -439,6 +458,7 @@ final class AppBreadcrumbs
         }
 
         if (Str::startsWith($routeName, 'dashboard.accounts.festivals.promo-codes.')) {
+            $base[] = $this->item(__('app.festival_tickets'), route('dashboard.accounts.festivals.tickets', [$account, $edition]));
             $promoCodes = $this->item(__('app.promo_codes'), route('dashboard.accounts.festivals.promo-codes.index', [$account, $edition]));
 
             if ($routeName === 'dashboard.accounts.festivals.promo-codes.index') {
@@ -535,7 +555,6 @@ final class AppBreadcrumbs
             'dashboard.accounts.festivals.performances' => 'app.festival_tab_performances',
             'dashboard.accounts.festivals.program' => 'app.festival_tab_program',
             'dashboard.accounts.festivals.tickets' => 'app.festival_tickets',
-            'dashboard.accounts.festivals.attendance' => 'app.festival_entrance_monitor',
             'dashboard.accounts.festivals.online-stream.edit' => 'app.festival_stream_settings',
             'dashboard.accounts.festivals.online-stream.update' => 'app.festival_stream_settings',
             'dashboard.accounts.festivals.online-stream.reset-leases' => 'app.festival_stream_settings',

@@ -34,6 +34,11 @@ class FestivalTicketOrderItem extends Model
         return $this->belongsTo(FestivalAdmissionType::class, 'festival_admission_type_id');
     }
 
+    public function orderSeats(): HasMany
+    {
+        return $this->hasMany(FestivalTicketOrderSeat::class);
+    }
+
     public function tickets(): HasMany
     {
         return $this->hasMany(FestivalTicket::class);

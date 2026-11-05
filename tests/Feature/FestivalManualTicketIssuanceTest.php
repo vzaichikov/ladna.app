@@ -205,7 +205,7 @@ class FestivalManualTicketIssuanceTest extends TestCase
             ->post(route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $order]), ['reason' => 'Not allowed'])
             ->assertUnprocessable();
         $this->actingAs($owner)
-            ->get(route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'sold', 'source' => 'manual']))
+            ->get(route('dashboard.accounts.festivals.tickets.sold', [$account, $edition, 'source' => 'manual']))
             ->assertOk()
             ->assertSee(__('app.festival_ticket_source_manual'))
             ->assertDontSee(__('app.festival_record_refund'));

@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalWorkspaceAccess;
 use App\Support\Payments\PaymentAmounts;
 use Carbon\CarbonImmutable;
@@ -20,7 +21,10 @@ use Illuminate\View\View;
 
 class FestivalAdmissionTypeController extends Controller
 {
-    public function __construct(private readonly FestivalWorkspaceAccess $workspaceAccess) {}
+    public function __construct(
+        private readonly FestivalWorkspaceAccess $workspaceAccess,
+        private readonly FestivalSeatReservations $reservations,
+    ) {}
 
     public function create(Request $request, Account $account, FestivalEdition $festivalEdition): View
     {
@@ -30,7 +34,7 @@ class FestivalAdmissionTypeController extends Controller
         return view('festivals.staff.admission-type-form', [
             'account' => $account,
             'edition' => $festivalEdition,
-            'admissionType' => new FestivalAdmissionType(['is_active' => true, 'max_per_order' => 10]),
+            'admissionType' => new FestivalAdmissionType(['is_active' => true, 'max_per_order' => 10, 'is_assigned_seating' => $request->boolean('assigned')]),
             'isLocked' => false,
             'workspacePermissions' => $permissions,
             'onlineStream' => $festivalEdition->onlineStream,
@@ -44,10 +48,12 @@ class FestivalAdmissionTypeController extends Controller
 
         DB::transaction(function () use ($account, $festivalEdition, $data): void {
             $purchase = $this->lockedPurchase($festivalEdition);
-            $this->assertPackageInventory($festivalEdition, $purchase, (int) $data['inventory']);
+            $inventory = (int) ($data['inventory'] ?? 0);
+            $this->assertPackageInventory($festivalEdition, $purchase, $inventory);
             $festivalEdition->admissionTypes()->create([
                 'account_id' => $account->id,
                 ...$data,
+                'inventory' => $inventory,
                 'sort_order' => ((int) $festivalEdition->admissionTypes()->max('sort_order')) + 1,
             ]);
         }, 3);
@@ -85,8 +91,13 @@ class FestivalAdmissionTypeController extends Controller
                 throw ValidationException::withMessages(['admission_type' => __('app.festival_admission_type_locked')]);
             }
 
+            if ($admissionType->is_assigned_seating && $this->reservations->activeHolds($festivalEdition)->where('festival_admission_type_id', $admissionType->id)->exists()) {
+                throw ValidationException::withMessages(['admission_type' => __('app.festival_seating_admin.active_holds')]);
+            }
+
+            $inventory = (int) ($data['inventory'] ?? $admissionType->inventory);
             $activeQuantity = $admissionType->soldOrHeldQuantity();
-            if ((int) $data['inventory'] < $activeQuantity) {
+            if ($inventory < $activeQuantity) {
                 throw ValidationException::withMessages(['inventory' => __('app.festival_admission_inventory_below_reserved', ['count' => $activeQuantity])]);
             }
 
@@ -95,7 +106,16 @@ class FestivalAdmissionTypeController extends Controller
                 throw ValidationException::withMessages(['early_bird_quota' => __('app.festival_admission_early_quota_below_reserved', ['count' => $earlyQuantity])]);
             }
 
-            $this->assertPackageInventory($festivalEdition, $purchase, (int) $data['inventory'], $admissionType);
+            if ($admissionType->is_assigned_seating && $inventory > 0 && ($data['early_bird_quota'] ?? 0) > $inventory) {
+                throw ValidationException::withMessages(['early_bird_quota' => __('app.festival_seating_admin.early_quota', ['type' => $admissionType->name])]);
+            }
+
+            if ($admissionType->is_assigned_seating && ! $data['is_active'] && $festivalEdition->assigned_seating_enabled
+                && $festivalEdition->seats()->whereBelongsTo($admissionType, 'admissionType')->where('is_blocked', false)->exists()) {
+                throw ValidationException::withMessages(['admission_type' => __('app.festival_seating_admin.type_in_use')]);
+            }
+
+            $this->assertPackageInventory($festivalEdition, $purchase, $inventory, $admissionType);
             $admissionType->update($data);
         }, 3);
 
@@ -114,6 +134,10 @@ class FestivalAdmissionTypeController extends Controller
 
             if ($admissionType->hasPurchaseHistory()) {
                 throw ValidationException::withMessages(['admission_type' => __('app.festival_admission_type_delete_history_block')]);
+            }
+
+            if ($admissionType->is_assigned_seating && $festivalEdition->seats()->whereBelongsTo($admissionType, 'admissionType')->exists()) {
+                throw ValidationException::withMessages(['admission_type' => __('app.festival_seating_admin.type_in_use')]);
             }
 
             $admissionType->delete();
@@ -154,6 +178,13 @@ class FestivalAdmissionTypeController extends Controller
 
     private function lockedPurchase(FestivalEdition $edition): ?FestivalEditionPurchase
     {
+        $lockedEdition = FestivalEdition::query()
+            ->whereKey($edition->id)
+            ->where('account_id', $edition->account_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $edition->setRawAttributes($lockedEdition->getAttributes(), true);
+
         return FestivalEditionPurchase::query()
             ->with('package')
             ->where('festival_edition_id', $edition->id)
@@ -209,7 +240,7 @@ class FestivalAdmissionTypeController extends Controller
 
     private function redirect(Account $account, FestivalEdition $edition, ?string $message = null): RedirectResponse
     {
-        return redirect()->route('dashboard.accounts.festivals.tickets', [$account, $edition, 'tab' => 'types'])
+        return redirect()->route('dashboard.accounts.festivals.admission-types.index', [$account, $edition])
             ->with('status', $message ?? __('app.festival_admission_saved'));
     }
 }

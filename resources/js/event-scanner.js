@@ -22,6 +22,8 @@ export function initEventScanner() {
     const modalCustomer = modal?.querySelector('[data-scanner-modal-customer]');
     const modalTypeRow = modal?.querySelector('[data-scanner-modal-type-row]');
     const modalType = modal?.querySelector('[data-scanner-modal-type]');
+    const modalSeatRow = modal?.querySelector('[data-scanner-modal-seat-row]');
+    const modalSeat = modal?.querySelector('[data-scanner-modal-seat]');
     const modalCodeRow = modal?.querySelector('[data-scanner-modal-code-row]');
     const modalCode = modal?.querySelector('[data-scanner-modal-code]');
     const modalCheckedInRow = modal?.querySelector('[data-scanner-modal-checked-in-row]');
@@ -101,6 +103,7 @@ export function initEventScanner() {
         const detailValues = [
             [modalCustomerRow, modalCustomer, ticket.customer],
             [modalTypeRow, modalType, [ticket.kind_label, ticket.type].filter((value, index, values) => value && values.indexOf(value) === index).join(' · ')],
+            [modalSeatRow, modalSeat, ticket.seat_label],
             [modalCodeRow, modalCode, ticket.code],
             [modalCheckedInRow, modalCheckedIn, checkedInAt],
         ];

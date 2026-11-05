@@ -182,6 +182,13 @@
                     </div>
                     <p class="mt-3 hidden text-sm font-semibold text-rose-700" data-ticket-share-error aria-live="polite">{{ __('app.festival_order_share_pdf_failed') }}</p>
 
+                    @if ($ownSeatMap)
+                        <details class="mt-5" data-show-my-seats>
+                            <summary class="crm-focus cursor-pointer rounded-lg border border-stone-200 px-4 py-3 text-sm font-semibold">{{ __('app.festival_journey.show_my_seats') }}</summary>
+                            <div class="mt-3"><x-festivals.seat-map :projection="$ownSeatMap" mode="own" /></div>
+                        </details>
+                    @endif
+
                     <div class="mt-6 overflow-hidden rounded-xl border border-stone-200">
                         <table class="block w-full divide-y divide-stone-200 text-sm sm:table sm:text-left">
                             <thead class="hidden bg-slate-50 text-slate-600 sm:table-header-group">
@@ -197,10 +204,16 @@
                                         <td class="block min-w-0 p-0 font-semibold sm:table-cell sm:min-w-48 sm:px-4 sm:py-4 sm:align-middle">
                                             <span class="mb-1 block text-xs font-semibold text-slate-500 sm:hidden">{{ __('app.festival_ticket_type') }}</span>
                                             {{ $ticket->orderItem?->admission_name ?? $ticket->admissionType?->name }}
+                                            @if ($ticket->seat)
+                                                <span class="mt-1 block text-sm font-semibold text-slate-700" data-festival-ticket-seat>{{ $ticket->seat->label() }}</span>
+                                            @else
+                                                <span class="mt-1 block text-sm font-medium text-slate-600">{{ __('app.festival_journey.general_admission') }}</span>
+                                            @endif
                                         </td>
                                         <td class="block p-0 sm:table-cell sm:px-4 sm:py-4 sm:align-middle">
                                             <span class="mb-2 block text-xs font-semibold text-slate-500 sm:hidden">{{ __('app.festival_ticket_qr') }}</span>
                                             <img src="{{ $qrCodes[$ticket->id] }}" alt="{{ __('app.festival_ticket_qr') }}" class="h-36 w-36 max-w-full sm:max-w-none">
+                                            <p class="mt-2 max-w-64 text-sm font-semibold">{{ $ticket->seat?->label() ?? __('app.festival_journey.general_admission') }}</p>
                                         </td>
                                         <td class="block p-0 font-mono text-base font-semibold whitespace-nowrap sm:table-cell sm:px-4 sm:py-4 sm:align-middle">
                                             <span class="mb-1 block font-sans text-xs font-semibold text-slate-500 sm:hidden">{{ __('app.event_ticket_code') }}</span>
@@ -224,6 +237,11 @@
                         @if ($date)<p class="mt-3 text-base">{{ $date }}</p>@endif
                         @if ($venue !== '')<p class="mt-1 text-sm">{{ $venue }}</p>@endif
                         <p class="mt-8 text-lg font-semibold">{{ $ticket->orderItem?->admission_name ?? $ticket->admissionType?->name }}</p>
+                        @if ($ticket->seat)
+                            <p class="mt-2 text-base font-semibold">{{ $ticket->seat->label() }}</p>
+                        @else
+                            <p class="mt-2 text-base font-semibold">{{ __('app.festival_journey.general_admission') }}</p>
+                        @endif
                         <img src="{{ $qrCodes[$ticket->id] }}" alt="{{ __('app.festival_ticket_qr') }}" data-ticket-print-qr>
                         <p class="mt-5 font-mono text-2xl font-semibold">{{ $ticket->code }}</p>
                         <p class="mt-3 text-sm">{{ __('app.festival_ticket_present_at_entrance') }}</p>

@@ -50,6 +50,8 @@
                 :cash-sale-url="$entranceTools['cash_sale_url']"
                 :card-sale-url="$entranceTools['card_sale_url']"
                 :ticket-types="$entranceTools['ticket_types']"
+                :seat-chart="$entranceTools['seat_chart']"
+                :seat-availability-url="$entranceTools['seat_availability_url']"
                 :payment-providers="$entranceTools['payment_providers']"
                 :currency="$festivalEdition->currency"
                 :can-sell="$entranceTools['can_sell']"

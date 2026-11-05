@@ -33,6 +33,7 @@ class PublicFestivalEntranceController extends Controller
             ->firstOrFail();
         $ticketTypes = $edition->admissionTypes()
             ->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value)
+            ->where('is_assigned_seating', false)
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('id')

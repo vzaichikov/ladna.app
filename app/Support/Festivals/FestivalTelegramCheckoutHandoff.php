@@ -64,9 +64,11 @@ class FestivalTelegramCheckoutHandoff
         return true;
     }
 
-    public function pullSessionAuthorization(Request $request, FestivalEdition $edition): ?TelegramChatAuthorization
+    public function pullSessionAuthorization(Request $request, FestivalEdition $edition, bool $consume = true): ?TelegramChatAuthorization
     {
-        $payload = $request->session()->pull($this->sessionKey($edition));
+        $payload = $consume
+            ? $request->session()->pull($this->sessionKey($edition))
+            : $request->session()->get($this->sessionKey($edition));
 
         if (! is_array($payload) || (int) ($payload['expires_at'] ?? 0) < now()->timestamp) {
             return null;
@@ -77,6 +79,11 @@ class FestivalTelegramCheckoutHandoff
         return $series
             ? $this->authorizations->byId($series, (int) ($payload['telegram_chat_authorization_id'] ?? 0))
             : null;
+    }
+
+    public function forgetSession(Request $request, FestivalEdition $edition): void
+    {
+        $request->session()->forget($this->sessionKey($edition));
     }
 
     public function hasSession(Request $request, FestivalEdition $edition): bool

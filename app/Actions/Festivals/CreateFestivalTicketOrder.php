@@ -17,8 +17,10 @@ use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
 use App\Models\TelegramChatAuthorization;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentGatewayRegistry;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +32,8 @@ class CreateFestivalTicketOrder
         private readonly ResolveFestivalGuest $resolveGuest,
         private readonly FestivalTelegramIdentityLinker $telegramIdentityLinker,
         private readonly FestivalPromoCodePricing $promoCodePricing,
+        private readonly FestivalSeatReservations $reservations,
+        private readonly FestivalTicketIssuer $issuer,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -53,14 +57,29 @@ class CreateFestivalTicketOrder
                 ->where('account_id', $edition->account_id)
                 ->lockForUpdate()
                 ->firstOrFail();
+            $items = $input['items'];
+            $seatIds = $input['seat_ids'] ?? [];
+            $holdKey = $seatIds === [] ? null : ($input['seat_hold_key'] ?? null);
+            if ($seatIds !== [] && (! is_string($holdKey) || ! preg_match('/^[a-f0-9]{64}$/D', $holdKey))) {
+                throw ValidationException::withMessages(['seat_ids' => __('app.festival_seating.unavailable')]);
+            }
+
+            if ($holdKey !== null && $existing = $edition->ticketOrders()->where('seat_hold_key', $holdKey)->first()) {
+                $this->assertReplayMatches($existing, $input);
+
+                return $existing->load('items');
+            }
+
             if (! in_array($edition->status, [FestivalEditionStatus::Published, FestivalEditionStatus::InProgress], true)
-                || $edition->ends_at?->isPast()) {
+                || $edition->ends_at?->isPast() || ($holdKey !== null && $edition->cancelled_at !== null)) {
                 throw ValidationException::withMessages(['items' => __('app.festival_admission_unavailable')]);
             }
 
             $purchase = FestivalEditionPurchase::query()->with('package')->where('festival_edition_id', $edition->id)->lockForUpdate()->first();
             abort_if($purchase?->status === FestivalEditionPurchaseStatus::PaymentReversed, 423, __('app.festival_payment_reversed_readonly'));
-            $requested = collect($input['items'])->keyBy('admission_type_id');
+            $selectedSeats = $holdKey === null ? new Collection : $this->reservations->consume($edition, $holdKey, $seatIds);
+            $seatsByType = $selectedSeats->groupBy('festival_admission_type_id');
+            $requested = $this->reservations->checkoutItems($items, $selectedSeats);
             $types = FestivalAdmissionType::query()
                 ->where('festival_edition_id', $edition->id)
                 ->where('account_id', $edition->account_id)
@@ -70,8 +89,15 @@ class CreateFestivalTicketOrder
                 ->lockForUpdate()
                 ->get();
 
-            if ($types->count() !== $requested->count()) {
+            if ($requested->isEmpty() || $types->count() !== $requested->count()) {
                 throw ValidationException::withMessages(['items' => __('app.festival_admission_invalid')]);
+            }
+
+            $quantityTypeIds = collect($items)->pluck('admission_type_id')->map(fn ($id): int => (int) $id);
+            if ($types->contains(fn (FestivalAdmissionType $type): bool => $type->is_assigned_seating
+                ? $quantityTypeIds->containsStrict($type->id) || ! $seatsByType->has($type->id) || $type->delivery_mode !== FestivalAdmissionDeliveryMode::Venue
+                : $seatsByType->has($type->id))) {
+                throw ValidationException::withMessages(['seat_ids' => __('app.festival_seating.unavailable')]);
             }
 
             $requestedQuantity = (int) $requested->sum(fn (array $item): int => (int) $item['quantity']);
@@ -95,31 +121,27 @@ class CreateFestivalTicketOrder
                 $heldQuantity = (int) FestivalTicketOrderItem::query()
                     ->whereHas('order', fn ($query) => $query
                         ->where('festival_edition_id', $edition->id)
-                        ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                        ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
+                        ->countsAgainstInventory())
                     ->sum('quantity');
-                if ($heldQuantity + $requestedQuantity > $purchase->package->max_tickets) {
+                $preholds = $this->reservations->preholdCount($edition, excludingHoldKey: $holdKey);
+                if ($heldQuantity + $preholds + $requestedQuantity > $purchase->package->max_tickets) {
                     throw ValidationException::withMessages(['items' => __('app.festival_ticket_limit_exceeded', ['limit' => $purchase->package->max_tickets])]);
                 }
             }
 
             $prepared = [];
+            $quotePrices = [];
             $subtotal = 0;
             foreach ($types as $type) {
                 $quantity = (int) $requested[$type->id]['quantity'];
                 if (! $type->saleIsOpen() || $quantity > $type->max_per_order) {
                     throw ValidationException::withMessages(['items' => __('app.festival_admission_unavailable')]);
                 }
-                if ($type->remainingQuantity() < $quantity) {
+                if ($type->remainingQuantity($holdKey) < $quantity) {
                     throw ValidationException::withMessages(['items' => __('app.festival_admission_sold_out')]);
                 }
-                $price = $type->currentPrice();
-                if ($price['tier'] === 'early_bird' && $type->early_bird_quota !== null) {
-                    $earlyHeld = (int) $type->orderItems()->where('price_tier', 'early_bird')->whereHas('order', fn ($query) => $query->whereIn('status', ['pending', 'paid'])->where(fn ($query) => $query->where('status', '!=', 'pending')->orWhere('expires_at', '>', now())))->sum('quantity');
-                    if ($quantity > $type->early_bird_quota - $earlyHeld) {
-                        $price = ['price_cents' => $type->price_cents, 'tier' => 'regular'];
-                    }
-                }
+                $price = $type->currentPrice($quantity);
+                $quotePrices[$type->id] = ['quantity' => $quantity, ...$price];
                 $total = $price['price_cents'] * $quantity;
                 $subtotal += $total;
                 $prepared[] = compact('type', 'quantity', 'price', 'total');
@@ -192,6 +214,12 @@ class CreateFestivalTicketOrder
             );
             $amount = $promotion->amounts->totalCents;
 
+            if ($holdKey !== null
+                && (($input['seat_quote'] ?? null) !== $this->reservations->quoteFingerprint($edition->id, $edition->account->default_currency, $selectedSeats->modelKeys(), $quotePrices)
+                    || ! isset($input['seat_quote_total']) || (int) $input['seat_quote_total'] !== $amount)) {
+                throw ValidationException::withMessages(['seat_quote' => __('app.festival_seating.price_changed')]);
+            }
+
             $provider = filled($input['provider'] ?? null) ? (string) $input['provider'] : null;
             $setting = $provider ? $this->gateways->availableSettingsFor($edition->account)
                 ->first(fn (IntegrationSetting $candidate): bool => $candidate->provider->value === $provider) : null;
@@ -208,6 +236,7 @@ class CreateFestivalTicketOrder
                 'purchaser_festival_portal_user_id' => $purchaser?->id,
                 'source' => FestivalTicketOrderSource::Checkout,
                 'provider' => $amount > 0 ? $provider : null,
+                'seat_hold_key' => $holdKey,
                 'order_id' => 'FTO-'.Str::upper(Str::random(18)),
                 'buyer_name' => trim((string) $input['buyer_name']),
                 'buyer_email' => Str::lower(trim((string) $input['buyer_email'])),
@@ -225,14 +254,14 @@ class CreateFestivalTicketOrder
                 'currency' => strtoupper($edition->account->default_currency),
                 'access_token_encrypted' => $accessToken,
                 'access_token_hash' => hash('sha256', $accessToken),
-                'expires_at' => now()->addMinutes(30),
+                'expires_at' => $selectedSeats->first()?->hold_expires_at ?? now()->addMinutes(30),
                 'terms_accepted_at' => now(),
                 'terms_hash' => hash('sha256', 'festival-admission-v1'),
             ]);
 
             foreach ($prepared as $row) {
                 $lineDiscount = (int) ($promotion->amounts->lineDiscounts[$row['type']->id] ?? 0);
-                $order->items()->create([
+                $item = $order->items()->create([
                     'account_id' => $edition->account_id,
                     'festival_admission_type_id' => $row['type']->id,
                     'admission_name' => $row['type']->name,
@@ -245,6 +274,14 @@ class CreateFestivalTicketOrder
                     'discount_cents' => $lineDiscount,
                     'final_total_cents' => $row['total'] - $lineDiscount,
                 ]);
+                if ($seatsByType->has($row['type']->id)) {
+                    $this->reservations->attach($item, $seatsByType->get($row['type']->id));
+                }
+            }
+
+            if ($holdKey !== null && $amount === 0) {
+                $order->update(['status' => FestivalTicketOrderStatus::Paid, 'paid_at' => now(), 'expires_at' => null]);
+                $this->issuer->execute($order);
             }
 
             if ($telegramAuthorization) {
@@ -256,6 +293,25 @@ class CreateFestivalTicketOrder
     }
 
     /** @return array{string, string} */
+    /** @param array<string, mixed> $input */
+    private function assertReplayMatches(FestivalTicketOrder $order, array $input): void
+    {
+        $originalSeats = $order->orderSeats()->pluck('festival_seat_id')->sort()->values()->all();
+        $originalItems = $order->items()->whereDoesntHave('orderSeats')->pluck('quantity', 'festival_admission_type_id')->sortKeys()->all();
+        $requestedItems = collect($input['items'])->mapWithKeys(fn (array $item): array => [(int) $item['admission_type_id'] => (int) $item['quantity']])->sortKeys()->all();
+        $requestedSeats = collect($input['seat_ids'])->map(fn ($id): int => (int) $id)->sort()->values()->all();
+
+        if ($originalSeats !== $requestedSeats || $originalItems !== $requestedItems
+            || $order->buyer_name !== trim((string) $input['buyer_name'])
+            || $order->buyer_email !== Str::lower(trim((string) $input['buyer_email']))
+            || $order->buyer_phone !== (string) $input['buyer_phone']
+            || $order->promo_code !== ($input['promo_code'] ?? null)
+            || $order->amount_cents !== (int) ($input['seat_quote_total'] ?? -1)
+            || ($order->amount_cents > 0 && $order->provider !== ($input['provider'] ?? null))) {
+            throw ValidationException::withMessages(['seat_ids' => __('app.festival_seating.checkout_already_used')]);
+        }
+    }
+
     private function splitName(string $name): array
     {
         $parts = preg_split('/\s+/u', trim($name), 2) ?: [];

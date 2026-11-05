@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Actions\Festivals\CreateFestivalTicketOrder;
+use App\Actions\Festivals\FestivalTicketIssuer;
 use App\Actions\Festivals\ResolveFestivalGuest;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Enums\PromoCodeDiscountType;
@@ -16,6 +17,7 @@ use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -462,6 +464,8 @@ class FestivalPromoCodeTest extends TestCase
             app(ResolveFestivalGuest::class),
             app(FestivalTelegramIdentityLinker::class),
             app(FestivalPromoCodePricing::class),
+            app(FestivalSeatReservations::class),
+            app(FestivalTicketIssuer::class),
         );
     }
 

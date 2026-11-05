@@ -17,6 +17,7 @@ use App\Models\FestivalTicketOrderItem;
 use App\Models\IntegrationSetting;
 use App\Models\User;
 use App\Support\Festivals\FestivalPromoCodePricing;
+use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Fiscalization\FiscalReceiptService;
 use App\Support\Payments\PaymentGatewayRegistry;
 use App\Support\Promotions\PromotionCodeNormalizer;
@@ -38,6 +39,7 @@ class FestivalDoorTicketSale
         private readonly FiscalReceiptService $fiscalReceipts,
         private readonly FestivalPromoCodePricing $promoCodePricing,
         private readonly PromotionCodeNormalizer $promoCodes,
+        private readonly FestivalSeatReservations $seats,
     ) {}
 
     /** @param array<string, mixed> $input */
@@ -53,25 +55,18 @@ class FestivalDoorTicketSale
             ->first();
 
         if ($existing) {
-            $this->assertReplayMatches($existing, $input, $provider);
+            $this->assertReplayMatches($existing, $account, $edition, $input, $provider);
 
             return $existing->load(['items', 'tickets.admissionType']);
         }
 
-        $guest = $this->resolveGuest->execute(
-            $account,
-            trim((string) $input['guest_name']),
-            filled($input['guest_email'] ?? null) ? (string) $input['guest_email'] : null,
-            $locale,
-        );
-
-        $order = DB::transaction(function () use ($account, $edition, $actor, $input, $mode, $locale, $provider, $reference, $guest): FestivalTicketOrder {
+        $order = DB::transaction(function () use ($account, $edition, $actor, $input, $mode, $locale, $provider, $reference): FestivalTicketOrder {
             $edition = FestivalEdition::query()->whereBelongsTo($account)->whereKey($edition->id)->lockForUpdate()->firstOrFail();
             $this->assertEditionOpen($edition);
 
-            $existing = FestivalTicketOrder::query()->where('order_id', $reference)->lockForUpdate()->first();
+            $existing = FestivalTicketOrder::query()->where('order_id', $reference)->first();
             if ($existing) {
-                $this->assertReplayMatches($existing, $input, $provider);
+                $this->assertReplayMatches($existing, $account, $edition, $input, $provider);
 
                 return $existing->load(['items', 'tickets.admissionType']);
             }
@@ -92,17 +87,22 @@ class FestivalDoorTicketSale
                 ->lockForUpdate()
                 ->first();
 
-            if (! $admissionType) {
+            if (! $admissionType || ($actor === null && $admissionType->is_assigned_seating)) {
                 throw ValidationException::withMessages(['ticket_type_id' => __('app.festival_admission_unavailable')]);
             }
+
+            $selectedSeats = $this->seats->availableForStaff(
+                $edition,
+                filled($input['seat_id'] ?? null) ? [(int) $input['seat_id']] : [],
+                $admissionType,
+            );
 
             if ($purchase) {
                 $held = (int) FestivalTicketOrderItem::query()
                     ->whereHas('order', fn ($query) => $query
                         ->where('festival_edition_id', $edition->id)
-                        ->whereIn('status', [FestivalTicketOrderStatus::Pending->value, FestivalTicketOrderStatus::Paid->value, FestivalTicketOrderStatus::PaidRequiresRefund->value])
-                        ->where(fn ($query) => $query->where('status', '!=', FestivalTicketOrderStatus::Pending->value)->orWhere('expires_at', '>', now())))
-                    ->sum('quantity');
+                        ->countsAgainstInventory())
+                    ->sum('quantity') + $this->seats->preholdCount($edition);
 
                 if ($held + 1 > $purchase->package->max_tickets) {
                     throw ValidationException::withMessages(['ticket_type_id' => __('app.festival_ticket_limit_exceeded', ['limit' => $purchase->package->max_tickets])]);
@@ -113,6 +113,12 @@ class FestivalDoorTicketSale
                 throw ValidationException::withMessages(['ticket_type_id' => __('app.festival_admission_sold_out')]);
             }
 
+            $guest = $this->resolveGuest->execute(
+                $account,
+                trim((string) $input['guest_name']),
+                filled($input['guest_email'] ?? null) ? (string) $input['guest_email'] : null,
+                $locale,
+            );
             $subtotal = $admissionType->price_cents;
             $promotion = $this->promoCodePricing->resolve(
                 $edition,
@@ -162,7 +168,7 @@ class FestivalDoorTicketSale
                 'terms_accepted_at' => ($input['terms_accepted'] ?? false) ? now() : null,
                 'terms_hash' => ($input['terms_accepted'] ?? false) ? hash('sha256', 'festival-entrance-v1') : null,
             ]);
-            $order->items()->create([
+            $item = $order->items()->create([
                 'account_id' => $account->id,
                 'festival_admission_type_id' => $admissionType->id,
                 'admission_name' => $admissionType->name,
@@ -175,6 +181,7 @@ class FestivalDoorTicketSale
                 'discount_cents' => $promotion->amounts->discountCents,
                 'final_total_cents' => $amount,
             ]);
+            $this->seats->attach($item, $selectedSeats);
 
             if ($isImmediatelyPaid) {
                 $this->issuer->execute($order, [['holder_name' => $order->buyer_name]]);
@@ -225,17 +232,20 @@ class FestivalDoorTicketSale
     }
 
     /** @param array<string, mixed> $input */
-    private function assertReplayMatches(FestivalTicketOrder $order, array $input, string $provider): void
+    private function assertReplayMatches(FestivalTicketOrder $order, Account $account, FestivalEdition $edition, array $input, string $provider): void
     {
         $item = $order->items()->first();
-        $allowedProviders = [$provider, 'entrance_cash'];
-        if ($order->amount_cents === 0) {
+        $allowedProviders = [$provider];
+        if ($order->amount_cents === 0 && $provider !== 'entrance_cash') {
             $allowedProviders[] = null;
         }
 
-        if ($order->source !== FestivalTicketOrderSource::Entrance
+        if ($order->account_id !== $account->id
+            || $order->festival_edition_id !== $edition->id
+            || $order->source !== FestivalTicketOrderSource::Entrance
             || $order->buyer_name !== trim((string) $input['guest_name'])
             || (int) $item?->festival_admission_type_id !== (int) $input['ticket_type_id']
+            || (int) $item?->orderSeats()->value('festival_seat_id') !== (int) ($input['seat_id'] ?? 0)
             || $order->promo_code !== ($this->promoCodes->normalize($input['promo_code'] ?? null) ?: null)
             || ! in_array($order->provider, $allowedProviders, true)) {
             throw ValidationException::withMessages(['idempotency_key' => __('app.entrance_request_conflict')]);

@@ -57,6 +57,7 @@ class FestivalTelegramMiniAppData
                     ->whereHas('stage', fn ($query) => $query->where('is_active', true))
                     ->with(['stage', 'entry', 'category']),
             ])
+            ->withExists(['admissionTypes as admission_available' => fn ($query) => $query->availableForSale()])
             ->orderByDesc('starts_at')
             ->get();
         $timelines = $this->timelinesForEditions($editions);
@@ -179,6 +180,7 @@ class FestivalTelegramMiniAppData
             'status' => $edition->status->value,
             'registration_status' => $edition->registration_status->value,
             'registration_open' => $edition->registrationIsOpen(),
+            'admission_available' => $edition->admission_available && $edition->ends_at?->isFuture(),
             'period' => $this->period($edition),
             'starts_at' => $edition->starts_at?->toIso8601String(),
             'ends_at' => $edition->ends_at?->toIso8601String(),
