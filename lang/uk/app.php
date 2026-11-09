@@ -1707,6 +1707,7 @@ return [
     'festival_order_download_pdf' => 'Завантажити PDF',
     'festival_order_print_or_save' => 'Друкувати / зберегти PDF',
     'festival_order_share_pdf_failed' => 'Системне поширення недоступне. Натомість почнеться завантаження PDF.',
+    'festival_ticket_email_pdf' => 'Ваші квитки також додано до листа у PDF. Збережіть файл на телефон або роздрукуйте перед фестивалем.',
     'festival_ticket_present_at_entrance' => 'Покажіть цей QR-код на вході до фестивалю.',
     'festival_monopay_payment_title' => 'Безпечна оплата карткою',
     'festival_monopay_payment_help' => 'Завершіть оплату у вбудованому вікні Monopay. Квитки з’являться тут лише після серверного підтвердження.',

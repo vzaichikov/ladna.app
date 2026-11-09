@@ -17,12 +17,12 @@ use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Festivals\FestivalHallOccupancy;
 use App\Support\Festivals\FestivalLandingRegistry;
 use App\Support\Festivals\FestivalQrToken;
+use App\Support\Festivals\FestivalTicketPdf;
 use App\Support\Festivals\FestivalTimelinePresenter;
 use App\Support\Payments\MonopayGateway;
 use App\Support\Payments\MonopayIframeCompatibility;
 use App\Support\Payments\PaymentCheckout;
 use App\Support\Payments\PaymentGatewayRegistry;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -265,7 +265,7 @@ class FestivalPublicController extends Controller
         ])->withHeaders($this->privateHeaders());
     }
 
-    public function orderPdf(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): Response
+    public function orderPdf(Request $request, string $accountSlug, string $accessToken, FestivalTicketPdf $pdf): Response
     {
         $account = $this->account($request, $accountSlug);
         $order = FestivalTicketOrder::query()
@@ -287,17 +287,7 @@ class FestivalPublicController extends Controller
 
         abort_if($order->tickets->isEmpty(), 404);
 
-        $qrCodes = $order->tickets->mapWithKeys(fn ($ticket): array => [$ticket->id => $qr->dataUri($ticket)]);
-        $venue = collect([$order->edition->venue_name, $order->edition->venue_address])->filter()->join(' · ');
-        $pdf = Pdf::setOptions([
-            'isRemoteEnabled' => false,
-            'isPhpEnabled' => false,
-            'isJavascriptEnabled' => false,
-        ], true)
-            ->setPaper('a4', 'portrait')
-            ->loadView('festivals.public.tickets-pdf', compact('account', 'order', 'qrCodes', 'venue'));
-
-        return $pdf
+        return $pdf->render($account, $order)
             ->download('festival-tickets-'.$order->order_id.'.pdf')
             ->withHeaders($this->privateHeaders());
     }

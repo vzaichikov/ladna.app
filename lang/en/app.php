@@ -1707,6 +1707,7 @@ return [
     'festival_order_download_pdf' => 'Download PDF',
     'festival_order_print_or_save' => 'Print / save PDF',
     'festival_order_share_pdf_failed' => 'Native sharing is unavailable. The PDF download will start instead.',
+    'festival_ticket_email_pdf' => 'Your tickets are also attached as a PDF. Save it to your phone or print it before the Festival.',
     'festival_ticket_present_at_entrance' => 'Present this QR code at the Festival entrance.',
     'festival_monopay_payment_title' => 'Secure card payment',
     'festival_monopay_payment_help' => 'Complete the payment in the embedded Monopay window. Tickets appear here only after server confirmation.',

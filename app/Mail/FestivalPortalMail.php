@@ -11,7 +11,10 @@ class FestivalPortalMail extends Mailable
 {
     use SerializesModels;
 
-    /** @param array<int, string> $lines */
+    /**
+     * @param  array<int, string>  $lines
+     * @param  list<array{type: string, code: string, seat: string, qr_url: string}>  $tickets
+     */
     public function __construct(
         public readonly string $subjectLine,
         public readonly string $greeting,
@@ -19,6 +22,7 @@ class FestivalPortalMail extends Mailable
         public readonly ?string $actionLabel = null,
         public readonly ?string $actionUrl = null,
         public readonly string $messageLocale = 'uk',
+        public readonly array $tickets = [],
     ) {
         $this->locale($messageLocale);
     }

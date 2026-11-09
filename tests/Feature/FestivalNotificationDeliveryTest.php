@@ -5,9 +5,13 @@ namespace Tests\Feature;
 use App\Actions\Festivals\FestivalEntrancePassEligibility;
 use App\Actions\Festivals\FestivalNotificationOutbox;
 use App\Enums\AccountMode;
+use App\Enums\FestivalAdmissionDeliveryMode;
+use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
+use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\FestivalTicketStatus;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\SmsDeliveryStatus;
@@ -16,6 +20,7 @@ use App\Enums\TelegramAlertType;
 use App\Jobs\SendFestivalNotification;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
+use App\Models\FestivalAdmissionType;
 use App\Models\FestivalAnnouncement;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
@@ -23,8 +28,10 @@ use App\Models\FestivalEntry;
 use App\Models\FestivalNotification;
 use App\Models\FestivalNotificationPreference;
 use App\Models\FestivalNotificationSetting;
+use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
+use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Models\IntegrationSetting;
 use App\Models\SmsDelivery;
@@ -49,7 +56,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FestivalNotificationDeliveryTest extends TestCase
@@ -654,6 +663,102 @@ class FestivalNotificationDeliveryTest extends TestCase
         $this->assertSame('festival_sms_scenario_disabled', $disabledLater->failure_reason);
     }
 
+    public function test_ticket_email_includes_current_valid_venue_qrs_and_one_pdf_without_persisting_bearers(): void
+    {
+        [$account, $edition, $order, $notification, $tickets] = $this->ticketEmailContext();
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        Mail::assertSent(FestivalPortalMail::class, 1);
+        $mail = Mail::sent(FestivalPortalMail::class)->sole();
+        $this->assertCount(3, $mail->tickets);
+        $this->assertSame(array_map(fn (FestivalTicket $ticket): string => $ticket->code, array_slice($tickets, 0, 3)), array_column($mail->tickets, 'code'));
+        foreach (array_slice($tickets, 0, 3) as $index => $ticket) {
+            $this->assertSame(route('public.festival-tickets.qr', [$account->slug, $order->access_token_encrypted, $ticket->code]), $mail->tickets[$index]['qr_url']);
+        }
+        $this->assertSame($tickets[0]->seat->label('en'), $mail->tickets[0]['seat']);
+        $this->assertSame($tickets[1]->seat->label('en'), $mail->tickets[1]['seat']);
+        $this->assertSame(__('app.festival_journey.general_admission', locale: 'en'), $mail->tickets[2]['seat']);
+
+        $this->assertCount(1, $mail->rawAttachments);
+        $attachment = $mail->rawAttachments[0];
+        $this->assertSame('festival-tickets-'.$order->order_id.'.pdf', $attachment['name']);
+        $this->assertSame('application/pdf', $attachment['options']['mime']);
+        $this->assertStringStartsWith('%PDF-', $attachment['data']);
+        $this->assertSame(3, preg_match_all('/\/Type\s*\/Page\b/', $attachment['data']));
+        $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
+        $stored = (string) DB::table('festival_notifications')->where('id', $notification->id)->value('payload');
+        foreach ([$order->access_token_encrypted, ...array_map(fn (FestivalTicket $ticket): string => $ticket->token_encrypted, $tickets)] as $token) {
+            $this->assertStringNotContainsString($token, $stored);
+            $this->assertStringNotContainsString($token, (string) $notification->text);
+        }
+    }
+
+    public function test_ticket_email_html_renders_each_qr_type_code_and_seat(): void
+    {
+        foreach (['en', 'uk'] as $locale) {
+            $mail = new FestivalPortalMail(
+                subjectLine: 'Festival tickets',
+                greeting: 'Hello',
+                lines: ['Tickets are ready.'],
+                actionLabel: 'Open tickets',
+                actionUrl: 'https://ladna.test/private-order',
+                messageLocale: $locale,
+                tickets: [
+                    ['type' => 'Front & centre', 'code' => 'FST-AAAA-BBBB', 'seat' => 'Main · Row A · Seat 1', 'qr_url' => 'https://ladna.test/first-qr'],
+                    ['type' => 'General admission', 'code' => 'FST-CCCC-DDDD', 'seat' => 'Standing', 'qr_url' => 'https://ladna.test/second-qr'],
+                ],
+            );
+            $mail->assertSeeInHtml('Front & centre');
+            $mail->assertSeeInHtml('FST-AAAA-BBBB');
+            $mail->assertSeeInHtml('FST-CCCC-DDDD');
+            $mail->assertSeeInHtml('Main · Row A · Seat 1');
+            $mail->assertSeeInHtml('src="https://ladna.test/first-qr"', false);
+            $mail->assertSeeInHtml('src="https://ladna.test/second-qr"', false);
+            $mail->assertSeeInHtml('https://ladna.test/private-order');
+            $mail->assertDontSeeInHtml('cid:');
+            $mail->assertSeeInText('FST-AAAA-BBBB');
+        }
+    }
+
+    #[DataProvider('unavailableTicketEmailStates')]
+    public function test_unavailable_ticket_notifications_do_not_deliver_qrs_or_pdf(string $state): void
+    {
+        [, $edition, $order, $notification] = $this->ticketEmailContext();
+        match ($state) {
+            'cancelled' => $edition->update(['cancelled_at' => now()]),
+            'archived' => $edition->update(['status' => FestivalEditionStatus::Archived]),
+            'private' => $edition->update(['is_private' => true]),
+            'refunded' => $order->update(['status' => FestivalTicketOrderStatus::Refunded]),
+            'wrong_recipient' => $order->update(['buyer_email' => 'different@example.test']),
+            'wrong_account' => $notification->update(['account_id' => Account::factory()->create(['enable_festivals' => true])->id]),
+        };
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        foreach (Mail::sent(FestivalPortalMail::class) as $mail) {
+            $this->assertSame([], $mail->tickets);
+            $this->assertSame([], $mail->rawAttachments);
+        }
+        if (in_array($state, ['refunded', 'wrong_recipient', 'wrong_account', 'private'], true)) {
+            Mail::assertNothingSent();
+            $this->assertSame(FestivalNotificationStatus::Cancelled, $notification->refresh()->status);
+        } else {
+            $this->assertContains($notification->refresh()->status, [FestivalNotificationStatus::Sent, FestivalNotificationStatus::Cancelled]);
+        }
+    }
+
+    /** @return array<string, array{string}> */
+    public static function unavailableTicketEmailStates(): array
+    {
+        return [
+            'cancelled edition' => ['cancelled'],
+            'archived edition' => ['archived'],
+            'private edition' => ['private'],
+            'refunded order' => ['refunded'],
+            'changed recipient' => ['wrong_recipient'],
+            'cross-account notification' => ['wrong_account'],
+        ];
+    }
+
     public function test_ticket_bearer_is_created_only_in_memory_when_the_email_is_sent(): void
     {
         [$account, $edition] = $this->festival();
@@ -1026,6 +1131,70 @@ class FestivalNotificationDeliveryTest extends TestCase
         $this->assertSame('2026-08-20 07:00:00', $announcement->scheduled_at?->format('Y-m-d H:i:s'));
         $this->assertSame(0, FestivalNotification::query()->where('festival_edition_id', $edition->id)->count());
         $this->assertTrue($portalUser->is_active);
+    }
+
+    /** @return array{Account, FestivalEdition, FestivalTicketOrder, FestivalNotification, list<FestivalTicket>} */
+    private function ticketEmailContext(): array
+    {
+        [$account, $edition] = $this->festival(locale: 'en');
+        $edition->update(['seating_floors' => [['id' => 'main', 'label' => 'Main hall', 'width' => 900, 'height' => 600]]]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Paid,
+            'paid_at' => now(),
+            'expires_at' => null,
+            'buyer_email' => 'ticket-holder@example.test',
+            'locale' => 'en',
+        ]);
+        $venue = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'General admission']);
+        $assigned = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id, 'name' => 'Reserved seat', 'is_assigned_seating' => true]);
+        $stream = FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $online = FestivalAdmissionType::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'delivery_mode' => FestivalAdmissionDeliveryMode::OnlineStream,
+            'festival_online_stream_id' => $stream->id,
+        ]);
+        $tickets = [];
+        foreach ([[$assigned, FestivalTicketStatus::Valid], [$assigned, FestivalTicketStatus::Valid], [$venue, FestivalTicketStatus::Valid], [$venue, FestivalTicketStatus::Voided], [$venue, FestivalTicketStatus::Refunded], [$online, FestivalTicketStatus::Valid]] as $index => [$type, $status]) {
+            $item = $order->items()->create([
+                'account_id' => $account->id,
+                'festival_admission_type_id' => $type->id,
+                'admission_name' => $type->name,
+                'unit_price_cents' => $type->price_cents,
+                'quantity' => 1,
+                'total_cents' => $type->price_cents,
+            ]);
+            $seat = $type->is_assigned_seating ? $edition->seats()->create([
+                'account_id' => $account->id,
+                'festival_admission_type_id' => $type->id,
+                'floor_key' => 'main',
+                'section' => 'Front',
+                'group_kind' => 'row',
+                'group_label' => 'A',
+                'seat_number' => (string) ($index + 1),
+                'x' => 1000 + $index * 1000,
+                'y' => 3000,
+            ]) : null;
+            if ($seat) {
+                $item->orderSeats()->create(['festival_seat_id' => $seat->id]);
+            }
+            $token = Str::random(64);
+            $tickets[] = FestivalTicket::query()->create([
+                'account_id' => $account->id,
+                'festival_edition_id' => $edition->id,
+                'festival_ticket_order_id' => $order->id,
+                'festival_ticket_order_item_id' => $item->id,
+                'festival_admission_type_id' => $type->id,
+                'festival_seat_id' => $seat?->id,
+                'code' => 'FST-'.Str::upper(Str::random(4)).'-'.Str::upper(Str::random(4)),
+                'token_encrypted' => $token,
+                'token_hash' => hash('sha256', $token),
+                'status' => $status,
+            ]);
+        }
+        $notification = app(FestivalNotificationOutbox::class)->queueForTicketOrder($order, ['tickets_count' => 6]);
+
+        return [$account, $edition, $order, $notification, $tickets];
     }
 
     /** @return array{Account, FestivalEdition, FestivalPortalUser} */

@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.180.0',
+                'date' => '2026-11-09',
+                'title' => 'Festival tickets directly in your email',
+                'items' => ['Festival ticket emails include a QR code for each valid entrance ticket and a printable PDF with ticket details and assigned seats.'],
+                'meta' => 'Festival ticket delivery improvements.',
+            ],
+            [
                 'version' => '0.179.2',
                 'date' => '2026-11-09',
                 'title' => 'Release history restored',
@@ -1697,6 +1704,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.180.0',
+                'date' => '2026-11-09',
+                'title' => 'Квитки фестивалю прямо в листі',
+                'items' => ['Лист із квитками фестивалю містить QR-код кожного дійсного квитка для входу та PDF для друку з даними квитків і призначеними місцями.'],
+                'meta' => 'Покращення доставки квитків фестивалю.',
+            ],
             [
                 'version' => '0.179.2',
                 'date' => '2026-11-09',

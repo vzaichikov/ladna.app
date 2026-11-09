@@ -3,20 +3,24 @@
 namespace App\Jobs;
 
 use App\Actions\Festivals\FestivalEntrancePassEligibility;
+use App\Enums\FestivalAdmissionDeliveryMode;
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntrancePassStatus;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Enums\FestivalTicketOrderStatus;
+use App\Enums\FestivalTicketStatus;
 use App\Enums\SmsDeliveryPurpose;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalEntrancePass;
 use App\Models\FestivalNotification;
 use App\Models\FestivalPortalUser;
+use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Support\Festivals\FestivalNotificationScenarioSettings;
+use App\Support\Festivals\FestivalTicketPdf;
 use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
@@ -28,12 +32,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Traits\Localizable;
 use RuntimeException;
 use Throwable;
 
 class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
 {
-    use FoundationQueueable;
+    use FoundationQueueable, Localizable;
 
     public int $tries = FestivalNotification::MaxAttempts;
 
@@ -156,6 +161,8 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             $payload = $notification->payload;
             $actionLabel = isset($payload['action_label']) ? (string) $payload['action_label'] : null;
             $actionUrl = isset($payload['action_url']) ? (string) $payload['action_url'] : null;
+            $tickets = [];
+            $ticketOrder = null;
             if ($notification->festival_ticket_order_id) {
                 $order = FestivalTicketOrder::query()
                     ->whereKey($notification->festival_ticket_order_id)
@@ -171,6 +178,27 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                 }
                 $actionLabel = __('app.festival_open_tickets', locale: $locale);
                 $actionUrl = route('public.festival-orders.show', [$account->slug, $order->access_token_encrypted]);
+                if ($notification->type === FestivalNotificationType::TicketsIssued
+                    && $order->edition->cancelled_at === null
+                    && ! in_array($order->edition->status, [FestivalEditionStatus::Cancelled, FestivalEditionStatus::Archived], true)) {
+                    $order->load(['tickets' => fn ($query) => $query
+                        ->where('account_id', $account->id)
+                        ->where('festival_edition_id', $order->festival_edition_id)
+                        ->where('status', FestivalTicketStatus::Valid->value)
+                        ->whereHas('admissionType', fn ($query) => $query->where('delivery_mode', FestivalAdmissionDeliveryMode::Venue->value))
+                        ->with(['admissionType', 'orderItem', 'seat.edition'])
+                        ->orderBy('id')]);
+                    if ($order->tickets->isNotEmpty()) {
+                        $ticketOrder = $order;
+                        $tickets = $order->tickets->map(fn (FestivalTicket $ticket): array => [
+                            'type' => $ticket->orderItem?->admission_name ?? $ticket->admissionType->name,
+                            'code' => $ticket->code,
+                            'seat' => $ticket->seat?->label($locale) ?? __('app.festival_journey.general_admission', locale: $locale),
+                            'qr_url' => route('public.festival-tickets.qr', [$account->slug, $order->access_token_encrypted, $ticket->code]),
+                        ])->all();
+                    }
+                }
+
             }
             $mailSettings = $mailSettingsResolver->resolve();
             $mail = (new FestivalPortalMail(
@@ -180,7 +208,13 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                 actionLabel: $actionLabel,
                 actionUrl: $actionUrl,
                 messageLocale: $locale,
+                tickets: $tickets,
             ))->from($mailSettings->fromEmail, $mailSettings->fromName);
+
+            if ($ticketOrder) {
+                $pdf = $this->withLocale($locale, fn (): string => app(FestivalTicketPdf::class)->render($account, $ticketOrder)->output());
+                $mail->attachData($pdf, 'festival-tickets-'.$ticketOrder->order_id.'.pdf', ['mime' => 'application/pdf']);
+            }
 
             Mail::mailer($mailSettings->mailer)
                 ->to($notification->recipient_email, $notification->recipient_name ?: $notification->recipient_email)
