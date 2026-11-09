@@ -5,6 +5,7 @@
     data-hold-url="{{ route('public.festivals.admission.seat-hold', [$account->slug, $edition->slug]) }}"
     data-quote-url="{{ route('public.festivals.admission.seat-quote', [$account->slug, $edition->slug]) }}"
     data-seat-label="{{ __('app.festival_seating.seat_label', ['number' => ':number']) }}"
+    data-selected-label="{{ __('app.festival_seating.selected') }}"
     data-unavailable-label="{{ __('app.festival_seating.unavailable_state') }}"
     data-unavailable-message="{{ __('app.festival_seating.unavailable') }}"
     data-expired-message="{{ __('app.festival_seating.hold_expired') }}"
@@ -39,34 +40,39 @@
                 <select class="crm-field" data-festival-seat-section></select>
             </label>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="inline-flex gap-1 rounded-lg border festival-border p-1">
+        <div class="festival-seat-toolbar">
+            <div class="festival-seat-tabs">
                 <x-ui.button type="button" variant="secondary" size="sm" data-festival-seat-map-toggle aria-pressed="true">{{ __('app.festival_seating.map') }}</x-ui.button>
                 <x-ui.button type="button" variant="secondary" size="sm" data-festival-seat-list-toggle aria-pressed="false">{{ __('app.festival_seating.list') }}</x-ui.button>
             </div>
             <div class="flex gap-1" data-festival-seat-zoom>
                 <x-ui.button type="button" variant="secondary" size="sm" data-festival-seat-zoom-out aria-label="{{ __('app.festival_seating.zoom_out') }}">−</x-ui.button>
+                <x-ui.button type="button" variant="secondary" size="sm" data-festival-seat-zoom-fit>{{ __('app.festival_seating.show_all') }}</x-ui.button>
                 <x-ui.button type="button" variant="secondary" size="sm" data-festival-seat-zoom-in aria-label="{{ __('app.festival_seating.zoom_in') }}">+</x-ui.button>
             </div>
         </div>
-        <div class="rounded-xl border festival-border festival-page p-3">
+        <div class="festival-seat-frame">
             <p class="mx-auto mb-3 w-fit rounded-md bg-slate-700 px-5 py-1 text-center text-xs font-semibold text-white" data-festival-seat-stage>{{ __('app.festival_seating.stage') }}</p>
-            <div class="max-h-96 overflow-auto rounded-lg" data-festival-seat-viewport>
-                <div class="relative w-full overflow-hidden bg-white" data-festival-seat-map></div>
+            <div class="festival-seat-viewport" data-festival-seat-viewport>
+                <div class="festival-seat-canvas" data-festival-seat-map></div>
             </div>
             <div class="max-h-96 overflow-auto" data-festival-seat-list hidden></div>
-            <p class="py-3 text-center text-sm festival-muted" data-festival-seat-empty hidden>{{ __('app.festival_seating.empty') }}</p>
+            <p class="py-3 text-center text-sm text-slate-600" data-festival-seat-empty hidden>{{ __('app.festival_seating.empty') }}</p>
         </div>
+        <p class="text-xs festival-muted" data-festival-seat-map-help>{{ __('app.festival_seating.map_help') }}</p>
         <div class="space-y-2 text-xs festival-muted">
             <div class="flex flex-wrap gap-x-4 gap-y-2" aria-label="{{ __('app.festival_seating.price_legend') }}" data-festival-seat-legend></div>
             <div class="flex flex-wrap gap-x-4 gap-y-2">
-                <span class="inline-flex items-center gap-1.5"><span class="size-3 rounded-full border border-slate-500 bg-white" aria-hidden="true"></span>{{ __('app.festival_seating.available') }}</span>
+                <span class="inline-flex items-center gap-1.5"><span class="size-3 rounded-full bg-blue-600" aria-hidden="true"></span>{{ __('app.festival_seating.available') }}</span>
                 <span class="inline-flex items-center gap-1.5"><span class="size-3 rounded-full bg-slate-950 text-center text-[9px] leading-3 text-white" aria-hidden="true">✓</span>{{ __('app.festival_seating.selected') }}</span>
                 <span class="inline-flex items-center gap-1.5"><span class="size-3 rounded-full bg-slate-300 text-center text-[9px] leading-3 text-slate-600" aria-hidden="true">×</span>{{ __('app.festival_seating.unavailable_state') }}</span>
             </div>
         </div>
-        <div class="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border festival-border festival-surface p-3">
-            <output class="text-sm font-semibold festival-text" data-festival-seat-estimate></output>
+        <div class="festival-seat-checkout-bar">
+            <div class="flex items-center justify-between gap-3 sm:block" aria-live="polite" aria-atomic="true">
+                <p class="text-xs festival-muted" data-festival-seat-selection-count></p>
+                <output class="text-lg font-semibold tabular-nums festival-text" data-festival-seat-estimate></output>
+            </div>
             <x-ui.button type="button" variant="success" size="sm" data-festival-seat-continue disabled>{{ __('app.festival_seating.continue') }}</x-ui.button>
         </div>
     </div>

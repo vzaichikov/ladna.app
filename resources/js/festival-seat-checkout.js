@@ -10,6 +10,7 @@ export function initFestivalSeatCheckout(root = document) {
         const floor = element('floor');
         const section = element('section');
         const map = element('map');
+        const viewport = element('viewport');
         const list = element('list');
         const editor = element('editor');
         const checkoutId = element('checkout-id');
@@ -26,6 +27,7 @@ export function initFestivalSeatCheckout(root = document) {
         const money = (cents) => format.format(cents / 100);
         const promoInput = form.querySelector('[data-promo-code-hidden]');
         const markerControls = new Map();
+        const floorMarkerDiameters = new Map();
         const quantityInputs = [...form.querySelectorAll('[data-festival-exclusive-ticket="false"] [data-event-ticket-quantity]')];
         const cartKey = `festival-seat-cart:${form.action}`;
         let floors = [];
@@ -39,6 +41,8 @@ export function initFestivalSeatCheckout(root = document) {
         let editing = true;
         let listView = false;
         let zoom = 1;
+        let markerDiameter = 24;
+        let floorWidth = 1200;
         let mapReady = false;
         let saving = false;
         let mapRequest;
@@ -91,7 +95,7 @@ export function initFestivalSeatCheckout(root = document) {
                     button.disabled = unavailable;
                     button.dataset.state = chosen ? 'selected' : conflicts.has(id) ? 'conflict' : unavailable ? 'unavailable' : 'available';
                     button.setAttribute('aria-pressed', String(chosen));
-                    if (button.classList.contains('absolute')) {
+                    if (button.hasAttribute('data-seat-marker')) {
                         button.textContent = chosen ? '✓' : seat.available ? seat.number : '×';
                     }
                 });
@@ -129,7 +133,8 @@ export function initFestivalSeatCheckout(root = document) {
             const description = [seatName, price, extra].filter(Boolean).join(' · ');
             button.title = description;
             if (mapMarker) {
-                button.className = 'absolute flex size-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-(--seat-color) bg-white text-[9px] font-bold text-slate-950 outline-offset-1 hover:z-10 hover:ring-2 hover:ring-(--seat-color) focus-visible:z-10 data-[state=selected]:z-10 data-[state=selected]:bg-(--seat-color) data-[state=selected]:text-white data-[state=unavailable]:border-slate-400 data-[state=unavailable]:bg-slate-200 data-[state=conflict]:border-rose-700 data-[state=conflict]:bg-rose-200';
+                button.className = 'festival-seat-marker';
+                button.dataset.seatMarker = '';
                 button.style.left = `${seat.x / 100}%`;
                 button.style.top = `${seat.y / 100}%`;
                 button.setAttribute('aria-label', description);
@@ -149,25 +154,62 @@ export function initFestivalSeatCheckout(root = document) {
                     label.append(notes);
                 }
             }
-            button.addEventListener('click', () => toggleSeat(seat.id));
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (mapMarker && button.getBoundingClientRect().width < 24 && zoom < 8) {
+                    zoomToSeat(seat);
+                    return;
+                }
+                toggleSeat(seat.id);
+            });
             const controls = markerControls.get(seat.id) ?? [];
             controls.push(button);
             markerControls.set(seat.id, controls);
             return button;
         }
 
-        function changeZoom(delta) {
-            zoom = Math.min(4, Math.max(1, zoom + delta));
+        function changeZoom(delta, anchor = null) {
+            const center = anchor ?? {
+                x: (viewport.scrollLeft + viewport.clientWidth / 2) / (map.clientWidth || 1),
+                y: (viewport.scrollTop + viewport.clientHeight / 2) / (map.clientHeight || 1),
+            };
+            zoom = Math.min(8, Math.max(1, zoom + delta));
             map.style.width = `${zoom * 100}%`;
-            element('zoom-in').disabled = zoom === 4;
+            if (viewport.clientWidth > 0) {
+                viewport.scrollLeft = zoom === 1 ? 0 : center.x * map.clientWidth - viewport.clientWidth / 2;
+                viewport.scrollTop = zoom === 1 ? 0 : center.y * map.clientHeight - viewport.clientHeight / 2;
+            }
+            element('zoom-in').disabled = zoom === 8;
             element('zoom-out').disabled = zoom === 1;
+            element('zoom-fit').disabled = zoom === 1;
+            map.dataset.detail = String(markerDiameter * map.clientWidth / floorWidth >= 14);
+        }
+
+        function zoomToSeat(seat) {
+            const targetZoom = 28 * floorWidth / (markerDiameter * viewport.clientWidth);
+            changeZoom(targetZoom - zoom, { x: seat.x / 10000, y: seat.y / 10000 });
         }
 
         function paintMap() {
             const selectedFloor = floors.find(({ id }) => id === floor.value);
             if (!selectedFloor) return;
-            const floorSeats = [...seats.values()].filter((seat) => seat.floor === selectedFloor.id
-                && (section.value === '' || seat.section === section.value));
+            const allFloorSeats = [...seats.values()].filter((seat) => seat.floor === selectedFloor.id);
+            const floorSeats = allFloorSeats.filter((seat) => section.value === '' || seat.section === section.value);
+            floorWidth = selectedFloor.width;
+            if (!floorMarkerDiameters.has(selectedFloor.id)) {
+                let diameter = 32;
+                for (let i = 0; i < allFloorSeats.length; i++) {
+                    for (let j = i + 1; j < allFloorSeats.length; j++) {
+                        const a = allFloorSeats[i], b = allFloorSeats[j];
+                        const distance = Math.max(Math.abs(a.x - b.x) * floorWidth / 10000,
+                            Math.abs(a.y - b.y) * selectedFloor.height / 10000);
+                        if (distance > 0) diameter = Math.min(diameter, distance * .8);
+                    }
+                }
+                floorMarkerDiameters.set(selectedFloor.id, diameter);
+            }
+            markerDiameter = floorMarkerDiameters.get(selectedFloor.id);
+            map.style.setProperty('--seat-size', `${markerDiameter / floorWidth * 100}cqw`);
             const activeSeat = document.activeElement?.dataset?.seatId;
             const focusList = list.contains(document.activeElement);
             markerControls.clear();
@@ -175,7 +217,7 @@ export function initFestivalSeatCheckout(root = document) {
             list.replaceChildren();
             element('empty').hidden = floorSeats.length > 0;
             element('stage').textContent = selectedFloor.stage || element('stage').dataset.fallback;
-            element('stage').hidden = !selectedFloor.stage && Array.isArray(selectedFloor.blocks);
+            element('stage').hidden = listView || (!selectedFloor.stage && Array.isArray(selectedFloor.blocks));
             map.style.aspectRatio = `${selectedFloor.width} / ${selectedFloor.height}`;
             const geometry = svgShape('svg', { viewBox: `0 0 ${selectedFloor.width} ${selectedFloor.height}`, 'aria-hidden': 'true' });
             geometry.classList.add('pointer-events-none', 'absolute', 'inset-0', 'h-full', 'w-full');
@@ -201,6 +243,7 @@ export function initFestivalSeatCheckout(root = document) {
             });
             element('legend').replaceChildren(...legend);
             paintMarkers();
+            changeZoom(0);
             if (activeSeat && focusList) markerControls.get(Number(activeSeat))?.[1]?.focus({ preventScroll: true });
         }
 
@@ -218,8 +261,12 @@ export function initFestivalSeatCheckout(root = document) {
             element('viewport').hidden = listView;
             list.hidden = !listView;
             element('zoom').hidden = listView;
+            element('map-help').hidden = listView;
+            element('stage').hidden = listView || (!floors.find(({ id }) => id === floor.value)?.stage
+                && Array.isArray(floors.find(({ id }) => id === floor.value)?.blocks));
             element('map-toggle').setAttribute('aria-pressed', String(!listView));
             element('list-toggle').setAttribute('aria-pressed', String(listView));
+            if (!listView) changeZoom(0);
         }
 
         function syncCart() {
@@ -275,6 +322,7 @@ export function initFestivalSeatCheckout(root = document) {
             };
             stateChange();
             element('estimate').textContent = money(estimates + (form.festivalGeneralSubtotalCents ?? 0));
+            element('selection-count').textContent = `${picker.dataset.selectedLabel}: ${choices.length}`;
         }
 
         function applyHold(data, restoreSelection = true) {
@@ -363,6 +411,7 @@ export function initFestivalSeatCheckout(root = document) {
                 mapReady = true;
                 element('loading').hidden = true;
                 syncCart();
+                changeZoom(0);
                 if (initial) form.dispatchEvent(new Event('promotion-input-changed'));
             } catch (error) {
                 if (initial && error.name !== 'AbortError') {
@@ -507,9 +556,27 @@ export function initFestivalSeatCheckout(root = document) {
             updateSectionOptions();
             paintMap();
         });
-        section.addEventListener('change', paintMap);
-        element('zoom-in').addEventListener('click', () => changeZoom(0.5));
-        element('zoom-out').addEventListener('click', () => changeZoom(-0.5));
+        section.addEventListener('change', () => {
+            paintMap();
+            const visible = [...seats.values()].filter((seat) => seat.floor === floor.value && seat.section === section.value);
+            if (visible.length) {
+                changeZoom(2 - zoom, {
+                    x: visible.reduce((sum, seat) => sum + seat.x, 0) / visible.length / 10000,
+                    y: visible.reduce((sum, seat) => sum + seat.y, 0) / visible.length / 10000,
+                });
+            } else changeZoom(1 - zoom);
+        });
+        element('zoom-in').addEventListener('click', () => changeZoom(zoom * .5));
+        element('zoom-out').addEventListener('click', () => changeZoom(-zoom / 3));
+        element('zoom-fit').addEventListener('click', () => changeZoom(1 - zoom));
+        map.addEventListener('click', (event) => {
+            if (markerDiameter * map.clientWidth / floorWidth >= 24 || zoom === 8) return;
+            const bounds = map.getBoundingClientRect();
+            zoomToSeat({ x: (event.clientX - bounds.left) / bounds.width * 10000, y: (event.clientY - bounds.top) / bounds.height * 10000 });
+        });
+        new ResizeObserver(() => {
+            map.dataset.detail = String(markerDiameter * map.clientWidth / floorWidth >= 14);
+        }).observe(viewport);
         element('map-toggle').addEventListener('click', () => showView(false));
         element('list-toggle').addEventListener('click', () => showView(true));
         retry.addEventListener('click', () => retryAction?.());

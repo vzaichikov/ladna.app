@@ -20,6 +20,12 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.179.1',
+                'date' => '2026-11-09',
+                'title' => 'Clearer Festival seating on mobile',
+                'items' => ['Festival seat maps keep seats separate on small screens. Tap to zoom before choosing a seat, return to the full map, and use larger controls with a clearer selection total.'],
+            ],
+            [
                 'version' => '0.179.0',
                 'date' => '2026-11-09',
                 'title' => 'Edit Festival prices and seating after sales',
@@ -1682,6 +1688,12 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.179.1',
+                'date' => '2026-11-09',
+                'title' => 'Зручніша схема місць фестивалю на телефоні',
+                'items' => ['Місця на схемі фестивалю більше не накладаються на малих екранах. Торкніться схеми для наближення перед вибором місця, повертайтеся до огляду всього залу та користуйтеся більшими кнопками й зрозумілим підсумком вибору.'],
+            ],
             [
                 'version' => '0.179.0',
                 'date' => '2026-11-09',
