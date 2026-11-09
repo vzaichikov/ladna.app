@@ -2,17 +2,21 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Festivals\FestivalTicketIssuer;
+use App\Enums\FestivalTicketOrderStatus;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
+use App\Models\FestivalTicketOrder;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\Festivals\FestivalSeatMapPng;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -47,6 +51,81 @@ class FestivalHallLayoutTest extends TestCase
             ->assertOk();
         $this->assertFalse($edition->refresh()->assigned_seating_enabled);
         $this->assertSame($seat->id, $edition->seats()->sole()->id);
+    }
+
+    public function test_confirmed_layout_edits_preserve_sold_tickets_and_allow_unsold_seat_changes(): void
+    {
+        Queue::fake();
+        [$account, $edition, $owner] = $this->festival();
+        $type = $this->assignedType($edition);
+        $payload = $this->layout($type);
+        $payload['seats'][] = [...$payload['seats'][0], 'seat_number' => '2', 'x' => 3500];
+        $url = route('dashboard.accounts.festivals.hall-layout.update', [$account, $edition]);
+        $this->actingAs($owner)->putJson($url, $payload)->assertOk();
+        $originalSeats = $edition->seats()->orderBy('id')->get();
+        $sold = $originalSeats[0];
+        $unsold = $originalSeats[1];
+        $order = $this->paidSeatOrder($edition, $type, $sold->id);
+        $ticket = $order->tickets()->sole();
+        $originalToken = $ticket->token_hash;
+
+        $payload['seats'][0]['id'] = $sold->id;
+        $payload['seats'][0]['x'] = 2700;
+        $payload['seats'][1]['seat_number'] = '3';
+        $payload['floors'][0]['stage'] = 'Updated stage';
+        $this->putJson($url, $payload)->assertUnprocessable()->assertJsonValidationErrors('layout');
+        $this->assertSame(2200, $sold->refresh()->x);
+        $this->assertModelExists($unsold);
+
+        $payload['confirm_ticket_changes'] = true;
+        $this->putJson($url, $payload)->assertOk();
+        $this->assertSame(2700, $sold->refresh()->x);
+        $this->assertSame('Updated stage', $edition->refresh()->seating_floors[0]['stage']);
+        $this->assertModelMissing($unsold);
+        $this->assertSame(2, $edition->seats()->count());
+        $this->assertSame(2, $type->refresh()->inventory);
+        $this->assertSame($sold->id, $ticket->refresh()->festival_seat_id);
+        $this->assertSame($originalToken, $ticket->token_hash);
+        $this->assertSame(1000, $order->refresh()->amount_cents);
+        $this->assertSame(1000, $order->items()->sole()->unit_price_cents);
+    }
+
+    public function test_confirmation_does_not_allow_removing_retyping_or_blocking_a_sold_seat(): void
+    {
+        Queue::fake();
+        [$account, $edition, $owner] = $this->festival();
+        $type = $this->assignedType($edition);
+        $anotherType = $this->assignedType($edition);
+        $payload = $this->layout($type);
+        $payload['seats'][] = [...$payload['seats'][0], 'seat_number' => '2', 'x' => 3500];
+        $url = route('dashboard.accounts.festivals.hall-layout.update', [$account, $edition]);
+        $this->actingAs($owner)->putJson($url, $payload)->assertOk();
+        $seats = $edition->seats()->orderBy('id')->get();
+        $seat = $seats[0];
+        $payload['seats'][1]['id'] = $seats[1]->id;
+        $unsold = $payload['seats'][1];
+        $order = $this->paidSeatOrder($edition, $type, $seat->id);
+        $payload['confirm_ticket_changes'] = true;
+        $payload['seats'][0]['id'] = $seat->id;
+
+        foreach ([
+            [$unsold],
+            [[...$payload['seats'][0], 'festival_admission_type_id' => $anotherType->id], $unsold],
+            [[...$payload['seats'][0], 'is_blocked' => true], $unsold],
+        ] as $seats) {
+            $this->putJson($url, [...$payload, 'seats' => $seats])
+                ->assertUnprocessable()->assertJsonValidationErrors('layout');
+            $this->assertSame($type->id, $seat->refresh()->festival_admission_type_id);
+            $this->assertFalse($seat->is_blocked);
+            $this->assertSame($seat->id, $order->tickets()->sole()->festival_seat_id);
+        }
+
+        $order->update(['status' => FestivalTicketOrderStatus::Refunded]);
+        $this->putJson($url, [...$payload, 'seats' => [[...$payload['seats'][0], 'festival_admission_type_id' => $anotherType->id], $unsold]])
+            ->assertUnprocessable()->assertJsonValidationErrors('layout');
+        $this->putJson($url, [...$payload, 'seats' => [$unsold]])
+            ->assertUnprocessable()->assertJsonValidationErrors('layout');
+        $this->assertSame($type->id, $seat->refresh()->festival_admission_type_id);
     }
 
     public function test_layout_rejects_duplicate_labels_and_another_editions_ticket_type(): void
@@ -241,6 +320,29 @@ class FestivalHallLayoutTest extends TestCase
 
         $this->actingAs($owner)->putJson(route('dashboard.accounts.festivals.hall-layout.update', [$account, $edition]), $payload)
             ->assertOk()->assertJsonPath('floors.1.blocks.0.id', 'bar');
+    }
+
+    private function paidSeatOrder(FestivalEdition $edition, FestivalAdmissionType $type, int $seatId): FestivalTicketOrder
+    {
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $edition->account_id,
+            'status' => FestivalTicketOrderStatus::Paid,
+            'amount_cents' => 1000,
+            'paid_at' => now(),
+            'expires_at' => null,
+        ]);
+        $item = $order->items()->create([
+            'account_id' => $edition->account_id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => $type->name,
+            'unit_price_cents' => 1000,
+            'quantity' => 1,
+            'total_cents' => 1000,
+        ]);
+        $item->orderSeats()->create(['festival_seat_id' => $seatId]);
+        app(FestivalTicketIssuer::class)->execute($order);
+
+        return $order;
     }
 
     /** @return array{Account, FestivalEdition, User} */

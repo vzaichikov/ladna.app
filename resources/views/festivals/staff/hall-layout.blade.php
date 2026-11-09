@@ -22,6 +22,16 @@
     @endphp
     <dialog id="hall-layout-fullscreen" aria-label="{{ __('app.festival_seating_admin.title') }}" class="fixed inset-0 m-0 h-dvh w-dvw max-h-none max-w-none overflow-y-auto overscroll-contain bg-slate-100 p-3 sm:p-5"></dialog>
     <div class="group/hall space-y-4" data-hall-layout-editor>
+        <dialog data-hall-confirm aria-labelledby="hall-confirm-title" aria-describedby="hall-confirm-copy" class="m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl bg-white p-6 text-slate-900 shadow-xl backdrop:bg-slate-950/50">
+            <form method="dialog" class="space-y-5">
+                <h2 id="hall-confirm-title" class="text-lg font-semibold">{{ __('app.festival_ticket_changes_title') }}</h2>
+                <p id="hall-confirm-copy" class="text-sm text-slate-600">{{ __('app.festival_seating_admin.confirm_changes') }}</p>
+                <div class="flex flex-wrap justify-end gap-3">
+                    <x-ui.button type="submit" value="cancel" variant="secondary" autofocus>{{ __('app.cancel') }}</x-ui.button>
+                    <x-ui.button type="submit" value="confirm">{{ __('app.save') }}</x-ui.button>
+                </div>
+            </form>
+        </dialog>
         <script type="application/json" data-hall-config>@json($layoutConfig)</script>
 
         <x-ui.page-header class="sm:[&>div:last-child]:max-w-[65%] group-data-[hall-expanded]/hall:sticky group-data-[hall-expanded]/hall:top-0 group-data-[hall-expanded]/hall:z-20 group-data-[hall-expanded]/hall:bg-slate-100 group-data-[hall-expanded]/hall:py-2 group-data-[hall-expanded]/hall:[&_.crm-page-copy]:hidden" :title="__('app.festival_seating_admin.title')" :copy="__('app.festival_seating_admin.copy')">

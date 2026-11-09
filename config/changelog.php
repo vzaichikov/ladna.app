@@ -20,6 +20,12 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.179.0',
+                'date' => '2026-11-09',
+                'title' => 'Edit Festival prices and seating after sales',
+                'items' => ['Festival organizers can update ticket prices and the hall layout after confirming a warning, while preserving existing purchase amounts and seats linked to tickets.'],
+            ],
+            [
                 'version' => '0.178.1',
                 'date' => '2026-11-09',
                 'title' => 'Mobile ticket payment fixes',
@@ -1676,6 +1682,12 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.179.0',
+                'date' => '2026-11-09',
+                'title' => 'Зміна цін і схеми фестивалю після продажу',
+                'items' => ['Організатори можуть змінювати ціни квитків і схему залу після підтвердження попередження; суми наявних покупок і місця, пов’язані з квитками, зберігаються.'],
+            ],
             [
                 'version' => '0.178.1',
                 'date' => '2026-11-09',

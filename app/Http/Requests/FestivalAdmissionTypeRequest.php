@@ -27,6 +27,7 @@ class FestivalAdmissionTypeRequest extends FormRequest
         $assigned = $this->boolean('is_assigned_seating');
 
         return [
+            'confirm_ticket_changes' => ['sometimes', 'boolean'],
             'is_assigned_seating' => ['required', 'boolean'],
             'delivery_mode' => ['required', Rule::enum(FestivalAdmissionDeliveryMode::class)],
             'name' => ['required', 'string', 'max:255'],

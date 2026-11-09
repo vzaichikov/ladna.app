@@ -23,6 +23,7 @@ class FestivalHallLayoutRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'confirm_ticket_changes' => ['sometimes', 'boolean'],
             'publish' => ['required', 'boolean'],
             'floors' => ['present', 'array', 'list', 'max:12'],
             'floors.*' => ['required', 'array:id,label,width,height,stage,background,sections,blocks'],

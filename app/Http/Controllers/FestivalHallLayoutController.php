@@ -127,7 +127,7 @@ class FestivalHallLayoutController extends Controller
                 ...$seat->only('id', 'floor_key', 'section', 'group_kind', 'group_label', 'seat_number', 'x', 'y', 'festival_admission_type_id', 'accessibility', 'sightline', 'is_blocked'),
                 'unavailable' => $liveSeatIds->has($seat->id),
             ]),
-            'frozen' => $edition->seats()->has('orderSeats')->exists(),
+            'has_history' => $edition->seats()->has('orderSeats')->exists(),
             'has_holds' => $this->reservations->activeHolds($edition)->exists(),
             'enabled' => $edition->assigned_seating_enabled,
         ];

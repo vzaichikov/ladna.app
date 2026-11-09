@@ -9,23 +9,29 @@
         :copy="__('app.festival_admission_type_form_copy')"
     />
 
-    @if ($isLocked)
+    @if ($hasSales)
         <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
             <div class="flex items-start gap-3">
-                <x-ui.icon name="lock" class="mt-0.5 h-5 w-5 shrink-0" />
-                <div><strong>{{ __('app.festival_admission_type_locked_title') }}</strong><p class="mt-1">{{ __('app.festival_admission_type_locked_copy') }}</p></div>
+                <x-ui.icon name="triangle-alert" class="mt-0.5 h-5 w-5 shrink-0" />
+                <div><strong>{{ __('app.festival_ticket_changes_title') }}</strong><p class="mt-1">{{ __('app.festival_ticket_price_changes_copy') }}</p></div>
             </div>
         </div>
     @endif
 
     <x-ui.panel class="max-w-4xl">
-        <form method="POST" action="{{ $admissionType->exists ? route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $admissionType]) : route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]) }}" class="space-y-6" data-assigned-admission-form>
+        <form method="POST" action="{{ $admissionType->exists ? route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $admissionType]) : route('dashboard.accounts.festivals.admission-types.store', [$account, $edition]) }}" class="space-y-6" data-assigned-admission-form
+            @if ($hasSales)
+                data-confirm-action data-confirm-title="{{ __('app.festival_ticket_changes_title') }}"
+                data-confirm-body="{{ __('app.festival_ticket_price_changes_copy') }}"
+                data-confirm-accept="{{ __('app.save') }}" data-confirm-variant="warning" data-confirm-icon="triangle-alert"
+            @endif>
+            <input type="hidden" name="confirm_ticket_changes" value="{{ $hasSales ? 1 : 0 }}">
             @csrf
             @if ($admissionType->exists) @method('PUT') @endif
 
             @error('admission_type') <div class="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{{ $message }}</div> @enderror
 
-            <fieldset class="space-y-5" @disabled($isLocked)>
+            <fieldset class="space-y-5">
                 <div class="grid gap-5 md:grid-cols-2">
                     <label class="md:col-span-2">
                         <span class="crm-label">{{ __('app.festival_admission_delivery_mode') }}</span>
@@ -106,10 +112,8 @@
             </fieldset>
 
             <div class="flex flex-wrap gap-2">
-                @unless ($isLocked)
-                    <x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" /> {{ __('app.save') }}</x-ui.button>
-                @endunless
-                <x-ui.button :href="route('dashboard.accounts.festivals.admission-types.index', [$account, $edition])" variant="secondary">{{ $isLocked ? __('app.back') : __('app.cancel') }}</x-ui.button>
+                <x-ui.button type="submit"><x-ui.icon name="save" class="h-4 w-4" /> {{ __('app.save') }}</x-ui.button>
+                <x-ui.button :href="route('dashboard.accounts.festivals.admission-types.index', [$account, $edition])" variant="secondary">{{ __('app.cancel') }}</x-ui.button>
             </div>
         </form>
     </x-ui.panel>

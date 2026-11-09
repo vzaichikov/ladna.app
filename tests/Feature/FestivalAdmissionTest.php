@@ -13,6 +13,7 @@ use App\Models\FestivalAdmissionType;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalNotification;
+use App\Models\FestivalOnlineStream;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTariffPackage;
@@ -291,7 +292,7 @@ class FestivalAdmissionTest extends TestCase
         $this->assertDatabaseMissing('festival_admission_types', ['id' => $type->id]);
     }
 
-    public function test_order_history_blocks_deletion_and_paid_history_locks_every_admission_type_field(): void
+    public function test_paid_ticket_prices_require_confirmation_and_preserve_purchase_facts(): void
     {
         Queue::fake();
         [$account, $edition] = $this->festival();
@@ -329,11 +330,59 @@ class FestivalAdmissionTest extends TestCase
             ->assertSessionHasErrors('admission_type');
 
         $this->assertSame('Locked admission', $type->refresh()->name);
+        $this->get($editUrl)->assertOk()
+            ->assertSee('name="price"', false)
+            ->assertSee('type="submit"', false)
+            ->assertDontSee('<fieldset class="space-y-5" disabled', false);
+
+        $this->put(route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $type]), $this->admissionPayload([
+            'name' => 'Updated admission',
+            'price' => '450.00',
+            'inventory' => 20,
+            'confirm_ticket_changes' => true,
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame('Updated admission', $type->refresh()->name);
+        $this->assertSame(45000, $type->price_cents);
+        $this->assertSame(30000, $order->refresh()->amount_cents);
+        $this->assertSame(30000, $order->items()->sole()->unit_price_cents);
+        $this->assertSame('Locked admission', $order->items()->sole()->admission_name);
         $this->actingAs($owner)
             ->from(route('dashboard.accounts.festivals.admission-types.index', [$account, $edition]))
             ->delete(route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $type]))
             ->assertSessionHasErrors('admission_type');
         $this->assertDatabaseHas('festival_admission_types', ['id' => $type->id]);
+    }
+
+    public function test_ticket_delivery_mode_cannot_change_after_order_history_even_with_confirmation(): void
+    {
+        [$account, $edition] = $this->festival();
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        FestivalOnlineStream::factory()->enabled()->for($edition, 'edition')->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+        $order = FestivalTicketOrder::factory()->for($edition)->create([
+            'account_id' => $account->id,
+            'status' => FestivalTicketOrderStatus::Expired,
+            'expires_at' => now()->subMinute(),
+        ]);
+        $order->items()->create([
+            'account_id' => $account->id,
+            'festival_admission_type_id' => $type->id,
+            'admission_name' => $type->name,
+            'unit_price_cents' => 30000,
+            'quantity' => 1,
+            'total_cents' => 30000,
+        ]);
+
+        $this->actingAs($owner)
+            ->put(route('dashboard.accounts.festivals.admission-types.update', [$account, $edition, $type]), $this->admissionPayload([
+                'delivery_mode' => 'online_stream',
+                'confirm_ticket_changes' => true,
+            ]))->assertSessionHasErrors('delivery_mode');
+
+        $this->assertSame('venue', $type->refresh()->delivery_mode->value);
+        $this->assertNull($type->festival_online_stream_id);
     }
 
     public function test_pending_holds_protect_inventory_and_any_order_history_protects_deletion(): void

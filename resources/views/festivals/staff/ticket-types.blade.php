@@ -30,11 +30,9 @@
                                     <td class="px-4 py-4 font-semibold">{{ $availability['remaining'] }}</td>
                                     <td class="px-4 py-4"><strong>{{ \App\Support\MoneyFormatter::format($availability['current_price_cents'], $account->default_currency) }}</strong><span class="mt-1 block text-xs text-slate-500">{{ __('app.festival_price_tier_'.$availability['price_tier']) }}</span></td>
                                     <td class="px-4 py-4 text-xs text-slate-600"><span class="block">{{ $admissionType->sales_starts_at?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</span><span class="block">{{ $admissionType->sales_ends_at?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</span></td>
-                                    <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $availability['locked'] ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800' }}">{{ $availability['locked'] ? __('app.festival_locked_after_purchase') : __('app.festival_editable') }}</span></td>
+                                    <td class="px-4 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $availability['locked'] ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800' }}">{{ $availability['locked'] ? __('app.festival_ticket_edit_with_confirmation') : __('app.festival_editable') }}</span></td>
                                     <td class="px-4 py-4"><div class="flex justify-end gap-2">
-                                        @unless ($availability['locked'])
-                                            <x-ui.action-button :href="route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $admissionType])" icon="edit" :label="__('app.edit')" />
-                                        @endunless
+                                        <x-ui.action-button :href="route('dashboard.accounts.festivals.admission-types.edit', [$account, $edition, $admissionType])" icon="edit" :label="__('app.edit')" />
                                         @unless ($availability['has_history'])
                                             <form method="POST" action="{{ route('dashboard.accounts.festivals.admission-types.destroy', [$account, $edition, $admissionType]) }}" data-confirm-delete data-confirm-title="{{ __('app.festival_delete_admission_type_title') }}" data-confirm-body="{{ __('app.festival_delete_admission_type_copy') }}">
                                                 @csrf @method('DELETE')

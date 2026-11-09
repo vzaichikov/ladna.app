@@ -56,7 +56,7 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
     const floorSections = () => [...new Set([...(currentFloor()?.sections ?? []), ...floorSeats().map((seat) => seat.section)])];
     const visibleSeats = () => floorSeats().filter((seat) => !section || seat.section === section);
     const seatType = (seat) => typeMap.get(seat.festival_admission_type_id);
-    const canEdit = () => !state.frozen && !state.has_holds && !preview;
+    const canEdit = () => !state.has_holds && !preview;
     const count = (key, value) => text[key].replace(':count', value);
     const groupKey = (seat) => JSON.stringify([seat.section, seat.group_kind, seat.group_label]);
     const clamp = (value, min = 0, max = 10000) => Math.min(max, Math.max(min, value));
@@ -417,13 +417,13 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
         el('stage').textContent = floor?.stage || '';
         el('stage').hidden = !floor?.stage;
         el('status').textContent = state.enabled ? text.on : text.off;
-        el('notice').textContent = state.has_holds ? text.active_holds : (state.frozen ? text.history : '');
+        el('notice').textContent = state.has_holds ? text.active_holds : (state.has_history ? text.history : '');
         el('notice').hidden = !el('notice').textContent;
         el('preview-note').hidden = !preview;
         el('inspector').hidden = preview;
         el('workspace').classList.toggle('xl:grid-cols-[minmax(0,1fr)_19rem]', !preview);
         el('preview-label').textContent = preview ? text.edit : text.preview;
-        actions.mode.textContent = state.enabled ? text.disable : (state.frozen ? text.enable : text.save_and_enable);
+        actions.mode.textContent = state.enabled ? text.disable : (state.has_history ? text.enable : text.save_and_enable);
         actions.mode.hidden = preview;
         actions.mode.disabled = busy || state.has_holds;
         actions.save.disabled = busy;
@@ -511,11 +511,24 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
         render();
     }
 
-    function save(publish) {
+    async function save(publish) {
+        if (busy) return null;
+        if (state.has_history && !await confirmTicketChanges()) return null;
         return send('save', 'PUT', {
             publish,
+            confirm_ticket_changes: Boolean(state.has_history),
             floors: state.floors,
             seats: state.seats.map(({ color, unavailable, ...seat }) => seat),
+        });
+    }
+
+    function confirmTicketChanges() {
+        const dialog = el('confirm');
+        if (dialog.open) return Promise.resolve(false);
+        return new Promise((resolve) => {
+            dialog.returnValue = '';
+            dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+            dialog.showModal();
         });
     }
 
@@ -854,7 +867,7 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
             if (!saved) return;
             load(saved);
         }
-        load(await (state.enabled || state.frozen ? send('mode', 'PATCH', { enabled: !state.enabled }) : save(true)));
+        load(await (state.enabled ? send('mode', 'PATCH', { enabled: !state.enabled }) : save(true)));
     });
     for (const action of ['floor-add', 'start']) {
         actions[action].addEventListener('click', () => {

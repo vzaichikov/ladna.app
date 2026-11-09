@@ -33,8 +33,8 @@ class SaveFestivalHallLayout
             DB::transaction(function () use ($edition, $layout, &$created): void {
                 [$edition, $purchase] = $this->lockedEdition($edition);
                 $this->assertNoHolds($edition);
-                if ($edition->seats()->has('orderSeats')->exists()) {
-                    $this->reject('history');
+                if ($edition->seats()->has('orderSeats')->exists() && ! ($layout['confirm_ticket_changes'] ?? false)) {
+                    $this->reject('confirmation_required');
                 }
 
                 $types = $this->lockedTypes($edition);
@@ -51,6 +51,19 @@ class SaveFestivalHallLayout
                 $retained = $seats->pluck('id')->filter();
                 if ($retained->diff($stored->keys())->isNotEmpty()) {
                     $this->reject('seat_missing');
+                }
+
+                $submitted = $seats->keyBy('id');
+                $referenced = $edition->seats()->has('orderSeats')->get();
+                $liveIds = $this->reservations->live($edition)->pluck('id')->flip();
+                foreach ($referenced as $seat) {
+                    $replacement = $submitted->get($seat->id);
+                    if (! $replacement || (int) ($replacement['festival_admission_type_id'] ?? 0) !== (int) $seat->festival_admission_type_id) {
+                        $this->reject('referenced_seat');
+                    }
+                    if ($liveIds->has($seat->id) && $replacement['is_blocked']) {
+                        $this->reject('seat_unavailable');
+                    }
                 }
 
                 $previous = collect($edition->seating_floors ?? [])->keyBy('id');

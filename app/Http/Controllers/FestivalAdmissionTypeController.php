@@ -35,7 +35,7 @@ class FestivalAdmissionTypeController extends Controller
             'account' => $account,
             'edition' => $festivalEdition,
             'admissionType' => new FestivalAdmissionType(['is_active' => true, 'max_per_order' => 10, 'is_assigned_seating' => $request->boolean('assigned')]),
-            'isLocked' => false,
+            'hasSales' => false,
             'workspacePermissions' => $permissions,
             'onlineStream' => $festivalEdition->onlineStream,
         ]);
@@ -71,7 +71,7 @@ class FestivalAdmissionTypeController extends Controller
             'account' => $account,
             'edition' => $festivalEdition,
             'admissionType' => $festivalAdmissionType,
-            'isLocked' => $festivalAdmissionType->hasLockedPurchaseHistory(),
+            'hasSales' => $festivalAdmissionType->hasLockedPurchaseHistory(),
             'workspacePermissions' => $permissions,
             'onlineStream' => $festivalEdition->onlineStream,
         ]);
@@ -80,15 +80,20 @@ class FestivalAdmissionTypeController extends Controller
     public function update(FestivalAdmissionTypeRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalAdmissionType $festivalAdmissionType): RedirectResponse
     {
         $this->assertAdmissionType($account, $festivalEdition, $festivalAdmissionType);
+        $confirmed = $request->boolean('confirm_ticket_changes');
         $data = $this->admissionTypeData($request->validated(), $festivalEdition);
 
-        DB::transaction(function () use ($account, $festivalEdition, $festivalAdmissionType, $data): void {
+        DB::transaction(function () use ($account, $festivalEdition, $festivalAdmissionType, $data, $confirmed): void {
             $purchase = $this->lockedPurchase($festivalEdition);
             $admissionType = FestivalAdmissionType::query()->whereKey($festivalAdmissionType->id)->lockForUpdate()->firstOrFail();
             $this->assertAdmissionType($account, $festivalEdition, $admissionType);
 
-            if ($admissionType->hasLockedPurchaseHistory()) {
-                throw ValidationException::withMessages(['admission_type' => __('app.festival_admission_type_locked')]);
+            if ($admissionType->hasLockedPurchaseHistory() && ! $confirmed) {
+                throw ValidationException::withMessages(['admission_type' => __('app.festival_ticket_changes_confirmation_required')]);
+            }
+
+            if ($admissionType->hasPurchaseHistory() && $data['delivery_mode'] !== $admissionType->delivery_mode->value) {
+                throw ValidationException::withMessages(['delivery_mode' => __('app.festival_admission_delivery_history')]);
             }
 
             if ($admissionType->is_assigned_seating && $this->reservations->activeHolds($festivalEdition)->where('festival_admission_type_id', $admissionType->id)->exists()) {
@@ -165,7 +170,7 @@ class FestivalAdmissionTypeController extends Controller
         $data['early_bird_price_cents'] = filled($data['early_bird_price'] ?? null)
             ? (int) PaymentAmounts::decimalToCents($data['early_bird_price'])
             : null;
-        unset($data['price'], $data['early_bird_price']);
+        unset($data['price'], $data['early_bird_price'], $data['confirm_ticket_changes']);
 
         foreach (['early_bird_ends_at', 'sales_starts_at', 'sales_ends_at'] as $field) {
             $data[$field] = filled($data[$field] ?? null)
