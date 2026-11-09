@@ -15,6 +15,7 @@ class SmsGatewayResult
         public ?int $wholesaleCostMinor = null,
         public ?string $wholesaleCostCurrency = null,
         public ?SmsGatewayDeliveryStatus $deliveryStatus = null,
+        public bool $retryable = false,
     ) {
         $this->acceptanceStatus = $acceptanceStatus
             ?? ($sent ? SmsGatewayAcceptanceStatus::Accepted : SmsGatewayAcceptanceStatus::Rejected);
@@ -41,12 +42,14 @@ class SmsGatewayResult
     public static function failed(
         string $message,
         ?SmsGatewayDeliveryStatus $deliveryStatus = null,
+        bool $retryable = false,
     ): self {
         return new self(
             sent: false,
             message: $message,
             acceptanceStatus: SmsGatewayAcceptanceStatus::Rejected,
             deliveryStatus: $deliveryStatus,
+            retryable: $retryable,
         );
     }
 

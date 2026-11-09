@@ -23,15 +23,27 @@ use App\Models\Room;
 use App\Models\ScheduledClass;
 use App\Support\CustomerNotifications\ClassBookingNotificationCoordinator;
 use App\Support\CustomerNotifications\CustomerNotificationProducer;
+use App\Support\CustomerNotifications\CustomerNotificationSender;
+use App\Support\Sms\SmsRetryPolicy;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Psr7\Request as GuzzleRequest;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class CustomerNotificationQueueTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
 
     protected function tearDown(): void
     {
@@ -162,7 +174,139 @@ class CustomerNotificationQueueTest extends TestCase
     /**
      * @return array{account: Account, booking: ClassBooking, scheduledClass: ScheduledClass}
      */
-    private function notificationFixture(Carbon $startsAt): array
+    #[DataProvider('smsProviders')]
+    public function test_safe_sms_failures_recover_after_a_four_hour_outage_without_duplicate_acceptance(IntegrationProvider $provider): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 08:00:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(now()->setTime(20, 0), $provider);
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        $notification->update(['scheduled_send_at' => now()]);
+        $outageEndsAt = now()->addHours(4);
+        $accepted = 0;
+        $calls = 0;
+        Http::fake(function ($request) use ($outageEndsAt, $provider, &$accepted, &$calls) {
+            $calls++;
+            if (now()->lt($outageEndsAt)) {
+                throw new ConnectionException('Connection refused.', previous: new ConnectException(
+                    'Connection refused.', new GuzzleRequest('POST', $request->url()),
+                    handlerContext: ['errno' => 7, 'request_size' => 0, 'size_upload' => 0, 'http_code' => 0, 'redirect_count' => 0],
+                ));
+            }
+            $accepted++;
+
+            return Http::response(match ($provider) {
+                IntegrationProvider::Smsclub => ['success_request' => ['info' => ['recovered-id' => '+380501112233']]],
+                IntegrationProvider::Turbosms => ['response_result' => [['message_id' => 'recovered-id']]],
+                IntegrationProvider::Sendpulse => ['data' => ['id' => 'recovered-id']],
+            });
+        });
+        $sender = app(CustomerNotificationSender::class);
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $this->assertSame(1, $sender->sendPending()['processed']);
+            $notification->refresh();
+            if ($notification->status === CustomerNotificationStatus::Pending) {
+                $this->assertNotNull($notification->next_attempt_at);
+                $this->assertSame(0, $sender->sendPending()['processed']);
+                Carbon::setTestNow($notification->next_attempt_at);
+            } else {
+                break;
+            }
+        }
+
+        $this->assertSame(CustomerNotificationStatus::Sent, $notification->status);
+        $this->assertGreaterThan(3, $notification->attempts);
+        $this->assertSame('recovered-id', $notification->provider_message_id);
+        $this->assertSame(1, $accepted);
+        $this->assertSame(1, $booking->account->smsDeliveries()->where('status', SmsDeliveryStatus::Accepted)->count());
+        $this->assertSame(0, $sender->sendPending()['processed']);
+    }
+
+    /** @return array<string, array{IntegrationProvider}> */
+    public static function smsProviders(): array
+    {
+        return ['smsclub' => [IntegrationProvider::Smsclub], 'turbosms' => [IntegrationProvider::Turbosms], 'sendpulse' => [IntegrationProvider::Sendpulse]];
+    }
+
+    public function test_transient_retries_exhaust_the_shared_budget(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 08:00:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(now()->addHours(5));
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        $notification->update(['attempts' => SmsRetryPolicy::MaxAttempts - 1, 'scheduled_send_at' => now()]);
+        Http::fake(['*' => Http::response([], 429)]);
+
+        $this->assertSame(1, app(CustomerNotificationSender::class)->sendPending()['failed']);
+        $this->assertSame(CustomerNotificationStatus::Failed, $notification->refresh()->status);
+        $this->assertNull($notification->next_attempt_at);
+        $this->assertSame(0, app(CustomerNotificationSender::class)->sendPending()['processed']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_ambiguous_sms_is_never_retried_by_later_sender_runs(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 08:00:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(now()->addHours(5));
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        Http::fake(['*' => Http::response([], 503)]);
+
+        app(CustomerNotificationSender::class)->sendPending();
+        Carbon::setTestNow(now()->addHours(4));
+        $this->assertSame(0, app(CustomerNotificationSender::class)->sendPending()['processed']);
+        $this->assertSame('sms_delivery_outcome_unknown', $notification->refresh()->last_error);
+        $this->assertSame(CustomerNotificationStatus::Failed, $notification->status);
+        Http::assertSentCount(1);
+    }
+
+    public function test_cancelled_booking_is_not_sent_after_transient_failure(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 08:00:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(now()->addHours(5));
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        Http::fake(['*' => Http::response([], 429)]);
+        app(CustomerNotificationSender::class)->sendPending();
+        $booking->update(['status' => ClassBookingStatus::Cancelled]);
+        Carbon::setTestNow($notification->refresh()->next_attempt_at);
+
+        $this->assertSame(1, app(CustomerNotificationSender::class)->sendPending()['cancelled']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_transient_retry_waits_through_quiet_hours_before_recovering(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 18:59:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(Carbon::parse('2026-11-08 12:00:00', 'Europe/Kyiv'));
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        $notification->update(['scheduled_send_at' => now()]);
+        Http::fake(['*' => Http::sequence()->push([], 429)->push(['response_result' => [['message_id' => 'morning-id']]])]);
+        $sender = app(CustomerNotificationSender::class);
+
+        $this->assertSame(1, $sender->sendPending()['retried']);
+        Carbon::setTestNow($notification->refresh()->next_attempt_at);
+        $this->assertSame(1, $sender->sendPending()['rescheduled']);
+        $this->assertSame('2026-11-08 09:00:00', $notification->refresh()->scheduled_send_at->timezone('Europe/Kyiv')->format('Y-m-d H:i:s'));
+        Http::assertSentCount(1);
+        Carbon::setTestNow($notification->scheduled_send_at->copy()->timezone(config('app.timezone')));
+
+        $this->assertSame(1, $sender->sendPending()['sent']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_ordinary_sms_rejection_keeps_the_existing_three_attempt_limit(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-07 08:00:00', config('app.timezone')));
+        ['booking' => $booking] = $this->notificationFixture(now()->addHours(5));
+        $notification = app(CustomerNotificationProducer::class)->queueClassReminder($booking);
+        $notification->update(['attempts' => 2]);
+        Http::fake(['*' => Http::response([], 400)]);
+
+        $this->assertSame(1, app(CustomerNotificationSender::class)->sendPending()['failed']);
+        $this->assertSame(3, $notification->refresh()->attempts);
+        $this->assertNull($notification->next_attempt_at);
+        Http::assertSentCount(1);
+    }
+
+    private function notificationFixture(Carbon $startsAt, IntegrationProvider $provider = IntegrationProvider::Turbosms): array
     {
         $account = Account::factory()->create([
             'name' => 'Studio SMS',
@@ -174,7 +318,7 @@ class CustomerNotificationQueueTest extends TestCase
         CustomerAuthSetting::create([
             'account_id' => $account->id,
             'sms_sending_mode' => SmsSendingMode::OwnGateway->value,
-            'sms_provider' => IntegrationProvider::Turbosms->value,
+            'sms_provider' => $provider->value,
         ]);
         CustomerNotificationSetting::create([
             'account_id' => $account->id,
@@ -186,12 +330,15 @@ class CustomerNotificationQueueTest extends TestCase
             'scope_type' => IntegrationScope::Account->value,
             'scope_id' => $account->id,
             'account_id' => $account->id,
-            'provider' => IntegrationProvider::Turbosms->value,
+            'provider' => $provider->value,
             'category' => IntegrationCategory::Messaging->value,
             'is_enabled' => true,
             'credentials' => [
                 'api_token' => 'turbo-token',
                 'sms_sender' => 'Ladna',
+                'bearer_token' => 'smsclub-token',
+                'src_addr' => 'Ladna',
+                'api_key' => 'sendpulse-token',
             ],
         ]);
 

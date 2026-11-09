@@ -30,4 +30,10 @@ class StudioSmsSendResult
     {
         return $this->status === SmsDeliveryStatus::Unknown;
     }
+
+    public function retryable(): bool
+    {
+        return $this->status === SmsDeliveryStatus::Failed
+            && $this->delivery->error_code === SmsRetryPolicy::TransientFailure;
+    }
 }

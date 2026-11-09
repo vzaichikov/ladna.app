@@ -19,6 +19,7 @@ use App\Models\TelegramMessage;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\SmsRetryPolicy;
 use App\Support\Sms\StudioSmsSender;
 use App\Support\Telegram\CustomerTelegramLinkResolver;
 use App\Support\Telegram\TelegramClient;
@@ -299,7 +300,7 @@ class CustomerNotificationSender
         }
 
         if (! $sendResult->accepted()) {
-            return $this->retryOrFail($notification, $sendResult->message ?: 'customer_sms_send_failed');
+            return $this->retryOrFail($notification, $sendResult->message ?: 'customer_sms_send_failed', $sendResult->retryable());
         }
 
         $notification->forceFill([
@@ -469,13 +470,16 @@ class CustomerNotificationSender
         return $response?->successful() === true && $response->json('ok') === true;
     }
 
-    private function retryOrFail(CustomerNotification $notification, string $error): string
+    private function retryOrFail(CustomerNotification $notification, string $error, bool $transientSmsFailure = false): string
     {
-        $failed = $notification->attempts >= self::MaxAttempts;
+        $failed = $notification->attempts >= ($transientSmsFailure ? SmsRetryPolicy::MaxAttempts : self::MaxAttempts);
+        $backoffMinutes = $transientSmsFailure
+            ? SmsRetryPolicy::backoffMinutes($notification->attempts)
+            : $this->backoffMinutes($notification->attempts);
 
         $notification->forceFill([
             'status' => $failed ? CustomerNotificationStatus::Failed->value : CustomerNotificationStatus::Pending->value,
-            'next_attempt_at' => $failed ? null : now()->addMinutes($this->backoffMinutes($notification->attempts)),
+            'next_attempt_at' => $failed ? null : now()->addMinutes($backoffMinutes),
             'failed_at' => $failed ? now() : null,
             'last_error' => Str::limit($error, 2000),
         ])->save();

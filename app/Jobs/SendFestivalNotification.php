@@ -20,6 +20,7 @@ use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\SmsRetryPolicy;
 use App\Support\Sms\StudioSmsSender;
 use App\Support\Telegram\FestivalTelegramNotificationSender;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -34,7 +35,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
 {
     use FoundationQueueable;
 
-    public int $tries = 5;
+    public int $tries = FestivalNotification::MaxAttempts;
 
     public int $timeout = 60;
 
@@ -59,7 +60,7 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         FestivalEntrancePassEligibility $entrancePassEligibility,
         FestivalNotificationScenarioSettings $scenarioSettings,
     ): void {
-        $notification = FestivalNotification::query()->whereKey($this->notificationId)->first();
+        $notification = FestivalNotification::query()->readyForDelivery()->whereKey($this->notificationId)->first();
 
         if (! $notification || in_array($notification->status, [FestivalNotificationStatus::Sent, FestivalNotificationStatus::Cancelled, FestivalNotificationStatus::WaitingForSmsCredit], true)) {
             return;
@@ -121,11 +122,11 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
 
         $claimed = FestivalNotification::query()
             ->whereKey($notification->id)
-            ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
-            ->where('attempts', '<', $this->tries)
+            ->readyForDelivery()
             ->update([
                 'status' => FestivalNotificationStatus::Sending->value,
                 'attempts' => DB::raw('attempts + 1'),
+                'failure_reason' => null,
                 'updated_at' => now(),
             ]);
         if ($claimed !== 1) {
@@ -186,6 +187,17 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                 ->send($mail);
             $this->markSent($notification);
         } catch (Throwable $exception) {
+            if ($notification->channel === FestivalNotificationChannel::Sms && $notification->failure_reason !== 'sms_provider_rejected') {
+                $notification->forceFill([
+                    'status' => FestivalNotificationStatus::Failed,
+                    'failed_at' => now(),
+                    'failure_reason' => 'sms_delivery_outcome_unknown',
+                ])->save();
+                report($exception);
+
+                return;
+            }
+
             $notification->forceFill(['status' => FestivalNotificationStatus::Failed, 'failed_at' => now(), 'failure_reason' => str($exception->getMessage())->limit(1000)])->save();
             throw $exception;
         }
@@ -217,7 +229,9 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         $notification->forceFill([
             'status' => FestivalNotificationStatus::Failed,
             'failed_at' => now(),
-            'failure_reason' => str($exception?->getMessage() ?: 'festival_notification_delivery_failed')->limit(1000),
+            'failure_reason' => $notification->channel === FestivalNotificationChannel::Sms && $notification->failure_reason !== 'sms_provider_rejected'
+                ? 'sms_delivery_outcome_unknown'
+                : str($exception?->getMessage() ?: 'festival_notification_delivery_failed')->limit(1000),
         ])->save();
     }
 
@@ -261,6 +275,18 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
         }
 
         if (! $result->accepted()) {
+            if ($result->retryable()) {
+                $exhausted = $notification->attempts >= SmsRetryPolicy::MaxAttempts;
+                $notification->forceFill([
+                    'status' => $exhausted ? FestivalNotificationStatus::Failed : FestivalNotificationStatus::Pending,
+                    'failure_reason' => SmsRetryPolicy::TransientFailure,
+                    'failed_at' => $exhausted ? now() : null,
+                    'available_at' => $exhausted ? $notification->available_at : now()->addMinutes(SmsRetryPolicy::backoffMinutes($notification->attempts)),
+                ])->save();
+
+                return;
+            }
+
             $reason = $result->delivery->error_code ?: $result->message ?: 'festival_sms_send_failed';
             $notification->forceFill([
                 'status' => FestivalNotificationStatus::Failed,
@@ -269,7 +295,12 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
             ])->save();
 
             if (in_array($result->delivery->error_code, ['sms_provider_rejected'], true)) {
-                throw new RuntimeException($reason);
+                $exception = new RuntimeException($reason);
+                $notification->forceFill([
+                    'available_at' => now()->addSeconds($this->backoff[min($notification->attempts - 1, count($this->backoff) - 1)]),
+                ])->save();
+
+                throw $exception;
             }
 
             return;

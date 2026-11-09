@@ -39,6 +39,7 @@ use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\ResumeSmsNotificationsAfterTopUp;
 use App\Support\Sms\SmsAutoTopUpService;
+use App\Support\Sms\SmsRetryPolicy;
 use App\Support\Sms\StudioSmsSender;
 use App\Support\Sms\StudioSmsSendResult;
 use App\Support\Telegram\FestivalTelegramNotificationSender;
@@ -61,6 +62,167 @@ class FestivalNotificationDeliveryTest extends TestCase
 
         Queue::fake();
         Mail::fake();
+        Http::preventStrayRequests();
+    }
+
+    public function test_unknown_sms_is_not_retried_by_a_queued_job_or_dispatcher(): void
+    {
+        $notification = $this->smsNotification();
+        $this->mock(StudioSmsSender::class)->shouldReceive('send')->once()->andReturn(
+            new StudioSmsSendResult(new SmsDelivery(['status' => SmsDeliveryStatus::Unknown]), SmsDeliveryStatus::Unknown),
+        );
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        Queue::fake();
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+
+        $this->assertSame(1, $notification->refresh()->attempts);
+        $this->assertSame('sms_delivery_outcome_unknown', $notification->failure_reason);
+        Queue::assertNotPushed(SendFestivalNotification::class, fn ($job): bool => $job->notificationId === $notification->id);
+    }
+
+    public function test_interrupted_sms_is_held_as_unknown_instead_of_resent(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['status' => FestivalNotificationStatus::Sending, 'attempts' => 1]);
+        DB::table('festival_notifications')->where('id', $notification->id)->update(['updated_at' => now()->subMinutes(6)]);
+        Queue::fake();
+        $this->mock(StudioSmsSender::class)->shouldNotReceive('send');
+
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->refresh()->status);
+        $this->assertSame('sms_delivery_outcome_unknown', $notification->failure_reason);
+        $this->assertSame(1, $notification->attempts);
+        Queue::assertNotPushed(SendFestivalNotification::class, fn ($job): bool => $job->notificationId === $notification->id);
+    }
+
+    public function test_transient_sms_retries_follow_shared_backoff_and_can_recover_beyond_five_attempts(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['attempts' => 5, 'failure_reason' => SmsRetryPolicy::TransientFailure]);
+        $sender = $this->mock(StudioSmsSender::class);
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(
+            new SmsDelivery(['error_code' => SmsRetryPolicy::TransientFailure]), SmsDeliveryStatus::Failed,
+        ));
+
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(6, $notification->refresh()->attempts);
+        $this->assertSame(FestivalNotificationStatus::Pending, $notification->status);
+        $this->assertSame(SmsRetryPolicy::TransientFailure, $notification->failure_reason);
+        $this->assertTrue($notification->available_at->equalTo(now()->addMinutes(30)->startOfSecond()));
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        Queue::fake();
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+        Queue::assertNotPushed(SendFestivalNotification::class, fn ($job): bool => $job->notificationId === $notification->id);
+
+        $this->travel(31)->minutes();
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+        Queue::assertPushed(SendFestivalNotification::class, fn ($job): bool => $job->notificationId === $notification->id);
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(new SmsDelivery, SmsDeliveryStatus::Accepted));
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
+        $this->assertSame(7, $notification->attempts);
+        $this->travelBack();
+    }
+
+    public function test_transient_sms_budget_is_enforced_by_job_and_dispatcher(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['attempts' => SmsRetryPolicy::MaxAttempts - 1, 'failure_reason' => SmsRetryPolicy::TransientFailure]);
+        $this->mock(StudioSmsSender::class)->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(
+            new SmsDelivery(['error_code' => SmsRetryPolicy::TransientFailure]), SmsDeliveryStatus::Failed,
+        ));
+
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        Queue::fake();
+        $this->artisan('festivals:dispatch-notifications')->assertSuccessful();
+
+        $this->assertSame(SmsRetryPolicy::MaxAttempts, $notification->refresh()->attempts);
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->status);
+        Queue::assertNotPushed(SendFestivalNotification::class, fn ($job): bool => $job->notificationId === $notification->id);
+    }
+
+    public function test_explicit_rejection_retries_sms_without_falling_through_to_email(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['status' => FestivalNotificationStatus::Failed, 'attempts' => 1, 'failure_reason' => 'sms_provider_rejected']);
+        $sender = $this->mock(StudioSmsSender::class);
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(
+            new SmsDelivery(['error_code' => 'sms_provider_rejected']), SmsDeliveryStatus::Failed,
+        ));
+
+        try {
+            app()->call([new SendFestivalNotification($notification->id), 'handle']);
+            $this->fail('Explicit SMS rejection should retain the existing queue retry.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('sms_provider_rejected', $exception->getMessage());
+        }
+
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->refresh()->status);
+        $this->assertSame('sms_provider_rejected', $notification->failure_reason);
+        $this->assertSame(2, $notification->attempts);
+        $this->assertTrue($notification->available_at->isFuture());
+        Mail::assertNothingSent();
+
+        $this->travel(3)->minutes();
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(new SmsDelivery, SmsDeliveryStatus::Accepted));
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
+        $this->assertSame(3, $notification->attempts);
+        Mail::assertNothingSent();
+        $this->travelBack();
+    }
+
+    public function test_exception_after_a_previous_rejection_is_still_an_unknown_new_attempt(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['status' => FestivalNotificationStatus::Failed, 'attempts' => 1, 'failure_reason' => 'sms_provider_rejected']);
+        $this->mock(StudioSmsSender::class)->shouldReceive('send')->once()->andThrow(new \RuntimeException('Lost response.'));
+
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->refresh()->status);
+        $this->assertSame('sms_delivery_outcome_unknown', $notification->failure_reason);
+        $this->assertSame(2, $notification->attempts);
+        Mail::assertNothingSent();
+    }
+
+    public function test_sms_credit_resume_keeps_the_extended_transient_retry_budget(): void
+    {
+        $notification = $this->smsNotification();
+        $notification->update(['attempts' => 6, 'failure_reason' => SmsRetryPolicy::TransientFailure]);
+        $sender = $this->mock(StudioSmsSender::class);
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(new SmsDelivery, SmsDeliveryStatus::WaitingForCredit));
+        $this->mock(SmsAutoTopUpService::class)->shouldReceive('attempt')->once()->andReturnNull();
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+        $this->assertSame(FestivalNotificationStatus::WaitingForSmsCredit, $notification->refresh()->status);
+        $this->assertSame(1, app(ResumeSmsNotificationsAfterTopUp::class)->execute($notification->account));
+
+        $sender->shouldReceive('send')->once()->andReturn(new StudioSmsSendResult(new SmsDelivery, SmsDeliveryStatus::Accepted));
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
+        $this->assertSame(8, $notification->attempts);
+    }
+
+    private function smsNotification(): FestivalNotification
+    {
+        [, $edition, $portalUser] = $this->festival();
+        FestivalNotificationSetting::query()->create([
+            'account_id' => $edition->account_id,
+            'type' => FestivalNotificationType::Announcement,
+            'is_enabled' => true,
+            'is_optional' => true,
+            'send_sms' => true,
+        ]);
+        app(FestivalNotificationOutbox::class)->queue($portalUser, $edition, FestivalNotificationType::Announcement, ['subject' => 'Program update', 'body' => 'The program is ready.']);
+
+        return FestivalNotification::query()->where('account_id', $edition->account_id)->where('channel', FestivalNotificationChannel::Sms)->sole();
     }
 
     public function test_ticket_seat_summary_is_localized_and_sms_and_old_payloads_stay_compatible(): void

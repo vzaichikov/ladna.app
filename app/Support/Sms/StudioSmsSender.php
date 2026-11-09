@@ -171,14 +171,15 @@ class StudioSmsSender
         }
 
         if (! $result->sent || $result->acceptanceStatus === SmsGatewayAcceptanceStatus::Rejected) {
+            $errorCode = $result->retryable ? SmsRetryPolicy::TransientFailure : 'sms_provider_rejected';
             $delivery = $mode === SmsSendingMode::LadnaService
                 ? $this->wallets->release(
                     $delivery,
                     SmsDeliveryStatus::Failed,
-                    'sms_provider_rejected',
+                    $errorCode,
                     $result->message,
                 )
-                : $this->markOwnGatewayFailed($delivery, $result->message);
+                : $this->markOwnGatewayFailed($delivery, $result->message, $errorCode);
 
             return new StudioSmsSendResult($delivery, SmsDeliveryStatus::Failed, $result->message);
         }
@@ -252,11 +253,11 @@ class StudioSmsSender
         return new StudioSmsSendResult($delivery->refresh(), SmsDeliveryStatus::Failed, $message);
     }
 
-    private function markOwnGatewayFailed(SmsDelivery $delivery, ?string $message): SmsDelivery
+    private function markOwnGatewayFailed(SmsDelivery $delivery, ?string $message, string $errorCode): SmsDelivery
     {
         $delivery->forceFill([
             'status' => SmsDeliveryStatus::Failed,
-            'error_code' => 'sms_provider_rejected',
+            'error_code' => $errorCode,
             'last_error' => $this->sanitizedError($message),
             'failed_at' => now(),
         ])->save();

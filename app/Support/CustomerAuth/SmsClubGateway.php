@@ -2,6 +2,7 @@
 
 namespace App\Support\CustomerAuth;
 
+use App\Support\Sms\SmsGatewayTransport;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -36,10 +37,14 @@ class SmsClubGateway implements SmsGateway, SmsGatewayBalanceProvider, SmsGatewa
             $payload['integration_id'] = (string) $this->credentials['integration_id'];
         }
 
-        try {
-            $response = $this->request()->post('https://im.smsclub.mobi/sms/send', $payload);
-        } catch (ConnectionException) {
-            return SmsGatewayResult::unknown('Smsclub request outcome is unknown.');
+        $response = (new SmsGatewayTransport)->post(
+            'https://im.smsclub.mobi/sms/send',
+            (string) ($this->credentials['bearer_token'] ?? ''),
+            $payload,
+        );
+
+        if ($response instanceof SmsGatewayResult) {
+            return $response;
         }
 
         if ($response->successful()) {
@@ -52,11 +57,8 @@ class SmsClubGateway implements SmsGateway, SmsGatewayBalanceProvider, SmsGatewa
             return SmsGatewayResult::sent($providerMessageId);
         }
 
-        if ($response->serverError()) {
-            return SmsGatewayResult::unknown(sprintf(
-                'Smsclub request outcome is unknown after HTTP %d.',
-                $response->status(),
-            ));
+        if ($response->status() === 453) {
+            return SmsGatewayResult::unknown('Smsclub reports a previously submitted duplicate message.');
         }
 
         return SmsGatewayResult::failed(sprintf(

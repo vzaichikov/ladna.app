@@ -2,8 +2,7 @@
 
 namespace App\Support\CustomerAuth;
 
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\Http;
+use App\Support\Sms\SmsGatewayTransport;
 
 class TurboSmsGateway implements SmsGateway
 {
@@ -19,31 +18,28 @@ class TurboSmsGateway implements SmsGateway
 
     public function sendSms(string $phone, string $message): SmsGatewayResult
     {
-        try {
-            $response = Http::withToken((string) ($this->credentials['api_token'] ?? ''))
-                ->acceptJson()
-                ->connectTimeout(3)
-                ->timeout(10)
-                ->post('https://api.turbosms.ua/message/send.json', [
-                    'recipients' => [$phone],
-                    'sms' => [
-                        'sender' => (string) ($this->credentials['sms_sender'] ?? ''),
-                        'text' => $message,
-                    ],
-                ]);
-        } catch (ConnectionException) {
-            return SmsGatewayResult::unknown('TurboSMS request outcome is unknown.');
+        $response = (new SmsGatewayTransport)->post(
+            'https://api.turbosms.ua/message/send.json',
+            (string) ($this->credentials['api_token'] ?? ''),
+            [
+                'recipients' => [$phone],
+                'sms' => [
+                    'sender' => (string) ($this->credentials['sms_sender'] ?? ''),
+                    'text' => $message,
+                ],
+            ],
+        );
+
+        if ($response instanceof SmsGatewayResult) {
+            return $response;
         }
 
         if ($response->successful()) {
-            return SmsGatewayResult::sent((string) ($response->json('response_result.0.message_id') ?? ''));
-        }
+            $messageId = $response->json('response_result.0.message_id');
 
-        if ($response->serverError()) {
-            return SmsGatewayResult::unknown(sprintf(
-                'TurboSMS request outcome is unknown after HTTP %d.',
-                $response->status(),
-            ));
+            return is_scalar($messageId) && trim((string) $messageId) !== ''
+                ? SmsGatewayResult::sent(trim((string) $messageId))
+                : SmsGatewayResult::unknown('TurboSMS returned no message identifier.');
         }
 
         return SmsGatewayResult::failed($response->body() ?: 'TurboSMS request failed.');

@@ -5,13 +5,17 @@ namespace App\Models;
 use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
+use App\Support\Sms\SmsRetryPolicy;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['account_id', 'festival_portal_user_id', 'festival_edition_id', 'festival_entry_id', 'festival_ticket_order_id', 'telegram_chat_authorization_id', 'type', 'channel', 'status', 'recipient_email', 'recipient_phone', 'recipient_name', 'subject', 'text', 'dedupe_key', 'payload', 'attempts', 'available_at', 'sent_at', 'failed_at', 'cancelled_at', 'failure_reason'])]
 class FestivalNotification extends Model
 {
+    public const int MaxAttempts = 5;
+
     protected $attributes = ['channel' => 'email', 'status' => 'pending', 'attempts' => 0];
 
     protected function casts(): array
@@ -27,6 +31,29 @@ class FestivalNotification extends Model
             'failed_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    public function scopeReadyForDelivery(Builder $query): Builder
+    {
+        return $query
+            ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
+            ->where(fn (Builder $query) => $query->whereNull('available_at')->orWhere('available_at', '<=', now()))
+            ->where(fn (Builder $query) => $query
+                ->where(fn (Builder $query) => $query
+                    ->where('channel', FestivalNotificationChannel::Sms->value)
+                    ->whereIn('failure_reason', [SmsRetryPolicy::TransientFailure, 'sms_credit_restored_revalidation_required'])
+                    ->where('attempts', '<', SmsRetryPolicy::MaxAttempts))
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('attempts', '<', self::MaxAttempts)
+                    ->where(fn (Builder $query) => $query
+                        ->where('channel', '!=', FestivalNotificationChannel::Sms->value)
+                        ->orWhereNull('failure_reason')
+                        ->orWhereNotIn('failure_reason', [
+                            SmsRetryPolicy::TransientFailure,
+                            'sms_credit_restored_revalidation_required',
+                            'sms_delivery_outcome_unknown',
+                            'delivery_interrupted',
+                        ]))));
     }
 
     public function account(): BelongsTo

@@ -34,6 +34,35 @@ class StudioSmsSenderTest extends TestCase
 {
     use DatabaseTransactions;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Http::preventStrayRequests();
+    }
+
+    public function test_transient_rejection_releases_credit_and_recovery_charges_once(): void
+    {
+        [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);
+        Http::fake(['*' => Http::sequence()
+            ->push([], 429)
+            ->push(['success_request' => ['info' => ['recovered-id' => '+380501112233']]])]);
+        $sender = app(StudioSmsSender::class);
+        $failed = $sender->send($account, '+380501112233', 'Reminder', SmsDeliveryPurpose::CustomerNotification, idempotencyKey: 'transient-attempt-1');
+
+        $this->assertTrue($failed->retryable());
+        $this->assertSame(1_000, $wallet->refresh()->balance_cents);
+        $this->assertSame(0, $wallet->reserved_cents);
+        $this->assertSame($failed->delivery->id, $sender->send($account, '+380501112233', 'Reminder', SmsDeliveryPurpose::CustomerNotification, idempotencyKey: 'transient-attempt-1')->delivery->id);
+
+        $recovered = $sender->send($account, '+380501112233', 'Reminder', SmsDeliveryPurpose::CustomerNotification, idempotencyKey: 'transient-attempt-2');
+        $this->assertTrue($recovered->accepted());
+        $this->assertFalse($recovered->retryable());
+        $this->assertSame(900, $wallet->refresh()->balance_cents);
+        $this->assertSame(0, $wallet->reserved_cents);
+        $this->assertSame($recovered->delivery->id, $sender->send($account, '+380501112233', 'Reminder', SmsDeliveryPurpose::CustomerNotification, idempotencyKey: 'transient-attempt-2')->delivery->id);
+        Http::assertSentCount(2);
+    }
+
     public function test_ladna_service_reserves_and_charges_cyrillic_segments_without_storing_otp_plaintext(): void
     {
         [$account, $wallet] = $this->ladnaAccount(balanceCents: 1_000, segmentPriceCents: 100);

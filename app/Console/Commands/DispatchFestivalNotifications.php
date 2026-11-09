@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Actions\Festivals\FestivalNotificationOutbox;
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationStatus;
 use App\Enums\FestivalNotificationType;
 use App\Jobs\SendFestivalNotification;
@@ -38,6 +39,17 @@ class DispatchFestivalNotifications extends Command
 
         $recovered = FestivalNotification::query()
             ->where('status', FestivalNotificationStatus::Sending->value)
+            ->where('channel', FestivalNotificationChannel::Sms->value)
+            ->where('updated_at', '<=', now()->subMinutes(self::StaleSendingAfterMinutes))
+            ->update([
+                'status' => FestivalNotificationStatus::Failed->value,
+                'failed_at' => now(),
+                'failure_reason' => 'sms_delivery_outcome_unknown',
+                'updated_at' => now(),
+            ]);
+        $recovered += FestivalNotification::query()
+            ->where('status', FestivalNotificationStatus::Sending->value)
+            ->where('channel', '!=', FestivalNotificationChannel::Sms->value)
             ->where('updated_at', '<=', now()->subMinutes(self::StaleSendingAfterMinutes))
             ->update([
                 'status' => FestivalNotificationStatus::Failed->value,
@@ -46,9 +58,7 @@ class DispatchFestivalNotifications extends Command
                 'updated_at' => now(),
             ]);
         $notifications = FestivalNotification::query()
-            ->whereIn('status', [FestivalNotificationStatus::Pending->value, FestivalNotificationStatus::Failed->value])
-            ->where('attempts', '<', 5)
-            ->where(fn ($query) => $query->whereNull('available_at')->orWhere('available_at', '<=', now()))
+            ->readyForDelivery()
             ->orderBy('id')
             ->limit($limit)
             ->get();
