@@ -204,9 +204,10 @@ class FestivalPublicController extends Controller
 
         $iframeCheckout = $this->iframeCheckoutData($order);
         abort_if($iframeCheckout === null, 404);
+        $hostedCheckoutUrl = $iframeCompatibility->hostedCheckoutUrl($iframeCheckout['page_url']);
 
         if (! $iframeCompatibility->allowsTicketIframe($request->userAgent())) {
-            return redirect()->away($iframeCheckout['page_url']);
+            return redirect()->away($hostedCheckoutUrl)->withHeaders($this->privateHeaders());
         }
 
         return response()
@@ -214,6 +215,7 @@ class FestivalPublicController extends Controller
                 'account' => $account,
                 'order' => $order,
                 'pageUrl' => $iframeCheckout['page_url'],
+                'hostedCheckoutUrl' => $hostedCheckoutUrl,
                 'iframeOrigin' => $iframeCheckout['origin'],
                 'returnUrl' => $returnUrl,
                 'statusUrl' => route('public.festival-orders.status', [$account->slug, $accessToken]),

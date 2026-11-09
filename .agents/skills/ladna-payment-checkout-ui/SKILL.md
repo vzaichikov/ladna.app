@@ -44,11 +44,11 @@ description: Standardize Ladna public payment, ticket checkout, and ticket deliv
 - Apply the enabled flag only to customer-facing ticket purchases: Event tickets and Festival venue-admission tickets. Class-pass purchases, Festival participant/entry/step charges, Festival SaaS purchases, subscriptions, SMS, and every other payment form must remain external redirects.
 - Keep studio Monopay credentials account-scoped. The platform flag chooses presentation only and must not become a parallel merchant-credential source.
 - Create and persist the domain order before opening the iframe. Render the returned `pageUrl` only on the private account plus access-token payment route, and retain a resumable link from the pending order page.
-- Render the same responsive iframe flow on mobile and desktop. Use the full available width with a sensible desktop maximum, keep enough vertical height for the checkout, and include `allow="payment *"`; never redirect only because the viewport is narrow.
+- Use the full hosted checkout on Android and Apple mobile devices, including installed PWAs, so wallet and bank-app handoffs do not depend on a cross-origin frame. Keep the responsive iframe on other clients when enabled, with `allow="payment *"`; do not use viewport width as a browser capability check.
 - Once the Monopay iframe is loaded, treat it as the payment action. Do not repeat the emerald branded provider button above it; retain only a clearly worded separate-page fallback link and order navigation.
-- Accept iframe messages only from the exact trusted Monobank checkout origin and the expected frame window. Handle `close-button` by returning to the private order and accept only the `monobank:` scheme for `monopay-link` deep links.
+- Accept iframe messages only from the exact trusted Monobank checkout origin and the expected frame window. Handle `close-button` by returning to the private order. For `monopay-link`, support `monobank:` and the provider's `mono://mbnk.app` and `https://mbnk.app` links; reject other destinations, credentials, and non-default ports.
 - Treat the signed server webhook and persisted order status as authoritative. Poll the private status endpoint and never issue tickets from a frame message or browser return.
-- Keep a direct separate-page payment link as fallback, restrict `frame-src` to the trusted Monobank origin, and return private/no-store/no-referrer/nosniff headers on the iframe page.
+- Keep a direct separate-page payment link as fallback, using the hosted `/{invoice}` route rather than `/frame/{invoice}` for the same invoice. Apply this conversion when resuming an existing iframe invoice on mobile too; never create another invoice for a presentation change. Restrict `frame-src` to the trusted Monobank origin and return private/no-store/no-referrer/nosniff headers on the iframe page.
 
 ## Ticket Payment Timing
 

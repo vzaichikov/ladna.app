@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.178.1',
+                'date' => '2026-11-09',
+                'title' => 'Mobile ticket payment fixes',
+                'items' => [
+                    'Festival and Event ticket payments open the full Monopay checkout on Android and iOS, including installed Ladna apps.',
+                    'Desktop checkout supports current Monobank app links, and opening payment on a separate page keeps the same invoice in the full checkout.',
+                ],
+                'meta' => 'Payment compatibility fix.',
+            ],
+            [
                 'version' => '0.178.0',
                 'date' => '2026-11-05',
                 'title' => 'Festival seating, tickets and entrance monitoring',
@@ -1666,6 +1676,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.178.1',
+                'date' => '2026-11-09',
+                'title' => 'Виправлення оплати квитків на телефоні',
+                'items' => [
+                    'Оплата квитків на фестивалі та події відкриває повну сторінку Monopay на Android та iOS, зокрема у встановленому застосунку Ladna.',
+                    'Оплата на комп’ютері підтримує актуальні посилання застосунку monobank. Перехід на окрему сторінку відкриває повну оплату з тим самим рахунком.',
+                ],
+                'meta' => 'Виправлення сумісності оплати.',
+            ],
             [
                 'version' => '0.178.0',
                 'date' => '2026-11-05',

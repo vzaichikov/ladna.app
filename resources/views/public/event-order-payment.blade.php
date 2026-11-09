@@ -51,7 +51,7 @@
                 </div>
 
                 <div class="mt-4 flex flex-wrap justify-center gap-2">
-                    <x-ui.button :href="$pageUrl" variant="secondary" target="_blank" rel="noopener noreferrer" data-event-monopay-direct-link>
+                    <x-ui.button :href="$hostedCheckoutUrl" variant="secondary" target="_blank" rel="noopener noreferrer" data-event-monopay-direct-link>
                         <x-ui.icon name="external-link" class="h-4 w-4" />
                         {{ __('app.event_monopay_open_direct') }}
                     </x-ui.button>

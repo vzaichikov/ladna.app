@@ -22,6 +22,7 @@ use App\Support\Payments\MonopayCheckoutSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class EventCheckoutDeliveryTest extends TestCase
@@ -242,7 +243,7 @@ class EventCheckoutDeliveryTest extends TestCase
         Http::fake([
             'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
                 'invoiceId' => 'event-mono-v2',
-                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-v2',
+                'pageUrl' => 'https://pay.monobank.ua/frame/event-mono-v2',
                 'status' => 'created',
             ]),
         ]);
@@ -267,7 +268,9 @@ class EventCheckoutDeliveryTest extends TestCase
             ->assertHeader('Content-Security-Policy', "frame-src https://pay.monobank.ua; frame-ancestors 'self'")
             ->assertHeader('Permissions-Policy', 'payment=(self "https://pay.monobank.ua")')
             ->assertSee('data-event-monopay-iframe', false)
-            ->assertSee('src="https://pay.monobank.ua/invoice/event-mono-v2"', false)
+            ->assertSee('src="https://pay.monobank.ua/frame/event-mono-v2"', false)
+            ->assertSee('href="https://pay.monobank.ua/event-mono-v2"', false)
+            ->assertDontSee('href="https://pay.monobank.ua/frame/event-mono-v2"', false)
             ->assertSee('allow="payment *"', false)
             ->assertSee('width="100%"', false)
             ->assertSee('height="700"', false)
@@ -296,22 +299,23 @@ class EventCheckoutDeliveryTest extends TestCase
         $this->get($paymentUrl)->assertRedirect($returnUrl);
     }
 
-    public function test_events_monopay_v2_sends_iphone_checkout_directly_to_monopay(): void
+    #[DataProvider('mobilePaymentUserAgents')]
+    public function test_events_monopay_v2_sends_mobile_checkout_directly_to_monopay(string $userAgent): void
     {
         app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
         [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
         Http::preventStrayRequests();
         Http::fake([
             'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
-                'invoiceId' => 'event-mono-iphone',
-                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-iphone',
+                'invoiceId' => 'event-mono-mobile',
+                'pageUrl' => 'https://pay.monobank.ua/event-mono-mobile',
                 'status' => 'created',
             ]),
         ]);
 
-        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+        $this->withHeader('User-Agent', $userAgent)
             ->post(route('public.events.checkout', [$account->slug, $event->slug]), $this->paidEventPayload($ticketType))
-            ->assertRedirect('https://pay.monobank.ua/invoice/event-mono-iphone');
+            ->assertRedirect('https://pay.monobank.ua/event-mono-mobile');
 
         $order = EventOrder::query()->whereBelongsTo($account)->sole();
         $this->assertSame('redirect', data_get($order->gateway_checkout_payload, '_launcher.type'));
@@ -320,7 +324,8 @@ class EventCheckoutDeliveryTest extends TestCase
             && ! array_key_exists('displayType', $request->data()));
     }
 
-    public function test_existing_event_iframe_invoice_redirects_when_opened_on_an_iphone(): void
+    #[DataProvider('mobilePaymentUserAgents')]
+    public function test_existing_event_iframe_invoice_opens_hosted_checkout_on_mobile_without_another_invoice(string $userAgent): void
     {
         app(MonopayCheckoutSettings::class)->saveEventIframeV2Enabled(true);
         [$account, $event, $ticketType] = $this->paidEventCheckoutContext();
@@ -328,7 +333,7 @@ class EventCheckoutDeliveryTest extends TestCase
         Http::fake([
             'https://api.monobank.ua/api/merchant/invoice/create' => Http::response([
                 'invoiceId' => 'event-mono-existing-iframe',
-                'pageUrl' => 'https://pay.monobank.ua/invoice/event-mono-existing-iframe',
+                'pageUrl' => 'https://pay.monobank.ua/frame/event-mono-existing-iframe',
                 'status' => 'created',
             ]),
         ]);
@@ -340,9 +345,13 @@ class EventCheckoutDeliveryTest extends TestCase
         $order = EventOrder::query()->whereBelongsTo($account)->sole();
         $this->assertSame('iframe', data_get($order->gateway_checkout_payload, '_launcher.type'));
 
-        $this->withHeader('User-Agent', $this->iphoneUserAgent())
+        $this->withHeader('User-Agent', $userAgent)
             ->get(route('public.event-orders.payment', [$account->slug, $order->access_token_encrypted]))
-            ->assertRedirect('https://pay.monobank.ua/invoice/event-mono-existing-iframe');
+            ->assertRedirect('https://pay.monobank.ua/event-mono-existing-iframe');
+
+        Http::assertSentCount(1);
+        $this->assertSame('event-mono-existing-iframe', $order->refresh()->gateway_invoice_id);
+        $this->assertSame('https://pay.monobank.ua/frame/event-mono-existing-iframe', data_get($order->gateway_checkout_payload, 'response.pageUrl'));
     }
 
     public function test_events_monopay_v2_rejects_an_untrusted_iframe_checkout_url(): void
@@ -714,9 +723,14 @@ class EventCheckoutDeliveryTest extends TestCase
         ]);
     }
 
-    private function iphoneUserAgent(): string
+    /** @return array<string, array{string}> */
+    public static function mobilePaymentUserAgents(): array
     {
-        return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1';
+        return [
+            'iphone' => ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 Version/18.6 Mobile/15E148 Safari/604.1'],
+            'android_chrome_and_installed_pwa' => ['Mozilla/5.0 (Linux; Android 15; SM-S921B) AppleWebKit/537.36 Chrome/142.0.0.0 Mobile Safari/537.36'],
+            'android_tablet' => ['Mozilla/5.0 (Linux; Android 15; SM-X910) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36'],
+        ];
     }
 
     /**

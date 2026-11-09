@@ -10186,8 +10186,11 @@ function initEventMonopayIframes(root = document) {
 
             try {
                 const deepLink = new URL(payload.value);
+                const isMonobankLink = deepLink.protocol === 'monobank:';
+                const isMonoAppLink = ['mono:', 'https:'].includes(deepLink.protocol)
+                    && deepLink.hostname === 'mbnk.app';
 
-                if (deepLink.protocol === 'monobank:') {
+                if ((isMonobankLink || isMonoAppLink) && !deepLink.username && !deepLink.password && !deepLink.port) {
                     window.location.assign(deepLink.href);
                 }
             } catch {}

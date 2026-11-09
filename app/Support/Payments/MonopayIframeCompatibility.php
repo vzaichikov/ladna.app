@@ -3,6 +3,7 @@
 namespace App\Support\Payments;
 
 use Illuminate\Support\Str;
+use Illuminate\Support\Uri;
 
 class MonopayIframeCompatibility
 {
@@ -12,6 +13,14 @@ class MonopayIframeCompatibility
             'iphone',
             'ipad',
             'ipod',
+            'android',
         ]);
+    }
+
+    public function hostedCheckoutUrl(string $pageUrl): string
+    {
+        $uri = Uri::of($pageUrl);
+
+        return (string) $uri->withPath(Str::replaceStart('frame/', '', $uri->path()));
     }
 }
