@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Actions\Festivals\ReconcileFestivalEntrancePasses;
+use App\Enums\FestivalNotificationChannel;
 use App\Enums\FestivalNotificationType;
+use App\Jobs\SendFestivalNotification;
+use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
@@ -74,7 +77,8 @@ class FestivalPortalTicketsTest extends TestCase
         [$account, $edition, $purchaser] = $this->festival();
         $admissionType = FestivalAdmissionType::factory()->for($edition)->create([
             'account_id' => $account->id,
-            'inventory' => 5,
+            'name' => 'Вхід для друзів — тестовий квиток',
+            'inventory' => 10,
             'price_cents' => 0,
         ]);
 
@@ -90,7 +94,7 @@ class FestivalPortalTicketsTest extends TestCase
             'buyer_email' => 'friend@example.test',
             'buyer_email_confirmation' => 'friend@example.test',
             'buyer_phone' => '+380501112233',
-            'items' => [$admissionType->id => 1],
+            'items' => [$admissionType->id => 8],
             'terms' => '1',
         ]);
 
@@ -99,7 +103,33 @@ class FestivalPortalTicketsTest extends TestCase
         $this->assertSame($purchaser->id, $order->purchaser_festival_portal_user_id);
         $this->assertSame('friend@example.test', $order->buyer_email);
         $this->assertNotSame($purchaser->id, $order->festival_portal_user_id);
-        $this->assertSame(1, $order->tickets()->count());
+        $this->assertSame(8, $order->tickets()->count());
+
+        $notification = FestivalNotification::query()
+            ->where('festival_ticket_order_id', $order->id)
+            ->where('channel', FestivalNotificationChannel::Email->value)
+            ->sole();
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        Mail::assertSent(FestivalPortalMail::class, 'friend@example.test');
+        $mail = Mail::sent(FestivalPortalMail::class)->sole();
+        $this->assertFalse($mail->hasTo($purchaser->email));
+        $this->assertCount(8, $mail->tickets);
+        foreach ($order->tickets()->orderBy('id')->get() as $index => $ticket) {
+            $this->assertSame($ticket->code, $mail->tickets[$index]['code']);
+            $this->assertSame(
+                route('public.festival-tickets.qr', [$account->slug, $order->access_token_encrypted, $ticket->code]),
+                $mail->tickets[$index]['qr_url'],
+            );
+        }
+        $this->assertCount(1, $mail->rawAttachments);
+        $attachment = $mail->rawAttachments[0];
+        $this->assertSame('festival-tickets-'.$order->order_id.'.pdf', $attachment['name']);
+        $this->assertSame('application/pdf', $attachment['options']['mime']);
+        $this->assertStringStartsWith('%PDF-', $attachment['data']);
+        $this->assertSame(8, preg_match_all('/\/Type\s*\/Page\b/', $attachment['data']));
+        $this->assertGreaterThanOrEqual(8, preg_match_all('/\/Subtype\s*\/Image\b/', $attachment['data']));
+        $this->assertLessThan(500_000, strlen($attachment['data']), 'Eight ticket pages must remain small enough for email delivery.');
 
         $this->actingAs($purchaser, 'festival')
             ->get(route('festival.portal.tickets.index', [$account->slug, 'tab' => 'friends']))

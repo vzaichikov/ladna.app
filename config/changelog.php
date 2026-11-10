@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.180.1',
+                'date' => '2026-11-10',
+                'title' => 'Reliable Festival ticket emails',
+                'items' => ['Festival ticket PDFs are smaller for group purchases, and email delivery failures remain visible for retry.'],
+                'meta' => 'Festival ticket delivery fix.',
+            ],
+            [
                 'version' => '0.180.0',
                 'date' => '2026-11-09',
                 'title' => 'Festival tickets directly in your email',
@@ -1704,6 +1711,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.180.1',
+                'date' => '2026-11-10',
+                'title' => 'Надійніша доставка квитків фестивалю',
+                'items' => ['PDF із квитками займає менше місця для групових покупок, а помилки доставки листів залишаються видимими для повторної відправки.'],
+                'meta' => 'Festival ticket delivery fix.',
+            ],
             [
                 'version' => '0.180.0',
                 'date' => '2026-11-09',

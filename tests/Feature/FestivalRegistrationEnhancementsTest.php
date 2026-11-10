@@ -32,6 +32,7 @@ use App\Support\Festivals\FestivalPaymentService;
 use App\Support\Payments\PaymentCallbackResult;
 use App\Support\Payments\PaymentCallbackStatus;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -39,6 +40,13 @@ use Tests\TestCase;
 class FestivalRegistrationEnhancementsTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Mail::fake();
+    }
 
     public function test_first_application_submission_uses_submission_date_for_age_rules(): void
     {

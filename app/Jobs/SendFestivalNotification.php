@@ -21,6 +21,7 @@ use App\Models\FestivalTicket;
 use App\Models\FestivalTicketOrder;
 use App\Support\Festivals\FestivalNotificationScenarioSettings;
 use App\Support\Festivals\FestivalTicketPdf;
+use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliverySettingsResolver;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\Sms\SmsAutoTopUpService;
@@ -34,6 +35,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Traits\Localizable;
 use RuntimeException;
+use Symfony\Component\Mime\Email;
 use Throwable;
 
 class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
@@ -209,7 +211,10 @@ class SendFestivalNotification implements ShouldBeUnique, ShouldQueue
                 actionUrl: $actionUrl,
                 messageLocale: $locale,
                 tickets: $tickets,
-            ))->from($mailSettings->fromEmail, $mailSettings->fromName);
+            ))->from($mailSettings->fromEmail, $mailSettings->fromName)
+                ->withSymfonyMessage(static function (Email $message): void {
+                    $message->getHeaders()->addTextHeader(LadnaTransactionalTransport::RequireDeliveryHeader, '1');
+                });
 
             if ($ticketOrder) {
                 $pdf = $this->withLocale($locale, fn (): string => app(FestivalTicketPdf::class)->render($account, $ticketOrder)->output());

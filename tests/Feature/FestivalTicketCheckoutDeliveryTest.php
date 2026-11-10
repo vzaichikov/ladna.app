@@ -8,6 +8,7 @@ use App\Enums\FestivalTicketStatus;
 use App\Enums\IntegrationCategory;
 use App\Enums\IntegrationProvider;
 use App\Enums\IntegrationScope;
+use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
 use App\Models\FestivalCategory;
@@ -24,6 +25,7 @@ use App\Support\Payments\MonopayCheckoutSettings;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -34,6 +36,7 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
 
     public function test_public_festival_checkout_creates_an_internal_guest_and_issues_a_free_ticket_without_login_otp_or_provider(): void
     {
+        Mail::fake();
         [$account, $edition] = $this->festival();
         $type = FestivalAdmissionType::factory()->for($edition)->create([
             'account_id' => $account->id,
@@ -64,6 +67,7 @@ class FestivalTicketCheckoutDeliveryTest extends TestCase
         $this->assertSame('viewer@example.com', $guest->email_normalized);
         $this->assertSame('+380501112233', $guest->phone_normalized);
         $this->assertSame(1, $order->tickets()->count());
+        Mail::assertSent(FestivalPortalMail::class, 'viewer@example.com');
         $this->assertDatabaseMissing('festival_otp_challenges', ['account_id' => $account->id]);
     }
 

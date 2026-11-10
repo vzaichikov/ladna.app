@@ -52,6 +52,7 @@ use App\Support\Sms\StudioSmsSendResult;
 use App\Support\Telegram\FestivalTelegramNotificationSender;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Mail\MailManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -59,17 +60,21 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 class FestivalNotificationDeliveryTest extends TestCase
 {
     use DatabaseTransactions;
 
+    private MailManager $mailManager;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Queue::fake();
+        $this->mailManager = app(MailManager::class);
         Mail::fake();
         Http::preventStrayRequests();
     }
@@ -661,6 +666,52 @@ class FestivalNotificationDeliveryTest extends TestCase
 
         $this->assertSame(FestivalNotificationStatus::Cancelled, $disabledLater->refresh()->status);
         $this->assertSame('festival_sms_scenario_disabled', $disabledLater->failure_reason);
+    }
+
+    public function test_rejected_ticket_email_stays_failed_instead_of_succeeding_through_log_and_can_retry(): void
+    {
+        [, , , $notification] = $this->ticketEmailContext();
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'engine' => 'sendpulse_api',
+                'fallback_engine' => 'log',
+                'mail_from_email' => 'mail@ladna.test',
+                'mail_from_name' => 'Ladna',
+                'sendpulse_api_key' => 'festival-mail-test-key',
+            ],
+        ]);
+        Mail::swap($this->mailManager);
+        Http::fake([
+            'https://api.sendpulse.com/smtp/emails' => Http::sequence()
+                ->push(['message' => 'Message size limit exceeded'], 422)
+                ->push(['result' => true, 'id' => 'festival-ticket-message']),
+        ]);
+
+        try {
+            app()->call([new SendFestivalNotification($notification->id), 'handle']);
+            $this->fail('A log fallback must not mark the Festival ticket email as sent.');
+        } catch (TransportException $exception) {
+            $this->assertStringContainsString('Message size limit exceeded', $exception->getMessage());
+        }
+
+        $notification->refresh();
+        $this->assertSame(FestivalNotificationStatus::Failed, $notification->status);
+        $this->assertNull($notification->sent_at);
+        $this->assertNotNull($notification->failed_at);
+        $this->assertSame(1, $notification->attempts);
+        $this->assertStringContainsString('Message size limit exceeded', $notification->failure_reason);
+        $this->assertTrue(FestivalNotification::query()->readyForDelivery()->whereKey($notification->id)->exists());
+
+        app()->call([new SendFestivalNotification($notification->id), 'handle']);
+
+        $this->assertSame(FestivalNotificationStatus::Sent, $notification->refresh()->status);
+        $this->assertNotNull($notification->sent_at);
+        $this->assertNull($notification->failed_at);
+        $this->assertSame(2, $notification->attempts);
+        Http::assertSentCount(2);
     }
 
     public function test_ticket_email_includes_current_valid_venue_qrs_and_one_pdf_without_persisting_bearers(): void

@@ -34,12 +34,20 @@ use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Telegram\TelegramMiniAppInitDataValidator;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class FestivalTelegramMiniAppTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Mail::fake();
+    }
 
     public function test_sponsor_templates_are_limited_to_flagged_sponsors_of_visible_series_editions(): void
     {

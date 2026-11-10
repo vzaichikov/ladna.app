@@ -21,6 +21,7 @@ use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalTelegramIdentityLinker;
 use App\Support\Payments\PaymentGatewayRegistry;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Mockery;
 use Tests\TestCase;
@@ -28,6 +29,13 @@ use Tests\TestCase;
 class FestivalPromoCodeTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Mail::fake();
+    }
 
     public function test_finance_owner_manages_an_edition_scoped_promo_code_and_used_codes_cannot_be_deleted(): void
     {

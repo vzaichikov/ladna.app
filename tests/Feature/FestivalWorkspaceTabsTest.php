@@ -35,12 +35,20 @@ use App\Models\User;
 use App\Support\Festivals\FestivalApplicationIndex;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FestivalWorkspaceTabsTest extends TestCase
 {
     use DatabaseTransactions;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Mail::fake();
+    }
 
     public function test_promo_pages_have_a_clickable_ticket_hub_ancestor(): void
     {

@@ -7,6 +7,7 @@ use App\Enums\IntegrationProvider;
 use App\Mail\TransactionalMail;
 use App\Models\EmailDelivery;
 use App\Models\IntegrationSetting;
+use App\Support\Mail\LadnaTransactionalTransport;
 use App\Support\Mail\MailDeliveryTransportResolver;
 use App\Support\Mail\SendPulseApiTransport;
 use App\Support\Mail\TrackedMailTransport;
@@ -265,6 +266,45 @@ class SendPulseMailTransportTest extends TestCase
         $this->assertTrue($delivery->fallback_used);
         $this->assertNotNull($delivery->provider_message_id);
         $this->assertStringContainsString('Sender rejected.', $delivery->last_error);
+        Http::assertSentCount(1);
+    }
+
+    public function test_required_delivery_refuses_an_explicit_log_transport(): void
+    {
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => [
+                'engine' => 'log',
+                'mail_from_email' => 'mail@ladna.test',
+                'mail_from_name' => 'Ladna',
+            ],
+        ]);
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('the log transport does not send email');
+
+        app(MailDeliveryTransportResolver::class)->resolve(requireDelivery: true);
+    }
+
+    public function test_required_delivery_header_is_consumed_before_the_provider_send(): void
+    {
+        Http::fake([
+            'https://api.sendpulse.com/smtp/emails' => Http::response(['result' => true, 'id' => 'required-delivery-id']),
+        ]);
+        IntegrationSetting::factory()->create([
+            'provider' => IntegrationProvider::MailDelivery->value,
+            'category' => IntegrationCategory::Email->value,
+            'is_enabled' => true,
+            'credentials' => $this->mailDeliveryCredentials('required-api-key'),
+        ]);
+        $email = $this->email();
+        $email->getHeaders()->addTextHeader(LadnaTransactionalTransport::RequireDeliveryHeader, '1');
+
+        $sent = app(LadnaTransactionalTransport::class)->send($email);
+
+        $this->assertSame('required-delivery-id', $sent->getMessageId());
+        $this->assertFalse($email->getHeaders()->has(LadnaTransactionalTransport::RequireDeliveryHeader));
         Http::assertSentCount(1);
     }
 

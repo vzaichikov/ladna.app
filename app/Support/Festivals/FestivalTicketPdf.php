@@ -18,6 +18,7 @@ class FestivalTicketPdf
         $venue = collect([$order->edition->venue_name, $order->edition->venue_address])->filter()->join(' · ');
 
         return Pdf::setOptions([
+            'isFontSubsettingEnabled' => true,
             'isRemoteEnabled' => false,
             'isPhpEnabled' => false,
             'isJavascriptEnabled' => false,
