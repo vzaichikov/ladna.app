@@ -748,7 +748,8 @@ class CustomerDashboardTest extends TestCase
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
             ->assertDontSee('other_studio_bot', false)
-            ->assertDontSee('data-customer-telegram-bot-link="customer-dashboard"', false);
+            ->assertDontSee('data-customer-telegram-bot-link="customer-dashboard"', false)
+            ->assertSee('href="'.route('customer.events.index', $account->slug).'"', false);
 
         TelegramBotInstallation::factory()->for($account)->create([
             'profile' => TelegramBotProfile::Customer->value,
@@ -760,7 +761,7 @@ class CustomerDashboardTest extends TestCase
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
             ->assertSee('data-customer-telegram-bot-link="customer-dashboard"', false)
-            ->assertSee($botLink, false)
+            ->assertSeeInOrder([$botLink, route('customer.events.index', $account->slug)], false)
             ->assertSee(__('app.customer_telegram_booking_bot', [], 'uk'))
             ->assertSee('assets/social/telegram.svg', false);
 
@@ -773,7 +774,8 @@ class CustomerDashboardTest extends TestCase
         $this->actingAs($customer, 'customer')
             ->get(route('customer.dashboard', $account->slug))
             ->assertOk()
-            ->assertDontSee($botLink, false);
+            ->assertDontSee($botLink, false)
+            ->assertSee('href="'.route('customer.events.index', $account->slug).'"', false);
     }
 
     /**

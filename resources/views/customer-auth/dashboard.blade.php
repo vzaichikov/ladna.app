@@ -53,27 +53,7 @@
 
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
         <section class="mx-auto max-w-6xl">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div class="flex items-center gap-4">
-                    <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-200 bg-white shadow-xs">
-                        <img src="{{ $account->logoUrl() }}" alt="" class="max-h-10 max-w-10 object-contain">
-                    </span>
-                    <div>
-                        <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>
-                        <h1 class="text-2xl font-semibold text-slate-950">{{ __('app.customer_portal') }}</h1>
-                    </div>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <x-ui.button :href="route('customer.profile.edit', $account->slug)" variant="secondary">
-                        <x-ui.icon name="user-round" class="h-4 w-4" />
-                        {{ __('app.profile') }}
-                    </x-ui.button>
-                    <form method="POST" action="{{ route('customer.logout', $account->slug) }}">
-                        @csrf
-                        <x-ui.button type="submit" variant="ghost">{{ __('app.logout') }}</x-ui.button>
-                    </form>
-                </div>
-            </div>
+            <x-customer-auth.header :account="$account" :customer="$customer" :title="__('app.customer_portal')" />
 
             @if (session('status'))
                 <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
@@ -83,34 +63,6 @@
             @if ($errors->any())
                 <div class="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
                     {{ $errors->first() }}
-                </div>
-            @endif
-
-            @if ($publicLocations->isNotEmpty() || $customerTelegramBotLink)
-                <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-                    @foreach ($publicLocations as $publicLocation)
-                        <x-ui.button :href="route('public.price', [$account->slug, $publicLocation->slug])" variant="secondary" class="w-full sm:w-auto">
-                            <x-ui.icon name="class-pass-plans" class="h-4 w-4" />
-                            {{ __('app.customer_dashboard_buy_class_pass') }}
-                        </x-ui.button>
-                        <x-ui.button :href="route('public.schedule', [$account->slug, $publicLocation->slug])" variant="secondary" class="w-full sm:w-auto">
-                            <x-ui.icon name="schedule" class="h-4 w-4" />
-                            {{ __('app.customer_dashboard_book_class') }}
-                        </x-ui.button>
-                    @endforeach
-                    @if ($customerTelegramBotLink)
-                        <x-ui.button
-                            :href="$customerTelegramBotLink"
-                            variant="secondary"
-                            class="w-full sm:w-auto"
-                            target="_blank"
-                            rel="noopener"
-                            data-customer-telegram-bot-link="customer-dashboard"
-                        >
-                            <img src="{{ asset('assets/social/telegram.svg') }}" alt="" class="h-4 w-4 shrink-0">
-                            {{ __('app.customer_telegram_booking_bot') }}
-                        </x-ui.button>
-                    @endif
                 </div>
             @endif
 

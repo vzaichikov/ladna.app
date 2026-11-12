@@ -8,16 +8,8 @@
 
 @section('content')
     <main class="min-h-[calc(100vh-8rem)] bg-canvas px-5 py-8">
-        <section class="mx-auto max-w-2xl">
-            <div class="flex items-center gap-4">
-                <span class="flex h-14 w-14 items-center justify-center rounded-2xl border border-stone-200 bg-white shadow-xs">
-                    <img src="{{ $account->logoUrl() }}" alt="" class="max-h-10 max-w-10 object-contain">
-                </span>
-                <div>
-                    <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>
-                    <h1 class="text-2xl font-semibold text-slate-950">{{ __('app.profile') }}</h1>
-                </div>
-            </div>
+        <section class="mx-auto max-w-6xl">
+            <x-customer-auth.header :account="$account" :customer="$customer" :title="__('app.profile')" />
 
             @unless ($customer->profileIsComplete())
                 <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
@@ -31,7 +23,7 @@
                 </div>
             @endif
 
-            <x-customer-auth.profile-form :account="$account" :customer="$customer" :profile-phone-merge="$profilePhoneMerge" />
+            <x-customer-auth.profile-form :account="$account" :customer="$customer" :profile-phone-merge="$profilePhoneMerge" :show-portal-link="false" />
         </section>
     </main>
 @endsection

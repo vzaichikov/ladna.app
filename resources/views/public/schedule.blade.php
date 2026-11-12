@@ -7,8 +7,13 @@
 @endsection
 
 @section('content')
-    <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
-        <section class="mx-auto max-w-6xl px-5 sm:px-8 {{ $isEmbed ? 'py-5' : 'py-10' }}">
+    <main @class(['min-h-[calc(100vh-8rem)] bg-canvas text-slate-950', 'px-5' => $customer && ! $isEmbed])>
+        <section @class([
+            'mx-auto',
+            $isEmbed ? 'py-5' : 'py-10',
+            'max-w-6xl' => $customer && ! $isEmbed,
+            'max-w-6xl px-5 sm:px-8' => ! $customer || $isEmbed,
+        ])>
             @php
                 $showDateAnchors = count($dateAnchors) > 1 && in_array($selectedPeriod, ['week', 'month'], true);
                 $routeName = $isEmbed ? 'public.schedule.embed' : 'public.schedule';
@@ -21,55 +26,57 @@
                 $formatDate = static fn ($date): string => \App\Support\DateTimePresenter::date($date, $account) ?? __('app.not_set');
             @endphp
 
-            <header class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
-                <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div class="flex gap-4">
-                        <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-slate-50 shadow-xs">
-                            <img src="{{ $account->logoUrl() }}" alt="" class="max-h-12 max-w-12 object-contain">
-                        </span>
-                        <div>
-                            <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>
-                            <h1 class="mt-2 text-4xl font-semibold leading-tight text-slate-950">{{ $location->name }} {{ __('app.schedule') }}</h1>
-                            @if ($location->address)
-                                <p class="mt-3 max-w-2xl text-slate-500">{{ $location->address }}</p>
-                            @endif
+            <x-customer-auth.navigation :account="$account" :customer="$isEmbed ? null : $customer" :has-dashboard-link="true">
+                <header class="rounded-2xl border border-stone-200 bg-white p-6 shadow-crm">
+                    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="flex gap-4">
+                            <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-stone-200 bg-slate-50 shadow-xs">
+                                <img src="{{ $account->logoUrl() }}" alt="" class="max-h-12 max-w-12 object-contain">
+                            </span>
+                            <div>
+                                <div class="text-sm font-semibold uppercase text-brand-600">{{ $account->name }}</div>
+                                <h1 class="mt-2 text-4xl font-semibold leading-tight text-slate-950">{{ $location->name }} {{ __('app.schedule') }}</h1>
+                                @if ($location->address)
+                                    <p class="mt-3 max-w-2xl text-slate-500">{{ $location->address }}</p>
+                                @endif
+                            </div>
                         </div>
-                    </div>
-                    <div class="flex flex-col gap-3 lg:items-end">
-                        <div class="flex flex-wrap gap-2 lg:justify-end">
-                            @foreach ($manualCtaOptions as $manualCtaOption)
-                                <x-ui.button type="button" variant="{{ $manualCtaOption['kind'] === \App\Enums\ScheduleKind::PrivateLesson ? 'brand' : 'secondary' }}" data-public-manual-booking-mock="{{ $manualCtaOption['kind']->value }}">
-                                    <x-ui.icon :name="$manualCtaOption['kind'] === \App\Enums\ScheduleKind::PrivateLesson ? 'user' : 'rooms'" class="h-4 w-4" />
-                                    {{ $manualCtaOption['label'] }}
-                                </x-ui.button>
-                            @endforeach
-                        </div>
-                        <div class="flex flex-wrap items-center gap-3 lg:justify-end">
-                            @if ($customer)
-                                <a
-                                    href="{{ route('customer.dashboard', $account->slug) }}"
-                                    class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
-                                    data-customer-dashboard-link
-                                >
-                                    <x-ui.icon name="user" class="h-3.5 w-3.5" />
-                                    {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
-                                </a>
-                            @else
-                                <a href="{{ route('customer.studio.login', $account->slug) }}" class="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
-                                    <x-ui.icon name="log-in" class="h-3.5 w-3.5" />
-                                    {{ __('app.customer_login') }}
-                                </a>
-                            @endif
+                        <div class="flex flex-col gap-3 lg:items-end">
+                            <div class="flex flex-wrap gap-2 lg:justify-end">
+                                @foreach ($manualCtaOptions as $manualCtaOption)
+                                    <x-ui.button type="button" variant="{{ $manualCtaOption['kind'] === \App\Enums\ScheduleKind::PrivateLesson ? 'brand' : 'secondary' }}" data-public-manual-booking-mock="{{ $manualCtaOption['kind']->value }}">
+                                        <x-ui.icon :name="$manualCtaOption['kind'] === \App\Enums\ScheduleKind::PrivateLesson ? 'user' : 'rooms'" class="h-4 w-4" />
+                                        {{ $manualCtaOption['label'] }}
+                                    </x-ui.button>
+                                @endforeach
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+                                @if ($customer)
+                                    <a
+                                        href="{{ route('customer.dashboard', $account->slug) }}"
+                                        class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
+                                        data-customer-dashboard-link
+                                    >
+                                        <x-ui.icon name="user" class="h-3.5 w-3.5" />
+                                        {{ __('app.public_schedule_logged_in_as', ['name' => $customerDisplayName ?? __('app.customer_section')]) }}
+                                    </a>
+                                @else
+                                    <a href="{{ route('customer.studio.login', $account->slug) }}" class="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs">
+                                        <x-ui.icon name="log-in" class="h-3.5 w-3.5" />
+                                        {{ __('app.customer_login') }}
+                                    </a>
+                                @endif
 
-                            <x-ui.public-legal-links
-                                :account="$account"
-                                :return-url="request()->fullUrl()"
-                                :show-offer="false"
-                            />
+                                <x-ui.public-legal-links
+                                    :account="$account"
+                                    :return-url="request()->fullUrl()"
+                                    :show-offer="false"
+                                />
+                            </div>
                         </div>
                     </div>
-                </div>
-            </header>
+                </header>
+            </x-customer-auth.navigation>
 
             @if (session('status'))
                 <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">

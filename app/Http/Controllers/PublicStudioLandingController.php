@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\BuildStudioPublicListings;
 use App\Models\Account;
 use App\Models\Customer;
 use App\Support\Telegram\CustomerTelegramLinkResolver;
@@ -12,8 +13,11 @@ use Illuminate\View\View;
 
 class PublicStudioLandingController extends Controller
 {
-    public function __invoke(string $accountSlug, CustomerTelegramLinkResolver $telegramLinks): View
-    {
+    public function __invoke(
+        string $accountSlug,
+        CustomerTelegramLinkResolver $telegramLinks,
+        BuildStudioPublicListings $buildListings,
+    ): View {
         $account = Account::active()
             ->where('slug', $accountSlug)
             ->firstOrFail();
@@ -24,38 +28,12 @@ class PublicStudioLandingController extends Controller
             ->active()
             ->orderBy('name')
             ->get(['id', 'account_id', 'name', 'slug', 'address', 'google_maps_embed_url']);
-        $events = $account->events()
-            ->published()
-            ->upcoming()
-            ->select(['id', 'account_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])
-            ->with(['media' => fn ($query) => $query
-                ->select(['id', 'event_id', 'image_path', 'alt_text', 'sort_order', 'is_cover'])
-                ->where('is_cover', true)])
-            ->orderBy('starts_at')
-            ->orderBy('id')
-            ->limit(6)
-            ->get();
-        $festivals = collect();
-
-        if ($account->enable_festivals) {
-            $festivals = $account->festivalEditions()
-                ->published()->publiclyVisible()
-                ->upcoming()
-                ->where('show_on_studio_page', true)
-                ->select(['id', 'account_id', 'festival_series_id', 'slug', 'title', 'summary', 'starts_at', 'ends_at', 'timezone'])
-                ->with('coverMedia')
-                ->orderBy('starts_at')
-                ->orderBy('id')
-                ->limit(6)
-                ->get();
-        }
 
         return view('public.studio', [
             'account' => $account,
             'customer' => $this->currentCustomerFor($account),
             'locations' => $locations,
-            'events' => $events,
-            'festivals' => $festivals,
+            ...$buildListings($account),
             'customerTelegramBotPublicStudioLink' => $telegramLinks->linkForPlacement(
                 $account,
                 CustomerTelegramLinkResolver::PlacementPublicStudio,

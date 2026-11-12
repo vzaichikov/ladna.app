@@ -17,9 +17,16 @@
         };
     @endphp
 
-    <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
-        <section class="mx-auto max-w-6xl px-4 py-4 sm:px-6">
-            @include('public._compact-header')
+    <main @class(['min-h-[calc(100vh-8rem)] bg-canvas text-slate-950', 'px-5' => $customer && ! $isEmbed])>
+        <section @class([
+            'mx-auto',
+            'py-4',
+            'max-w-6xl' => $customer && ! $isEmbed,
+            'max-w-6xl px-4 sm:px-6' => ! $customer || $isEmbed,
+        ])>
+            <x-customer-auth.navigation :account="$account" :customer="$isEmbed ? null : $customer" :has-dashboard-link="true">
+                @include('public._compact-header')
+            </x-customer-auth.navigation>
 
             @if ($priceGroups->isNotEmpty())
                 @php

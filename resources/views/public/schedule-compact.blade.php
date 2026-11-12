@@ -3,7 +3,7 @@
 @section('title', $account->name.' '.$location->name.' '.strtolower(__('app.schedule')))
 
 @section('publicFooter')
-    <x-ui.powered-footer :account="$account" :show-locale-switcher="! $isEmbed" class="mx-auto max-w-4xl bg-canvas px-4 pb-6 sm:px-6" />
+    <x-ui.powered-footer :account="$account" :show-locale-switcher="! $isEmbed" :class="$customer && ! $isEmbed ? 'mx-auto max-w-6xl bg-canvas px-5 pb-8 sm:px-8' : 'mx-auto max-w-4xl bg-canvas px-4 pb-6 sm:px-6'" />
 @endsection
 
 @section('content')
@@ -32,9 +32,16 @@
         $manualDateLabel = $compact['selectedDate']->translatedFormat('D, j F');
     @endphp
 
-    <main class="min-h-[calc(100vh-8rem)] bg-canvas text-slate-950">
-        <section class="mx-auto max-w-4xl px-4 sm:px-6 {{ $isEmbed ? 'py-3' : 'py-4' }}">
-            @include('public._compact-header')
+    <main @class(['min-h-[calc(100vh-8rem)] bg-canvas text-slate-950', 'px-5' => $customer && ! $isEmbed])>
+        <section @class([
+            'mx-auto',
+            $isEmbed ? 'py-3' : 'py-4',
+            'max-w-6xl' => $customer && ! $isEmbed,
+            'max-w-4xl px-4 sm:px-6' => ! $customer || $isEmbed,
+        ])>
+            <x-customer-auth.navigation :account="$account" :customer="$isEmbed ? null : $customer" :has-dashboard-link="true">
+                @include('public._compact-header')
+            </x-customer-auth.navigation>
 
             @if (session('status'))
                 <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">

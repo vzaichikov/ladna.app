@@ -58,6 +58,7 @@ Route::prefix('{accountSlug}/customer')
 
             Route::middleware(EnsureCustomerProfileIsComplete::class)->group(function (): void {
                 Route::get('/', [CustomerAuthController::class, 'studioDashboard'])->name('dashboard');
+                Route::get('events', [CustomerAuthController::class, 'events'])->name('events.index');
                 Route::get('profile', [CustomerAuthController::class, 'editProfile'])->name('profile.edit');
                 Route::patch('bookings/{classBooking}/cancel', CustomerBookingCancellationController::class)->name('bookings.cancel');
                 Route::get('purchases/{customerPurchase}/return', CustomerPurchaseReturnController::class)->name('purchases.return');

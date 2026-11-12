@@ -8,6 +8,7 @@ use App\Enums\TelegramBotMode;
 use App\Enums\TelegramBotProfile;
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\Event;
 use App\Models\FestivalEdition;
 use App\Models\FestivalSeries;
 use App\Models\Location;
@@ -123,6 +124,61 @@ class PublicStudioLandingTest extends TestCase
             ->assertDontSee($customer->name)
             ->assertDontSee('data-customer-dashboard-link', false)
             ->assertSee('href="'.route('customer.studio.login', $otherAccount->slug).'"', false);
+    }
+
+    public function test_customer_catalog_reuses_studio_listings_and_links_directly_to_public_pages(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $customer = Customer::factory()->for($account)->create();
+        $event = Event::factory()->published()->for($account)->create();
+        $draftEvent = Event::factory()->for($account)->create();
+        $series = FestivalSeries::factory()->for($account)->create();
+        $editions = FestivalEdition::factory()->published()->for($series)->for($account);
+        $festival = $editions->create(['show_on_studio_page' => true]);
+        $privateFestival = $editions->create([
+            'show_on_studio_page' => true,
+            'is_private' => true,
+        ]);
+        $unlistedFestival = $editions->create(['show_on_studio_page' => false]);
+        $otherAccount = Account::factory()->create();
+        $otherEvent = Event::factory()->published()->for($otherAccount)->create();
+        $catalogUrl = route('customer.events.index', $account->slug);
+        $eventUrl = route('public.events.show', [$account->slug, $event->slug]);
+        $festivalUrl = route('public.festivals.show', [$account->slug, $festival->slug]);
+
+        $this->get($catalogUrl)->assertRedirect(route('customer.studio.login', $account->slug));
+
+        $this->actingAs($customer, 'customer')
+            ->get(route('customer.dashboard', $account->slug))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'href="'.route('public.studio', $account->slug).'"',
+                'href="'.$catalogUrl.'"',
+                'href="'.route('public.studio', $account->slug).'"',
+                'href="'.$catalogUrl.'"',
+            ], false);
+
+        $this->get($catalogUrl)
+            ->assertOk()
+            ->assertSee($eventUrl, false)
+            ->assertSee($festivalUrl, false)
+            ->assertDontSee($draftEvent->title)
+            ->assertDontSee($otherEvent->title)
+            ->assertDontSee($privateFestival->title)
+            ->assertDontSee($unlistedFestival->title);
+
+        $this->get(route('customer.events.index', $otherAccount->slug))->assertNotFound();
+        $this->get(route('customer.studio.login', $account->slug))->assertRedirect(route('customer.dashboard', $account->slug));
+        $this->get($eventUrl)->assertOk()->assertSee($event->title);
+        $this->get($festivalUrl)->assertOk()->assertSee($festival->title);
+
+        $account->update(['enable_festivals' => false]);
+
+        $this->get($catalogUrl)
+            ->assertOk()
+            ->assertSee($eventUrl, false)
+            ->assertDontSee($festivalUrl, false)
+            ->assertDontSee('data-public-festivals-rail', false);
     }
 
     public function test_public_studio_bot_placements_are_independent_and_tenant_scoped(): void

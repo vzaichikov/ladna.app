@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.181.0',
+                'date' => '2026-11-12',
+                'title' => 'Studio events and Festivals in the customer portal',
+                'items' => [
+                    'Open the studio homepage from the first navigation button or find upcoming events and Festivals in the customer portal.',
+                    'Use the mobile menu to navigate between customer pages. The profile, schedule and class-pass price list match the portal width on desktop.',
+                ],
+                'meta' => 'Customer portal navigation and listings.',
+            ],
+            [
                 'version' => '0.180.1',
                 'date' => '2026-11-10',
                 'title' => 'Reliable Festival ticket emails',
@@ -1711,6 +1721,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.181.0',
+                'date' => '2026-11-12',
+                'title' => 'Події та фестивалі студії в кабінеті клієнта',
+                'items' => [
+                    'Перша кнопка в меню відкриває сторінку студії. Найближчі події та фестивалі можна знайти в окремому розділі кабінету.',
+                    'На телефоні між сторінками кабінету можна переходити через меню. На комп’ютері профіль, розклад і прайс абонементів мають таку саму ширину, як і кабінет.',
+                ],
+                'meta' => 'Навігація й афіша в кабінеті клієнта.',
+            ],
             [
                 'version' => '0.180.1',
                 'date' => '2026-11-10',

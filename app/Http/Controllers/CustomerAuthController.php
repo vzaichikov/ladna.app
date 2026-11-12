@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\BuildStudioPublicListings;
 use App\Actions\MergeCustomerIdentityByVerifiedPhone;
 use App\Enums\ClassBookingStatus;
 use App\Enums\ScheduledClassStatus;
@@ -25,7 +26,6 @@ use App\Support\CustomerAuth\TurnstileVerifier;
 use App\Support\PhoneNumberNormalizer;
 use App\Support\PublicClassPassCheckoutContext;
 use App\Support\SaasBilling\AccountSubscriptionAccess;
-use App\Support\Telegram\CustomerTelegramLinkResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
@@ -454,7 +454,7 @@ class CustomerAuthController extends Controller
         return $this->loginCustomer($customer, $account);
     }
 
-    public function studioDashboard(Request $request, string $accountSlug, CustomerTelegramLinkResolver $telegramLinks): View
+    public function studioDashboard(Request $request, string $accountSlug): View
     {
         $account = $this->account($accountSlug);
         $customer = $this->customerForAccount($account);
@@ -464,10 +464,6 @@ class CustomerAuthController extends Controller
             $request->query('tab') === 'history', $request->has('booking_history_page') => 'history',
             default => 'bookings',
         };
-        $publicLocations = $account->locations()
-            ->active()
-            ->orderBy('name')
-            ->get(['id', 'account_id', 'name', 'slug']);
         $purchaseHistory = $customer->purchases()
             ->with(['customerClassPass', 'classPassPlan', 'location'])
             ->newestFirst()
@@ -510,12 +506,19 @@ class CustomerAuthController extends Controller
             'upcomingBookings' => $upcomingBookings,
             'bookingHistory' => $bookingHistory,
             'bookingHistoryCount' => $bookingHistoryCount,
-            'publicLocations' => $publicLocations,
             'purchaseHistory' => $purchaseHistory,
-            'customerTelegramBotLink' => $telegramLinks->linkForPlacement(
-                $account,
-                CustomerTelegramLinkResolver::PlacementCustomerDashboard,
-            ),
+        ]);
+    }
+
+    public function events(string $accountSlug, BuildStudioPublicListings $buildListings): View
+    {
+        $account = $this->account($accountSlug);
+        $customer = $this->customerForAccount($account);
+
+        return view('customer-auth.events', [
+            'account' => $account,
+            'customer' => $customer,
+            ...$buildListings($account),
         ]);
     }
 
