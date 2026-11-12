@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.181.1',
+                'date' => '2026-11-12',
+                'title' => 'Correct class-pass expiry after class cancellation',
+                'items' => ['The class pass “Use by” date reflects the extra days granted when the studio cancels a class. Restoring the class removes those extra days from the date.'],
+                'meta' => 'Class-pass expiry fix.',
+            ],
+            [
                 'version' => '0.181.0',
                 'date' => '2026-11-12',
                 'title' => 'Studio events and Festivals in the customer portal',
@@ -1721,6 +1728,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.181.1',
+                'date' => '2026-11-12',
+                'title' => 'Правильний строк дії абонемента після скасування заняття',
+                'items' => ['Дата «Використати до» враховує додаткові дні, які студія нараховує після скасування заняття. Якщо заняття відновити, ці дні віднімаються.'],
+                'meta' => 'Виправлення строку дії абонементів.',
+            ],
             [
                 'version' => '0.181.0',
                 'date' => '2026-11-12',

@@ -280,6 +280,7 @@ class CancelScheduledClassForStudio
             $passUpdates += [
                 'validity_days' => $newValidityDays,
                 'total_validity_days' => $newTotalValidityDays,
+                'usable_until_at' => null,
             ];
             $attributes += [
                 'added_validity_days' => $extendDaysCount,

@@ -183,6 +183,7 @@ class RestoreScheduledClassCancellation
                 $passUpdates += [
                     'validity_days' => (int) $customerClassPass->validity_days - (int) $effect->added_validity_days,
                     'total_validity_days' => (int) $customerClassPass->total_validity_days - (int) $effect->added_validity_days,
+                    'usable_until_at' => null,
                 ];
             }
 

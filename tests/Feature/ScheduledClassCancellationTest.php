@@ -171,6 +171,39 @@ class ScheduledClassCancellationTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_total_class_pass_expiry_tracks_multiple_cancellations_and_partial_restoration(): void
+    {
+        $this->travelTo(Carbon::parse('2026-06-20 10:00:00', 'UTC'));
+
+        $context = $this->context([
+            'class_pass_cancellation_rules' => [
+                'return_sessions_enabled' => true,
+                'return_sessions_count' => 1,
+                'extend_days_enabled' => true,
+                'extend_days_count' => 1,
+            ],
+        ]);
+        $pass = $this->issuePass($context, sessions: 2);
+        $firstClass = $this->scheduledClass($context, '2026-06-21 10:00:00');
+        $secondClass = $this->scheduledClass($context, '2026-06-22 10:00:00');
+        $this->bookCustomer($context, $firstClass);
+        $this->bookCustomer($context, $secondClass);
+
+        $this->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $firstClass]))
+            ->assertOk();
+        $this->assertSame('2026-12-18 10:00:00', $pass->fresh()->usable_until_at?->toDateTimeString());
+
+        $this->patchJson(route('dashboard.accounts.scheduled-classes.cancel', [$context['account'], $secondClass]))
+            ->assertOk();
+        $this->assertSame('2026-12-19 10:00:00', $pass->fresh()->usable_until_at?->toDateTimeString());
+
+        $this->patchJson(route('dashboard.accounts.scheduled-classes.restore', [$context['account'], $firstClass]))
+            ->assertOk();
+        $this->assertSame('2026-12-18 10:00:00', $pass->fresh()->usable_until_at?->toDateTimeString());
+
+        $this->travelBack();
+    }
+
     public function test_return_one_session_releases_cancelled_class_without_extra_session(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-20 10:00:00', 'UTC'));
