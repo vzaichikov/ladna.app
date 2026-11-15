@@ -897,7 +897,6 @@
                     @yield('content')
                 </main>
 
-                <x-festivals.sponsors :sponsors="$festivalFooterSponsors" :strip="true" class="mx-auto w-full max-w-6xl px-5 py-6 sm:px-8" />
                 <x-ui.app-footer :version="$applicationVersion" />
             </div>
         </div>

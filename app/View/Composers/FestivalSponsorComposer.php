@@ -68,7 +68,7 @@ class FestivalSponsorComposer
     /** @param array<string, mixed> $data */
     private function edition(Request $request, Account $account, array $data): ?FestivalEdition
     {
-        if ($request->routeIs('dashboard.accounts.festivals.*', 'festival.portal.*')) {
+        if ($request->routeIs('festival.portal.*')) {
             $edition = $request->route('festivalEdition');
 
             if ($edition instanceof FestivalEdition) {

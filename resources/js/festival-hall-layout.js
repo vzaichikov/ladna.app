@@ -1,3 +1,5 @@
+const seatStatusColors = { blocked: '#e2e8f0', held: '#d97706', assigned: '#7c3aed' };
+
 function dot(color) {
     const element = document.createElement('span');
     element.className = 'inline-block size-3 shrink-0 rounded-full border border-slate-500';
@@ -97,9 +99,11 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
         node.classList.toggle('bg-rose-50', error);
     }
 
+    const seatStatus = seat => seat.reservation ?? (seat.is_blocked ? 'blocked' : 'available');
+
     function seatLabel(seat) {
         return [seat.section, `${text[seat.group_kind]} ${seat.group_label}`, `${text.seat_number} ${seat.seat_number}`,
-            seatType(seat)?.price, seat.accessibility, seat.sightline, seat.unavailable ? text.unavailable : (seat.is_blocked ? text.blocked : text.available)]
+            seatType(seat)?.price, seat.accessibility, seat.sightline, text[seatStatus(seat)]]
             .filter(Boolean).join(' · ');
     }
 
@@ -122,15 +126,16 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
             button.type = 'button';
             button.className = 'absolute z-10 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white text-[9px] font-bold text-white shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900';
             setPosition(button, seat);
-            button.style.backgroundColor = seat.unavailable ? '#64748b' : (seat.is_blocked ? '#e2e8f0' : (seatType(seat)?.color || seat.color || '#64748b'));
-            if (seat.is_blocked && !seat.unavailable) {
+            const status = seatStatus(seat);
+            button.style.backgroundColor = seatStatusColors[status] ?? (seatType(seat)?.color || seat.color || '#64748b');
+            if (status === 'blocked') {
                 button.classList.replace('text-white', 'text-slate-700');
             }
             button.classList.toggle('cursor-move', canEdit() && tool === 'select');
             button.classList.toggle('ring-2', isSelected);
             button.classList.toggle('ring-offset-2', isSelected);
             button.classList.toggle('ring-amber-500', isSelected);
-            button.textContent = seat.unavailable || seat.is_blocked ? '×' : seat.seat_number;
+            button.textContent = status === 'blocked' ? '×' : seat.seat_number;
             button.title = seatLabel(seat);
             button.setAttribute('aria-label', button.title);
             button.setAttribute('aria-pressed', String(isSelected));
@@ -289,8 +294,8 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
         el('selection-actions').hidden = !selected.size || preview;
         el('floor-panel').hidden = !canEdit() || !currentFloor();
         actions.clear.hidden = !selected.size && !selectedBlock;
-        actions.block.disabled = !seats.some((seat) => !seat.unavailable && !seat.is_blocked);
-        actions.unblock.disabled = !seats.some((seat) => !seat.unavailable && seat.is_blocked);
+        actions.block.disabled = !seats.some((seat) => seatStatus(seat) === 'available');
+        actions.unblock.disabled = !seats.some((seat) => seatStatus(seat) === 'blocked');
         el('type-hint').textContent = selected.size ? text.apply_type_hint : text.default_type_hint;
         el('ticket-types').replaceChildren(...[...typeMap.values()].map((type) => {
             const button = document.createElement('button');
@@ -447,10 +452,10 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
             item.className = 'flex items-center gap-1.5';
             item.append(dot(type.color), document.createTextNode(`${type.name} · ${type.price}`));
             return item;
-        }), ...[[text.blocked, '#e2e8f0'], [text.unavailable, '#64748b']].map(([label, color]) => {
+        }), ...Object.entries(seatStatusColors).map(([status, color]) => {
             const item = document.createElement('li');
             item.className = 'flex items-center gap-1.5';
-            item.append(dot(color), document.createTextNode(label));
+            item.append(dot(color), document.createTextNode(text[status]));
             return item;
         }));
 
@@ -518,7 +523,7 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
             publish,
             confirm_ticket_changes: Boolean(state.has_history),
             floors: state.floors,
-            seats: state.seats.map(({ color, unavailable, ...seat }) => seat),
+            seats: state.seats.map(({ color, reservation, ...seat }) => seat),
         });
     }
 
@@ -1076,7 +1081,7 @@ export function initFestivalHallLayout(root = document.querySelector('[data-hall
     });
 
     async function blockSeats(blocked) {
-        const seats = [...selected].filter((seat) => !seat.unavailable);
+        const seats = [...selected].filter((seat) => !seat.reservation);
         if (!canEdit()) {
             const ids = seats.map((seat) => seat.id).filter(Boolean);
             if (ids.length) load(await send('block', 'PATCH', { blocked, seat_ids: ids }));

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Festivals\SaveFestivalHallLayout;
 use App\Enums\FestivalAdmissionDeliveryMode;
+use App\Enums\FestivalTicketOrderStatus;
 use App\Http\Requests\FestivalHallLayoutRequest;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
@@ -118,17 +119,20 @@ class FestivalHallLayoutController extends Controller
     /** @return array<string,mixed> */
     private function present(FestivalEdition $edition): array
     {
-        $liveSeatIds = $this->reservations->live($edition)->pluck('id')->flip();
-        $seats = $edition->seats()->orderBy('id')->get();
+        $heldSeatIds = $this->reservations->activeHolds($edition)->pluck('id')->flip();
+        $seats = $edition->seats()
+            ->withExists(['orderSeats as has_paid_assignment' => fn ($query) => $query
+                ->whereHas('item.order', fn ($orders) => $orders->where('status', FestivalTicketOrderStatus::Paid->value))])
+            ->orderBy('id')->get();
 
         return [
             'floors' => $edition->seating_floors ?? [],
             'seats' => $seats->map(fn ($seat): array => [
                 ...$seat->only('id', 'floor_key', 'section', 'group_kind', 'group_label', 'seat_number', 'x', 'y', 'festival_admission_type_id', 'accessibility', 'sightline', 'is_blocked'),
-                'unavailable' => $liveSeatIds->has($seat->id),
+                'reservation' => $seat->has_paid_assignment ? 'assigned' : ($heldSeatIds->has($seat->id) ? 'held' : null),
             ]),
             'has_history' => $edition->seats()->has('orderSeats')->exists(),
-            'has_holds' => $this->reservations->activeHolds($edition)->exists(),
+            'has_holds' => $heldSeatIds->isNotEmpty(),
             'enabled' => $edition->assigned_seating_enabled,
         ];
     }

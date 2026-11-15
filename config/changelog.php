@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.182.1',
+                'date' => '2026-11-16',
+                'title' => 'Clearer seat statuses in Festival administration',
+                'items' => [
+                    'The hall editor and ticket map show issued tickets in purple and temporary checkout holds in amber.',
+                    'Festival sponsor banners are hidden in the staff workspace.',
+                ],
+                'meta' => 'Festival admin display improvements.',
+            ],
+            [
                 'version' => '0.182.0',
                 'date' => '2026-11-15',
                 'title' => 'Advance cash sales for Festival tickets',
@@ -1738,6 +1748,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.182.1',
+                'date' => '2026-11-16',
+                'title' => 'Зрозуміліші позначки місць в адмінці фестивалю',
+                'items' => [
+                    'У редакторі залу та на схемі квитків фіолетовим позначено видані квитки, а бурштиновим — тимчасовий резерв під час оформлення.',
+                    'Банери спонсорів приховано в робочому просторі команди фестивалю.',
+                ],
+                'meta' => 'Покращення відображення в адмінці фестивалю.',
+            ],
             [
                 'version' => '0.182.0',
                 'date' => '2026-11-15',

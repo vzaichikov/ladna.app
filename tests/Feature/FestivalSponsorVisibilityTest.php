@@ -191,14 +191,16 @@ class FestivalSponsorVisibilityTest extends TestCase
             ->assertHeader('Referrer-Policy', 'no-referrer');
     }
 
-    public function test_staff_workspace_and_guest_judge_pages_use_their_verified_edition(): void
+    public function test_sponsors_are_hidden_in_the_staff_workspace_and_visible_in_the_guest_judge_cabinet(): void
     {
         [$account, $edition] = $this->festival();
         $sponsor = $this->sponsor($edition, 'Judging sponsor', true);
         $owner = User::factory()->create();
         $account->addOwner($owner);
-        $response = $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]))->assertOk();
-        $this->assertStripSponsors($response, [$sponsor]);
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.show', [$account, $edition]))
+            ->assertOk()
+            ->assertDontSee('data-festival-sponsors-strip', false)
+            ->assertDontSee($sponsor->name);
 
         $judge = FestivalPortalUser::factory()->for($account)->judge()->create();
         $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
@@ -266,8 +268,8 @@ class FestivalSponsorVisibilityTest extends TestCase
             ['public.festivals.index', ['accountSlug' => $account->slug], ['account' => $account, 'edition' => $edition]],
             ['public.festivals.show', ['accountSlug' => $account->slug, 'editionSlug' => $otherEdition->slug], ['account' => $account, 'edition' => $edition]],
             ['public.festivals.show', ['accountSlug' => $otherAccount->slug, 'editionSlug' => $edition->slug], ['account' => $account, 'edition' => $edition]],
-            ['dashboard.accounts.festivals.show', ['account' => $account, 'festivalEdition' => $otherEdition], ['account' => $account, 'edition' => $otherEdition]],
-            ['dashboard.accounts.festivals.show', ['account' => $otherAccount, 'festivalEdition' => $edition], ['account' => $account, 'edition' => $edition]],
+            ['festival.portal.judging.index', ['accountSlug' => $account->slug, 'festivalEdition' => $otherEdition], ['account' => $account, 'edition' => $otherEdition]],
+            ['festival.portal.judging.index', ['accountSlug' => $otherAccount->slug, 'festivalEdition' => $edition], ['account' => $account, 'edition' => $edition]],
             ['festival.stream.player', ['path' => $stream->path], ['account' => $account, 'stream' => $stream, 'isEmbed' => true]],
             ['festival.stream.player', ['path' => 'different-stream'], ['account' => $account, 'stream' => $stream]],
         ] as [$routeName, $parameters, $data]) {

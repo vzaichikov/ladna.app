@@ -270,6 +270,16 @@ class FestivalDoorOperationsTest extends TestCase
         $this->postJson($issueUrl, array_replace($input, ['cash_sale_key' => (string) Str::uuid()]))
             ->assertUnprocessable()->assertJsonValidationErrors('seat_ids');
         $this->assertSame(1, $edition->ticketOrders()->count());
+
+        app(FestivalSeatReservations::class)->hold($edition, hash('sha256', 'other-buyer'), [$otherSeat->id]);
+        $editorUrl = route('dashboard.accounts.festivals.hall-layout.edit', [$account, $edition]);
+        $this->get($editorUrl)->assertOk()->assertViewHas('layout', fn (array $layout): bool => $layout['seats']->pluck('reservation', 'id')->all() === [$seat->id => 'assigned', $otherSeat->id => 'held']);
+
+        $this->travel(11)->minutes();
+        $this->get($editorUrl)->assertOk()->assertViewHas('layout', fn (array $layout): bool => $layout['seats']->pluck('reservation', 'id')->all() === [$seat->id => 'assigned', $otherSeat->id => null]);
+        $this->getJson($mapUrl)->assertOk()
+            ->assertJsonPath('seats.0.reservation', 'assigned')
+            ->assertJsonPath('seats.1.reservation', 'free');
     }
 
     public function test_assigned_card_sale_respects_the_buyers_hold_and_reserves_its_own_seat_until_paid(): void

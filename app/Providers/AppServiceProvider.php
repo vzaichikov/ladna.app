@@ -163,7 +163,7 @@ class AppServiceProvider extends ServiceProvider
         });
         View::composer('layouts.app', AppBreadcrumbComposer::class);
         View::composer('layouts.app', FestivalWorkspaceComposer::class);
-        View::composer(['festivals.public.templates.*', 'layouts.festival-public', 'layouts.public', 'layouts.app'], FestivalSponsorComposer::class);
+        View::composer(['festivals.public.templates.*', 'layouts.festival-public', 'layouts.public'], FestivalSponsorComposer::class);
         View::composer('festivals.portal._nav', function (ViewInstance $view): void {
             $account = $view->getData()['account'] ?? null;
             $portalUser = $view->getData()['portalUser'] ?? request()->user('festival');
