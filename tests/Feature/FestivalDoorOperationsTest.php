@@ -231,6 +231,47 @@ class FestivalDoorOperationsTest extends TestCase
         $this->assertTrue($edition->tickets()->firstOrFail()->seat->is($seat));
     }
 
+    public function test_advance_cash_sale_assigns_the_selected_hall_seat(): void
+    {
+        [$account, $edition, $type] = $this->festivalDoor();
+        [$seat, $otherSeat] = $this->assignedSeats($edition, $type);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $guest = FestivalPortalUser::factory()->for($account)->guest()->create();
+        $mapUrl = route('dashboard.accounts.festivals.tickets.seat-map', [$account, $edition]);
+        $issueUrl = route('dashboard.accounts.festivals.tickets.issue.store', [$account, $edition]);
+
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.tickets.sold', [$account, $edition, 'view' => 'map']))
+            ->assertOk()->assertSee(__('app.festival_journey.map.issue'));
+        $map = $this->getJson($mapUrl)->assertOk();
+        $issueLink = $map->json('seats.0.issue_href');
+        $this->get($issueLink)->assertOk()->assertViewHas('selectedSeatId', $seat->id);
+
+        $input = [
+            'festival_portal_user_id' => $guest->id,
+            'festival_admission_type_id' => $type->id,
+            'seat_id' => $seat->id,
+            'holder_name' => $guest->displayName(),
+            'payment_method' => 'cash',
+            'cash_amount' => '350',
+            'cash_sale_key' => (string) Str::uuid(),
+        ];
+        $this->post($issueUrl, $input)->assertRedirect()->assertSessionHasNoErrors();
+        $ticket = $edition->tickets()->sole();
+
+        $this->getJson($mapUrl)->assertOk()
+            ->assertJsonPath('seats.0.ticket_id', $ticket->id)
+            ->assertJsonPath('seats.0.reservation', 'assigned')
+            ->assertJsonPath('seats.0.label', $seat->label())
+            ->assertJsonPath('seats.1.reservation', 'free');
+        $this->post($issueUrl, $input)->assertSessionHasNoErrors();
+        $this->postJson($issueUrl, array_replace($input, ['seat_id' => $otherSeat->id]))
+            ->assertUnprocessable()->assertJsonValidationErrors('cash_sale_key');
+        $this->postJson($issueUrl, array_replace($input, ['cash_sale_key' => (string) Str::uuid()]))
+            ->assertUnprocessable()->assertJsonValidationErrors('seat_ids');
+        $this->assertSame(1, $edition->ticketOrders()->count());
+    }
+
     public function test_assigned_card_sale_respects_the_buyers_hold_and_reserves_its_own_seat_until_paid(): void
     {
         [$account, $edition, $type, $operator] = $this->festivalDoor();

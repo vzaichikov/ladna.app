@@ -49,6 +49,17 @@ class IssueFestivalTicketRequest extends FormRequest
             ],
             'holder_name' => ['required', 'string', 'max:255'],
             'seat_id' => ['nullable', 'integer', 'min:1'],
+            'payment_method' => ['sometimes', 'required', Rule::in(['complimentary', 'cash'])],
+            'cash_amount' => ['exclude_unless:payment_method,cash', 'required', 'numeric', 'min:0.01', 'max:999999.99', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'cash_sale_key' => ['exclude_unless:payment_method,cash', 'required', 'uuid'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $cashAmount = $this->input('cash_amount');
+        if (is_string($cashAmount)) {
+            $this->merge(['cash_amount' => str_replace(',', '.', $cashAmount)]);
+        }
     }
 }

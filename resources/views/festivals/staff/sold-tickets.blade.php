@@ -53,7 +53,7 @@
                     @php
                         $order = $ticket->order;
                         $receipt = $order->fiscalReceipt;
-                        $canRefund = $order->source === \App\Enums\FestivalTicketOrderSource::Checkout
+                        $canRefund = in_array($order->source, [\App\Enums\FestivalTicketOrderSource::Checkout, \App\Enums\FestivalTicketOrderSource::CashPresale], true)
                             && $order->status === \App\Enums\FestivalTicketOrderStatus::Paid
                             && ! isset($shownRefundOrderIds[$order->id]);
                     @endphp
@@ -66,11 +66,12 @@
                         <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_ticket_type') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $ticket->orderItem->admission_name }}</dd></div>
                             <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.order') }}</dt><dd class="mt-1 break-all font-mono text-xs text-slate-900">{{ $order->order_id }}</dd></div>
-                            @if ($order->source === \App\Enums\FestivalTicketOrderSource::Manual)
+                            @if (in_array($order->source, [\App\Enums\FestivalTicketOrderSource::Manual, \App\Enums\FestivalTicketOrderSource::CashPresale], true))
                                 <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_issued_by') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->issuer?->name ?: '—' }}</dd></div>
                                 <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_issued_at') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->issued_at?->timezone($edition->timezone)->format('d.m.Y H:i') ?? '—' }}</dd></div>
-                            @else
-                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->provider ?: '—' }} · {{ __('app.festival_order_'.$order->status->value) }}</dd><span class="mt-1 block break-all text-xs text-slate-500">{{ $order->gateway_payment_id ?: $order->gateway_invoice_id ?: '—' }}</span></div>
+                            @endif
+                            @if ($order->source !== \App\Enums\FestivalTicketOrderSource::Manual)
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_payment') }}</dt><dd class="mt-1 font-semibold text-slate-900">{{ $order->provider === \App\Models\FestivalTicketOrder::ProviderCashPresale ? __('app.payment_method_cash') : ($order->provider ?: '—') }} · {{ __('app.festival_order_'.$order->status->value) }}</dd><span class="mt-1 block break-all text-xs text-slate-500">{{ $order->gateway_payment_id ?: $order->gateway_invoice_id ?: '—' }}</span></div>
                                 <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs text-slate-500">{{ __('app.festival_fiscal_receipt') }}</dt><dd class="mt-1 font-semibold text-slate-900">@if($order->amount_cents === 0){{ __('app.festival_fiscal_not_required') }}@elseif($receipt){{ __('app.fiscal_status_'.$receipt->status->value) }}@else{{ __('app.fiscal_status_pending') }}@endif</dd>@if($receipt?->fiscal_number)<span class="mt-1 block break-all text-xs text-slate-500">{{ $receipt->fiscal_number }}</span>@endif @if($receipt?->last_error)<span class="mt-1 block text-xs text-rose-700">{{ $receipt->last_error }}</span>@endif</div>
                             @endif
                         </dl>

@@ -47,6 +47,7 @@ use App\Support\Sms\CompleteSmsTopUpPayment;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class FiscalizationTest extends TestCase
@@ -508,6 +509,38 @@ class FiscalizationTest extends TestCase
             && data_get($request->data(), 'delivery.email') === 'festival-ticket-buyer@example.com'
             && data_get($request->data(), 'delivery.phone') === '+380501112233');
         $this->assertCount(1, collect(Http::recorded())->filter(fn (array $record): bool => $record[0]->url() === 'https://api.checkbox.ua/api/v1/receipts/sell'));
+    }
+
+    public function test_festival_cash_presale_fiscalizes_as_cash_once(): void
+    {
+        $account = Account::factory()->create(['enable_festivals' => true]);
+        $owner = User::factory()->create();
+        $account->addOwner($owner);
+        $this->enableAccountFiscalization($account);
+        $edition = FestivalEdition::factory()->published()->for(FestivalSeries::factory()->for($account))
+            ->create(['account_id' => $account->id]);
+        $type = FestivalAdmissionType::factory()->for($edition)->create(['account_id' => $account->id]);
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $this->fakeCheckboxSuccess('FN-FESTIVAL-CASH-PRESALE');
+        $input = [
+            'festival_portal_user_id' => $guest->id,
+            'festival_admission_type_id' => $type->id,
+            'holder_name' => $guest->displayName(),
+            'payment_method' => 'cash',
+            'cash_amount' => '500,25',
+            'cash_sale_key' => (string) Str::uuid(),
+        ];
+
+        $issueUrl = route('dashboard.accounts.festivals.tickets.issue.store', [$account, $edition]);
+        $this->actingAs($owner)->post($issueUrl, $input)->assertSessionHasNoErrors();
+        $this->post($issueUrl, $input)->assertSessionHasNoErrors();
+
+        $receipt = $edition->ticketOrders()->sole()->fiscalReceipt()->sole();
+        $this->assertSame(FiscalReceiptStatus::Fiscalized, $receipt->status);
+        $this->assertSame('CASH', data_get($receipt->request_payload, 'payments.0.type'));
+        $this->assertSame(50025, data_get($receipt->request_payload, 'payments.0.value'));
+        $this->assertSame(50025, data_get($receipt->request_payload, 'goods.0.good.price'));
+        $this->assertCount(1, Http::recorded(fn ($request): bool => str_ends_with($request->url(), '/receipts/sell')));
     }
 
     public function test_zero_value_festival_admission_issues_tickets_without_a_fiscal_receipt(): void

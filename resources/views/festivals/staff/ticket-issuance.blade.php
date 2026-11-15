@@ -52,7 +52,9 @@
             @csrf
             <h2 class="text-xl font-semibold text-slate-950">{{ __('app.festival_handmade_ticket') }}</h2>
             <p class="mt-1 text-sm text-slate-600">{{ __('app.festival_handmade_ticket_copy') }}</p>
-            <p class="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">{{ __('app.festival_journey.selection_hint') }}</p>
+            @if ($seatChart)
+                <p class="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">{{ __('app.festival_journey.selection_hint') }}</p>
+            @endif
 
             @if ($selectedGuest)
                 <input type="hidden" name="festival_portal_user_id" value="{{ $selectedGuest->id }}">
@@ -69,7 +71,31 @@
             <div class="mt-5 space-y-5">
                 <label class="block"><span class="crm-label">{{ __('app.festival_ticket_type') }}</span><select name="festival_admission_type_id" required class="crm-field"><option value="">{{ __('app.select') }}</option>@foreach($admissionTypes as $admissionType)<option value="{{ $admissionType->id }}" @selected($selectedTypeId == $admissionType->id)>{{ $admissionType->name }} · {{ $capacityByType[$admissionType->id] }}</option>@endforeach</select>@error('festival_admission_type_id')<span class="crm-help">{{ $message }}</span>@enderror</label>
                 <x-festivals.staff.seat-picker :selected-seat-id="$selectedSeatId" :large="true" :chart="$seatChart" type-field="festival_admission_type_id" :availability-url="route('dashboard.accounts.festivals.entrance.seats', [$account, $edition])" />
-                <label><span class="crm-label">{{ __('app.festival_ticket_holder_name') }}</span><input name="holder_name" value="{{ old('holder_name', $selectedGuest?->displayName()) }}" required maxlength="255" class="crm-field">@error('holder_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                <label class="block"><span class="crm-label">{{ __('app.festival_ticket_holder_name') }}</span><input name="holder_name" value="{{ old('holder_name', $selectedGuest?->displayName()) }}" required maxlength="255" class="crm-field">@error('holder_name')<span class="crm-help">{{ $message }}</span>@enderror</label>
+                <fieldset class="group space-y-3">
+                    <legend class="crm-label">{{ __('app.payment_method') }}</legend>
+                    <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                        <label class="inline-flex items-center gap-2">
+                            <input type="radio" name="payment_method" value="complimentary" @checked(old('payment_method', 'complimentary') !== 'cash')>
+                            {{ __('app.festival_complimentary') }}
+                        </label>
+                        <label class="inline-flex items-center gap-2">
+                            <input id="festival-cash-presale" type="radio" name="payment_method" value="cash" @checked(old('payment_method') === 'cash')>
+                            {{ __('app.payment_method_cash') }}
+                        </label>
+                    </div>
+                    @error('payment_method')<p class="crm-help">{{ $message }}</p>@enderror
+                    <div class="hidden group-has-[#festival-cash-presale:checked]:block">
+                        <label class="block">
+                            <span class="crm-label">{{ __('app.festival_cash_presale_amount', ['currency' => $account->default_currency]) }}</span>
+                            <input type="text" name="cash_amount" value="{{ is_scalar(old('cash_amount')) ? old('cash_amount') : '' }}" inputmode="decimal" class="crm-field" aria-describedby="festival-cash-presale-help">
+                        </label>
+                        <p id="festival-cash-presale-help" class="mt-1 text-sm text-slate-600">{{ __('app.festival_cash_presale_amount_help') }}</p>
+                        @error('cash_amount')<p class="crm-help">{{ $message }}</p>@enderror
+                        @error('cash_sale_key')<p class="crm-help">{{ $message }}</p>@enderror
+                    </div>
+                </fieldset>
+                <input type="hidden" name="cash_sale_key" value="{{ is_string(old('cash_sale_key')) ? old('cash_sale_key') : (string) \Illuminate\Support\Str::uuid() }}">
             </div>
 
             <div class="mt-6 flex justify-end"><x-ui.button type="submit" :disabled="! $selectedGuest || $admissionTypes->isEmpty()"><x-ui.icon name="ticket" class="h-4 w-4" />{{ __('app.festival_issue_ticket') }}</x-ui.button></div>

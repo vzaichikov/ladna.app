@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.182.0',
+                'date' => '2026-11-15',
+                'title' => 'Advance cash sales for Festival tickets',
+                'items' => [
+                    'Choose Cash when issuing a guest ticket and enter the amount received. With assigned seating enabled, select an exact seat from the Issued tickets map.',
+                    'Advance cash sales appear in total ticket revenue under Orders. Recording a refund deducts the amount from that total.',
+                ],
+                'meta' => 'Festival cash presales release.',
+            ],
+            [
                 'version' => '0.181.1',
                 'date' => '2026-11-12',
                 'title' => 'Correct class-pass expiry after class cancellation',
@@ -1728,6 +1738,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.182.0',
+                'date' => '2026-11-15',
+                'title' => 'Передпродаж квитків на фестиваль за готівку',
+                'items' => [
+                    'Під час видачі квитка гостю виберіть «Готівка» і введіть отриману суму. Якщо ввімкнено вибір місць, виберіть конкретне місце на схемі у розділі «Видані квитки».',
+                    'Готівковий передпродаж входить до загального доходу від квитків у розділі «Замовлення». Після фіксації повернення сума віднімається від загального доходу.',
+                ],
+                'meta' => 'Готівковий передпродаж квитків на фестивалі.',
+            ],
             [
                 'version' => '0.181.1',
                 'date' => '2026-11-12',

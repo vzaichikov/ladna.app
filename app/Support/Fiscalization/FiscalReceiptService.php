@@ -276,6 +276,7 @@ class FiscalReceiptService
             'payments' => [[
                 'type' => ($payment instanceof CustomerPurchaseRefund && $payment->isCash())
                     || (($payment instanceof EventOrder || $payment instanceof FestivalTicketOrder) && $payment->provider === 'entrance_cash')
+                    || ($payment instanceof FestivalTicketOrder && $payment->provider === FestivalTicketOrder::ProviderCashPresale)
                     ? 'CASH'
                     : 'CASHLESS',
                 'value' => $payment->amount_cents,
@@ -432,11 +433,11 @@ class FiscalReceiptService
 
     private function paymentProviderLabel(string $provider): string
     {
-        if ($provider === CustomerPurchase::ProviderStudioCardTransfer) {
-            return __('app.payment_method_card_transfer');
-        }
-
-        $label = config('integrations.providers.'.$provider.'.label');
+        $label = match ($provider) {
+            CustomerPurchase::ProviderStudioCardTransfer => __('app.payment_method_card_transfer'),
+            FestivalTicketOrder::ProviderCashPresale => __('app.payment_method_cash'),
+            default => config('integrations.providers.'.$provider.'.label'),
+        };
 
         return is_string($label) ? $label : $provider;
     }

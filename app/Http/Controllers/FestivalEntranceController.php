@@ -414,10 +414,14 @@ class FestivalEntranceController extends Controller
             ->orderByDesc('checked_in_at')
             ->orderBy('code')
             ->get();
-        $cashBalance = (int) $edition->cashEntries()
+        $entranceCash = $edition->cashEntries()->whereIn('purpose', [
+            FestivalCashEntry::PurposeEntranceTicketSale,
+            FestivalCashEntry::PurposeEntranceTicketRefund,
+        ]);
+        $cashBalance = (int) (clone $entranceCash)
             ->selectRaw('COALESCE(SUM(CASE WHEN direction = ? THEN amount_cents ELSE -amount_cents END), 0) as balance', [FestivalCashEntry::DirectionIn])
             ->value('balance');
-        $cashHistory = $edition->cashEntries()
+        $cashHistory = $entranceCash
             ->with('order:id,buyer_name')
             ->latest('occurred_at')
             ->latest('id')

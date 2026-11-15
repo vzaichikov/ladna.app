@@ -17,6 +17,8 @@ use App\Models\FestivalTicketOrderItem;
 use App\Support\Festivals\FestivalSeatReservations;
 use App\Support\Festivals\FestivalStaffSeating;
 use App\Support\Festivals\FestivalWorkspaceAccess;
+use App\Support\Fiscalization\FiscalReceiptService;
+use App\Support\Payments\PaymentAmounts;
 use App\Support\PhoneNumberNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -99,12 +101,21 @@ class FestivalTicketIssuanceController extends Controller
         Account $account,
         FestivalEdition $festivalEdition,
         IssueManualFestivalTickets $issueTickets,
+        FiscalReceiptService $fiscalReceipts,
     ): RedirectResponse {
         $guest = FestivalPortalUser::query()->findOrFail($request->integer('festival_portal_user_id'));
         $admissionType = FestivalAdmissionType::query()->findOrFail($request->integer('festival_admission_type_id'));
+        $cashSale = $request->validated('payment_method') === 'cash' ? [
+            'amount_cents' => PaymentAmounts::decimalToCents($request->validated('cash_amount')),
+            'idempotency_key' => $request->validated('cash_sale_key'),
+        ] : null;
         $order = $issueTickets->execute($festivalEdition, $guest, $admissionType, $request->user(), [[
             'holder_name' => $request->string('holder_name')->trim()->toString(),
-        ]], $request->filled('seat_id') ? [$request->integer('seat_id')] : []);
+        ]], $request->filled('seat_id') ? [$request->integer('seat_id')] : [], $cashSale);
+
+        if ($cashSale !== null && $order?->wasRecentlyCreated) {
+            $fiscalReceipts->fiscalizeFestivalTicketOrder($order);
+        }
 
         return redirect()->route('dashboard.accounts.festivals.tickets.sold', [$account, $festivalEdition])
             ->with('status', __('app.festival_manual_ticket_issued', ['order' => $order?->order_id]));

@@ -9,6 +9,7 @@ use App\Enums\FestivalPortalRole;
 use App\Enums\FestivalTicketOrderSource;
 use App\Enums\FestivalTicketOrderStatus;
 use App\Models\FestivalAdmissionType;
+use App\Models\FestivalCashEntry;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
 use App\Models\FestivalJudgeAssignment;
@@ -28,11 +29,13 @@ class IssueManualFestivalTickets
     public function __construct(
         private readonly FestivalTicketIssuer $issuer,
         private readonly FestivalSeatReservations $seats,
+        private readonly RecordFestivalCashEntry $cashEntries,
     ) {}
 
     /**
      * @param  array<int, array{holder_name: string, festival_participant_id?: int|null, festival_judge_assignment_id?: int|null, automation_key?: string|null}>  $ticketSpecifications
      * @param  list<int>  $seatIds
+     * @param  array{amount_cents: int, idempotency_key: string}|null  $cashSale
      */
     public function execute(
         FestivalEdition $edition,
@@ -41,11 +44,21 @@ class IssueManualFestivalTickets
         User $actor,
         array $ticketSpecifications,
         array $seatIds = [],
+        ?array $cashSale = null,
     ): ?FestivalTicketOrder {
         abort_unless($edition->account_id === $guest->account_id && $edition->account_id === $admissionType->account_id, 404);
         abort_unless($actor->can('manageFestivalFinance', $edition->account), 403);
 
-        return DB::transaction(function () use ($edition, $guest, $admissionType, $actor, $ticketSpecifications, $seatIds): ?FestivalTicketOrder {
+        $amountCents = $cashSale['amount_cents'] ?? 0;
+        $isCashPresale = $cashSale !== null;
+        if ($isCashPresale && ($amountCents <= 0 || count($ticketSpecifications) !== 1)) {
+            throw new \InvalidArgumentException('A Festival cash presale requires a positive amount and one ticket.');
+        }
+        $orderReference = $isCashPresale
+            ? 'FTO-'.Str::upper(substr(hash('sha256', $edition->id.':'.strtolower($cashSale['idempotency_key'])), 0, 32))
+            : 'FTO-'.Str::upper(Str::random(18));
+
+        return DB::transaction(function () use ($edition, $guest, $admissionType, $actor, $ticketSpecifications, $seatIds, $isCashPresale, $amountCents, $orderReference): ?FestivalTicketOrder {
             $edition = FestivalEdition::query()->where('account_id', $edition->account_id)->lockForUpdate()->findOrFail($edition->id);
             $guest = FestivalPortalUser::query()
                 ->whereKey($guest->id)
@@ -82,6 +95,23 @@ class IssueManualFestivalTickets
                 return null;
             }
 
+            if ($isCashPresale) {
+                $existing = $edition->ticketOrders()->with(['items', 'tickets'])->where('order_id', $orderReference)->first();
+                if ($existing) {
+                    $ticket = $existing->tickets->first();
+                    if ($existing->source !== FestivalTicketOrderSource::CashPresale
+                        || $existing->festival_portal_user_id !== $guest->id
+                        || $existing->amount_cents !== $amountCents
+                        || $ticket?->festival_admission_type_id !== $admissionType->id
+                        || $ticket->festival_seat_id !== ($seatIds[0] ?? null)
+                        || $ticket->holder_name !== $prepared[0]['holder_name']) {
+                        throw ValidationException::withMessages(['cash_sale_key' => __('app.festival_cash_presale_request_conflict')]);
+                    }
+
+                    return $existing;
+                }
+            }
+
             $quantity = count($prepared);
             if ($admissionType->is_assigned_seating
                 && ($quantity !== 1
@@ -114,17 +144,18 @@ class IssueManualFestivalTickets
                 'account_id' => $edition->account_id,
                 'festival_edition_id' => $edition->id,
                 'festival_portal_user_id' => $guest->id,
-                'source' => FestivalTicketOrderSource::Manual,
+                'source' => $isCashPresale ? FestivalTicketOrderSource::CashPresale : FestivalTicketOrderSource::Manual,
                 'issued_by_user_id' => $actor->id,
                 'issued_at' => $issuedAt,
-                'provider' => null,
-                'order_id' => 'FTO-'.Str::upper(Str::random(18)),
+                'provider' => $isCashPresale ? FestivalTicketOrder::ProviderCashPresale : null,
+                'order_id' => $orderReference,
                 'status' => FestivalTicketOrderStatus::Paid,
                 'buyer_name' => $guest->displayName(),
                 'buyer_email' => FestivalPortalUser::normalizeEmail((string) $guest->email),
                 'buyer_phone' => $guest->phone,
                 'locale' => $guest->locale,
-                'amount_cents' => 0,
+                'subtotal_cents' => $amountCents,
+                'amount_cents' => $amountCents,
                 'currency' => Str::upper($edition->account->default_currency),
                 'access_token_encrypted' => $accessToken,
                 'access_token_hash' => hash('sha256', $accessToken),
@@ -138,13 +169,25 @@ class IssueManualFestivalTickets
                 'admission_name' => $admissionType->name,
                 'admission_description' => $admissionType->description,
                 'price_tier' => 'manual',
-                'unit_price_cents' => 0,
+                'unit_price_cents' => $amountCents,
                 'quantity' => $quantity,
-                'total_cents' => 0,
+                'total_cents' => $amountCents,
+                'subtotal_cents' => $amountCents,
+                'final_total_cents' => $amountCents,
             ]);
             $this->seats->attach($item, $selectedSeats);
 
             $this->issuer->execute($order, $prepared);
+
+            if ($isCashPresale) {
+                $this->cashEntries->execute(
+                    $order,
+                    $actor,
+                    FestivalCashEntry::DirectionIn,
+                    FestivalCashEntry::PurposePresaleTicketSale,
+                    __('app.festival_cash_presale_reason'),
+                );
+            }
 
             return $order->load(['items', 'tickets']);
         }, 3);

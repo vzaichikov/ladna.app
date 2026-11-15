@@ -9,7 +9,7 @@
                 <label><span class="crm-label">{{ __('app.search') }}</span><input name="q" value="{{ $filters['q'] }}" class="crm-field" placeholder="{{ __('app.festival_order_search_placeholder') }}"></label>
                 <label><span class="crm-label">{{ __('app.status') }}</span><select name="status" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketOrderStatus::cases() as $status)<option value="{{ $status->value }}" @selected($filters['status'] === $status->value)>{{ __('app.festival_order_'.$status->value) }}</option>@endforeach</select></label>
                 <label><span class="crm-label">{{ __('app.festival_ticket_source') }}</span><select name="source" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach(\App\Enums\FestivalTicketOrderSource::cases() as $source)<option value="{{ $source->value }}" @selected($filters['source'] === $source->value)>{{ __('app.festival_ticket_source_'.$source->value) }}</option>@endforeach</select></label>
-                <label><span class="crm-label">{{ __('app.payment_provider') }}</span><select name="provider" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach($orderProviderOptions as $provider)<option value="{{ $provider }}" @selected($filters['provider'] === $provider)>{{ config('integrations.providers.'.$provider.'.label', $provider) }}</option>@endforeach</select></label>
+                <label><span class="crm-label">{{ __('app.payment_provider') }}</span><select name="provider" class="crm-field"><option value="">{{ __('app.all') }}</option>@foreach($orderProviderOptions as $provider)<option value="{{ $provider }}" @selected($filters['provider'] === $provider)>{{ $provider === \App\Models\FestivalTicketOrder::ProviderCashPresale ? __('app.payment_method_cash') : config('integrations.providers.'.$provider.'.label', $provider) }}</option>@endforeach</select></label>
             </x-ui.filter-bar>
 
             <div class="space-y-4" data-festival-ticket-orders>
@@ -37,7 +37,7 @@
                             <div class="lg:text-right">
                                 <strong class="text-lg text-slate-950">{{ \App\Support\MoneyFormatter::format($order->amount_cents, $order->currency) }}</strong>
                                 @if ($order->discount_cents > 0)<p class="mt-1 text-xs font-semibold text-emerald-700">{{ \App\Support\MoneyFormatter::format($order->subtotal_cents, $order->currency) }} · {{ $order->promo_code }} −{{ \App\Support\MoneyFormatter::format($order->discount_cents, $order->currency) }}</p>@endif
-                                <p class="mt-1 text-xs text-slate-500">{{ config('integrations.providers.'.$order->provider.'.label', $order->provider ?: '—') }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $order->provider === \App\Models\FestivalTicketOrder::ProviderCashPresale ? __('app.payment_method_cash') : config('integrations.providers.'.$order->provider.'.label', $order->provider ?: '—') }}</p>
                             </div>
                         </div>
 

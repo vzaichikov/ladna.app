@@ -23,6 +23,10 @@ class FestivalCashEntry extends Model
 
     public const PurposeEntranceTicketRefund = 'entrance_ticket_refund';
 
+    public const PurposePresaleTicketSale = 'presale_ticket_sale';
+
+    public const PurposePresaleTicketRefund = 'presale_ticket_refund';
+
     protected function casts(): array
     {
         return [

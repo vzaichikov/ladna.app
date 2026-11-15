@@ -22,8 +22,15 @@ class RecordFestivalCashEntry
     ): ?FestivalCashEntry {
         $order->loadMissing(['account', 'edition']);
 
-        if ($order->source !== FestivalTicketOrderSource::Entrance || $order->provider !== 'entrance_cash') {
-            throw new LogicException('Only Festival entrance cash orders may enter the Festival cash ledger.');
+        $expectedPurpose = match ([$order->source, $order->provider, $direction]) {
+            [FestivalTicketOrderSource::Entrance, 'entrance_cash', FestivalCashEntry::DirectionIn] => FestivalCashEntry::PurposeEntranceTicketSale,
+            [FestivalTicketOrderSource::Entrance, 'entrance_cash', FestivalCashEntry::DirectionOut] => FestivalCashEntry::PurposeEntranceTicketRefund,
+            [FestivalTicketOrderSource::CashPresale, FestivalTicketOrder::ProviderCashPresale, FestivalCashEntry::DirectionIn] => FestivalCashEntry::PurposePresaleTicketSale,
+            [FestivalTicketOrderSource::CashPresale, FestivalTicketOrder::ProviderCashPresale, FestivalCashEntry::DirectionOut] => FestivalCashEntry::PurposePresaleTicketRefund,
+            default => null,
+        };
+        if ($purpose !== $expectedPurpose) {
+            throw new LogicException('The Festival cash ledger purpose must match the cash order and direction.');
         }
 
         if ($order->amount_cents === 0) {

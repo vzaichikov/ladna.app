@@ -17,6 +17,7 @@ use App\Jobs\SendFestivalNotification;
 use App\Mail\FestivalPortalMail;
 use App\Models\Account;
 use App\Models\FestivalAdmissionType;
+use App\Models\FestivalCashEntry;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalEditionPurchase;
@@ -35,6 +36,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
@@ -127,6 +129,88 @@ class FestivalManualTicketIssuanceTest extends TestCase
         $purchase->update(['status' => FestivalEditionPurchaseStatus::PaymentReversed]);
         $this->expectExceptionMessage(__('app.festival_payment_reversed_readonly'));
         app(IssueManualFestivalTickets::class)->execute($edition, $activeGuest, $type, $owner, [['holder_name' => 'Reversed']]);
+    }
+
+    public function test_cash_presale_issues_one_ticket_and_records_revenue_until_refunded(): void
+    {
+        [$account, $edition, $type, $owner] = $this->festival(maxTickets: 1, inventory: 1);
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $issueUrl = route('dashboard.accounts.festivals.tickets.issue.store', [$account, $edition]);
+        $ordersUrl = route('dashboard.accounts.festivals.ticket-orders.index', [$account, $edition]);
+        $input = [
+            'festival_portal_user_id' => $guest->id,
+            'festival_admission_type_id' => $type->id,
+            'holder_name' => $guest->displayName(),
+            'payment_method' => 'cash',
+            'cash_amount' => '350.50',
+            'cash_sale_key' => (string) Str::uuid(),
+        ];
+
+        $this->actingAs($owner)->post($issueUrl, $input)->assertSessionHasNoErrors()->assertRedirect();
+        $order = $edition->ticketOrders()->sole();
+        $this->assertSame(35050, $order->amount_cents);
+        $this->assertSame('cash_presale', $order->source->value);
+        $this->assertSame(FestivalTicketOrderStatus::Paid, $order->status);
+        $this->assertSame($owner->id, $order->issued_by_user_id);
+        $this->assertSame(35050, $order->items()->sole()->final_total_cents);
+        $ticket = $order->tickets()->sole();
+        $this->assertSame(FestivalTicketStatus::Valid, $ticket->status);
+        $this->assertFalse($ticket->is_checked_in);
+        $this->assertSame(0, $type->remainingQuantity());
+
+        $this->post($issueUrl, $input)->assertSessionHasNoErrors()->assertRedirect();
+        $this->post($issueUrl, array_replace($input, ['cash_amount' => '351']))->assertSessionHasErrors('cash_sale_key');
+        $this->assertSame(1, $edition->ticketOrders()->count());
+        $this->assertSame(1, $edition->tickets()->count());
+        $cashIn = $order->cashEntries()->sole();
+        $this->assertSame(FestivalCashEntry::DirectionIn, $cashIn->direction);
+        $this->assertSame(35050, $cashIn->amount_cents);
+        $this->assertSame($order->currency, $cashIn->currency);
+
+        $report = $this->get($ordersUrl)->assertOk()->viewData('admissionReport');
+        $this->assertSame(1, $report['paid_orders']);
+        $this->assertSame([$order->currency => 35050], $report['revenue_by_currency']->all());
+        $this->getJson(route('dashboard.accounts.festivals.attendance.data', [$account, $edition]))
+            ->assertOk()
+            ->assertJsonPath('guest_tickets.total', 1)
+            ->assertJsonPath('cash.amount_cents', 0)
+            ->assertJsonPath('cash.history', []);
+
+        $this->get(route('dashboard.accounts.festivals.tickets.sold', [$account, $edition, 'source' => 'cash_presale']))
+            ->assertOk()->assertSee(__('app.festival_record_refund'));
+        $this->post(route('dashboard.accounts.festivals.ticket-orders.refund', [$account, $edition, $order]), [
+            'reason' => 'Cash returned to the guest.',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $this->assertSame(FestivalTicketOrderStatus::Refunded, $order->refresh()->status);
+        $this->assertSame(FestivalTicketStatus::Refunded, $ticket->refresh()->status);
+        $cashOut = $order->cashEntries()->where('direction', FestivalCashEntry::DirectionOut)->sole();
+        $this->assertSame(35050, $cashOut->amount_cents);
+        $this->assertSame(1, $type->remainingQuantity());
+        $report = $this->get($ordersUrl)->assertOk()->viewData('admissionReport');
+        $this->assertSame(0, $report['paid_orders']);
+        $this->assertSame([], $report['revenue_by_currency']->all());
+    }
+
+    public function test_cash_presale_requires_a_positive_decimal_amount_and_finance_permission(): void
+    {
+        [$account, $edition, $type, $owner] = $this->festival();
+        $guest = FestivalPortalUser::factory()->guest()->for($account)->create();
+        $issueUrl = route('dashboard.accounts.festivals.tickets.issue.store', [$account, $edition]);
+        $input = [
+            'festival_portal_user_id' => $guest->id,
+            'festival_admission_type_id' => $type->id,
+            'holder_name' => $guest->displayName(),
+            'payment_method' => 'cash',
+            'cash_sale_key' => (string) Str::uuid(),
+        ];
+
+        foreach ([null, '0', '-20', '20.123', ['10']] as $amount) {
+            $this->actingAs($owner)->post($issueUrl, [...$input, 'cash_amount' => $amount])->assertSessionHasErrors('cash_amount');
+        }
+        $this->actingAs($this->staff($account, [StudioPermission::CheckInFestivalTickets]))
+            ->post($issueUrl, [...$input, 'cash_amount' => '20'])->assertForbidden();
+        $this->assertSame(0, $edition->ticketOrders()->count());
     }
 
     public function test_participant_ticket_job_is_retired_in_favor_of_dedicated_entrance_passes(): void

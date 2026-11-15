@@ -24,6 +24,8 @@ class FestivalTicketOrder extends Model
     /** @use HasFactory<FestivalTicketOrderFactory> */
     use HasFactory;
 
+    public const ProviderCashPresale = 'cash_presale';
+
     protected $attributes = ['source' => 'checkout', 'status' => 'pending', 'locale' => 'uk'];
 
     protected function casts(): array
