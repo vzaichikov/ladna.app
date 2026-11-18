@@ -135,7 +135,7 @@
                 </div>
             </div>
 
-            <aside class="min-w-0 rounded-2xl border festival-border festival-surface p-5 shadow-crm lg:sticky lg:top-6 lg:self-start" @if ($festivalSeatPickerAvailable) data-festival-seat-details @endif>
+            <aside class="min-w-0 rounded-2xl border festival-border festival-surface p-5 shadow-crm lg:sticky lg:top-6 lg:self-start">
                 <h2 class="text-lg font-semibold festival-text">{{ __('app.payment_method') }}</h2>
                 <dl class="mt-4 grid grid-cols-2 gap-3 rounded-xl festival-page p-4 text-sm">
                     <div>
@@ -168,6 +168,10 @@
                     </span>
                 </label>
                 <x-ui.field-error name="terms" class="mt-2" />
+
+                @if ($festivalSeatPickerAvailable)
+                    <p class="mt-5 text-sm font-semibold festival-muted" data-festival-seat-confirmation-help aria-live="polite" hidden>{{ __('app.festival_seating.confirmation_help') }}</p>
+                @endif
 
                 <div class="mt-5 {{ $hasPaidTicketOptions ? 'hidden' : '' }}" data-event-payment-no-selection>
                     <p class="mb-3 text-sm font-semibold text-amber-800" data-event-payment-select-help aria-live="polite">{{ __('app.event_select_tickets_to_continue') }}</p>

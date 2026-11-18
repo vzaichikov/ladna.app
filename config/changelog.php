@@ -20,6 +20,13 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.182.2',
+                'date' => '2026-11-18',
+                'title' => 'Payment panel stays visible during Festival seat selection',
+                'items' => ['The payment panel stays on the page while you select or change seats on desktop, tablet, and mobile.'],
+                'meta' => 'Festival ticket checkout fix.',
+            ],
+            [
                 'version' => '0.182.1',
                 'date' => '2026-11-16',
                 'title' => 'Clearer seat statuses in Festival administration',
@@ -1748,6 +1755,13 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.182.2',
+                'date' => '2026-11-18',
+                'title' => 'Блок оплати видно під час вибору місць на фестиваль',
+                'items' => ['Блок оплати залишається на сторінці, коли ви вибираєте або змінюєте місця на комп’ютері, планшеті чи телефоні.'],
+                'meta' => 'Виправлення оформлення квитків на фестиваль.',
+            ],
             [
                 'version' => '0.182.1',
                 'date' => '2026-11-16',

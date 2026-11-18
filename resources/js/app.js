@@ -9874,6 +9874,7 @@ function initEventTicketCheckouts(root = document) {
         const paidPayment = form.querySelector('[data-event-payment-paid]');
         const selectionHelp = [...form.querySelectorAll('[data-event-payment-select-help]')];
         const requiredFieldsHelp = [...form.querySelectorAll('[data-event-payment-required-help]')];
+        const seatConfirmationHelp = form.querySelector('[data-festival-seat-confirmation-help]');
         const freeAction = form.querySelector('[data-event-free-action]');
         const paidActions = [...form.querySelectorAll('[data-event-paid-action]')];
         const hasPaidTicketOptions = form.dataset.eventHasPaidTicketOptions === 'true';
@@ -9993,11 +9994,15 @@ function initEventTicketCheckouts(root = document) {
             const isFree = hasSelection && totalCents === 0;
             const showPaidPayment = (!hasSelection && hasPaidTicketOptions) || (hasSelection && !isFree);
             const requiredDetailsComplete = requiredFieldsComplete();
+            const awaitingSeatConfirmation = Boolean(seats?.awaitingConfirmation);
             noSelection?.classList.toggle('hidden', hasSelection || hasPaidTicketOptions);
             freePayment?.classList.toggle('hidden', !isFree);
             paidPayment?.classList.toggle('hidden', !showPaidPayment);
-            selectionHelp.forEach((message) => message.classList.toggle('hidden', hasSelection));
-            requiredFieldsHelp.forEach((message) => message.classList.toggle('hidden', !hasSelection || requiredDetailsComplete));
+            selectionHelp.forEach((message) => message.classList.toggle('hidden', hasSelection || awaitingSeatConfirmation));
+            requiredFieldsHelp.forEach((message) => message.classList.toggle('hidden', !hasSelection || requiredDetailsComplete || awaitingSeatConfirmation));
+            if (seatConfirmationHelp) {
+                seatConfirmationHelp.hidden = !awaitingSeatConfirmation;
+            }
 
             if (freeAction) {
                 freeAction.disabled = !isFree || !requiredDetailsComplete || Boolean(seats?.blocked);

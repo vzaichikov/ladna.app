@@ -20,7 +20,7 @@ export function initFestivalSeatCheckout(root = document) {
         const message = element('message');
         const retry = element('retry');
         const continueButton = element('continue');
-        const details = [...form.querySelectorAll('[data-festival-seat-details]')];
+        const buyerDetails = form.querySelector('[data-festival-seat-details]');
         const format = new Intl.NumberFormat(form.dataset.locale, {
             style: 'currency', currency: form.dataset.currency, currencyDisplay: 'symbol',
         });
@@ -273,12 +273,13 @@ export function initFestivalSeatCheckout(root = document) {
             const choices = selectedSeats();
             const active = !editing && hold !== null && choices.length > 0;
             const hasQuantityOptions = picker.dataset.hasQuantityOptions === 'true';
-            const blocked = editing ? choices.length > 0 || hold !== null : active && !quote;
+            const awaitingConfirmation = editing && (choices.length > 0 || hold !== null);
+            const blocked = awaitingConfirmation || (active && !quote);
             editor.hidden = !mapReady || !editing;
             element('summary').hidden = choices.length === 0;
             element('summary-actions').hidden = !active;
             element('timer').hidden = hold === null;
-            details.forEach((panel) => { panel.hidden = editing && (blocked || !hasQuantityOptions); });
+            buyerDetails.hidden = editing && (awaitingConfirmation || !hasQuantityOptions);
             continueButton.disabled = saving || (choices.length === 0 && hold === null);
 
             const estimates = choices.reduce((sum, seat) => sum + seatPrice(seat), 0);
@@ -318,6 +319,7 @@ export function initFestivalSeatCheckout(root = document) {
                 count: active ? choices.length : 0,
                 estimatedSubtotal: active ? estimates : 0,
                 quote: active ? quote : null,
+                awaitingConfirmation,
                 blocked,
             };
             stateChange();

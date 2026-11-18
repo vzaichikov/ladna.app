@@ -6349,6 +6349,7 @@ return [
         'loading' => 'Loading seats…',
         'empty' => 'There are no seats in this section.',
         'continue' => 'Continue with these seats',
+        'confirmation_help' => 'Choose “Continue with these seats” to add them to your order.',
         'edit' => 'Change seats',
         'cancel' => 'Release seats',
         'held' => 'Seats held for',
