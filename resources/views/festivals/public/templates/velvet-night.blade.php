@@ -82,6 +82,7 @@
                             {{ __('app.buy_tickets') }}
                         </a>
                     @endif
+                    @include('festivals.public._program-link', ['buttonClass' => 'velvet-button velvet-button-outline'])
                     @if ($festivalTelegramBotUrl)
                         <a
                             href="{{ $festivalTelegramBotUrl }}"

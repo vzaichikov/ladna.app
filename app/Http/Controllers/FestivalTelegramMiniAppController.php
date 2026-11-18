@@ -154,7 +154,9 @@ class FestivalTelegramMiniAppController extends Controller
         abort_unless($installation, 404);
         $validator->validate($request->validated('init_data'), $installation);
 
-        return $this->privateJson(['editions' => $data->timelineUpdates($series)]);
+        $targetId = $request->validated('target_id');
+
+        return $this->privateJson(['editions' => $data->timelineUpdates($series, $targetId ? (int) $targetId : null)]);
     }
 
     public function unlink(
@@ -243,10 +245,12 @@ class FestivalTelegramMiniAppController extends Controller
             'live' => __('app.festival_telegram_period_live'),
             'upcoming' => __('app.festival_telegram_period_upcoming'),
             'previous' => __('app.festival_telegram_period_previous'),
-            'timeline' => __('app.festival_timeline'),
+            'timeline' => __('app.festival_timeline_title'),
             'happening_now' => __('app.festival_timeline_public_title'),
             'timeline_live' => __('app.festival_timeline_live_eyebrow'),
             'timeline_active' => __('app.festival_timeline_status_active'),
+            'timeline_passed' => __('app.festival_timeline_status_passed'),
+            'timeline_future' => __('app.festival_timeline_status_future'),
             'timeline_paused' => __('app.festival_timeline_paused'),
             'timeline_completed' => __('app.festival_timeline_completed_state'),
             'timeline_waiting' => __('app.festival_timeline_waiting_for', ['item' => '__item__']),

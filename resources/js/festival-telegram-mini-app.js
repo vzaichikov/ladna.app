@@ -25,6 +25,7 @@ export function initFestivalTelegramMiniApp() {
     let initData = telegram?.initData || '';
     let contactPoll = null;
     let timelinePoll = null;
+    let pollingSchedule = false;
     let countdownTimer = null;
     let automaticActionOpened = false;
     let selectedEditionId = null;
@@ -112,17 +113,17 @@ export function initFestivalTelegramMiniApp() {
         return details;
     };
 
-    const formattedDateTime = (value) => value
-        ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    const formattedDateTime = (value, timezone) => value
+        ? new Intl.DateTimeFormat(undefined, { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
         : '';
 
-    const formattedTime = (value) => value
-        ? new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+    const formattedTime = (value, timezone) => value
+        ? new Intl.DateTimeFormat(undefined, { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(value))
         : '';
 
     const withItem = (template, item) => (template || '').replace('__item__', item || '—');
 
-    const formattedEditionDate = (edition) => formattedDateTime(edition.starts_at);
+    const formattedEditionDate = (edition) => formattedDateTime(edition.starts_at, edition.timezone);
 
     const editionThumbnail = (edition, sizeClasses) => {
         if (!edition.thumbnail_url) {
@@ -188,7 +189,7 @@ export function initFestivalTelegramMiniApp() {
                     card.append(chips);
                 }
                 if (category.registration_closes_at) {
-                    card.append(element('p', 'mt-3 text-xs text-slate-400', `${labels.registration_closes_at}: ${formattedDateTime(category.registration_closes_at)}`));
+                    card.append(element('p', 'mt-3 text-xs text-slate-400', `${labels.registration_closes_at}: ${formattedDateTime(category.registration_closes_at, edition.timezone)}`));
                 }
                 if (category.requirements_html) {
                     card.append(element('h5', 'mt-3 border-t border-white/10 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-400', labels.category_requirements));
@@ -257,9 +258,7 @@ export function initFestivalTelegramMiniApp() {
         container.append(details);
     };
 
-    const countProgramItems = (items) => (items || []).reduce((total, item) => total + 1 + countProgramItems(item.children), 0);
-
-    const appendProgramItems = (container, items, depth = 0) => {
+    const appendProgramItems = (container, items, timezone, depth = 0) => {
         (items || []).forEach((item) => {
             const isHeader = item.type === 'free_header' || item.type === 'category_header';
             const card = element('div', isHeader
@@ -269,29 +268,31 @@ export function initFestivalTelegramMiniApp() {
             if (isHeader) {
                 card.append(element('h4', 'font-semibold text-fuchsia-100', item.name));
             } else {
-                card.append(element('time', 'font-mono text-sm font-semibold tabular-nums text-slate-300', formattedTime(item.starts_at)));
+                const time = element('time', 'font-mono text-sm font-semibold tabular-nums text-slate-300', formattedTime(item.starts_at, timezone));
+                time.dateTime = item.starts_at;
+                card.append(time);
                 const copy = element('div', 'min-w-0');
                 copy.append(element('p', 'font-semibold text-slate-100', item.name));
-                copy.append(element('p', 'mt-0.5 text-xs text-slate-400', [item.category, item.type_label, item.ends_at ? formattedTime(item.ends_at) : null].filter(Boolean).join(' · ')));
+                copy.append(element('p', 'mt-0.5 text-xs text-slate-400', [item.category, item.type_label, formattedTime(item.ends_at, timezone)].filter(Boolean).join(' · ')));
                 card.append(copy);
             }
             container.append(card);
-            appendProgramItems(container, item.children, depth + 1);
+            appendProgramItems(container, item.children, timezone, depth + 1);
         });
     };
 
     const appendProgram = (container, edition) => {
         const program = edition.program || [];
-        const count = program.reduce((total, stage) => total + countProgramItems(stage.items), 0);
-        if (!count) return;
+        if (!program.length) return;
 
-        const details = disclosure(labels.program, count);
+        const details = disclosure(labels.program);
+        details.classList.add('mt-5');
         const body = element('div', 'mt-4 space-y-5');
         program.forEach((stage) => {
             const scene = element('section');
             scene.append(element('h3', 'festival-telegram-accent-text text-sm font-semibold uppercase tracking-wider', stage.stage));
             const items = element('div', 'mt-2 space-y-2');
-            appendProgramItems(items, stage.items);
+            appendProgramItems(items, stage.items, edition.timezone);
             scene.append(items);
             body.append(scene);
         });
@@ -315,6 +316,34 @@ export function initFestivalTelegramMiniApp() {
         });
         details.append(list);
         container.append(details);
+    };
+
+    const timelineDetails = (scenes) => {
+        const details = disclosure(labels.timeline);
+        details.classList.add('mt-4');
+        const body = element('div', 'mt-4 space-y-4');
+
+        scenes.forEach((scene) => {
+            const stage = element('section');
+            stage.append(element('h4', 'text-sm font-semibold text-slate-200', scene.scene_name));
+            const items = element('ol', 'mt-2 space-y-2');
+            (scene.items || []).forEach((item) => {
+                const row = element('li', 'grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg bg-slate-950/45 px-3 py-2.5');
+                if (item.status === 'active') row.setAttribute('aria-current', 'time');
+                const start = element('time', 'text-xs font-semibold text-slate-300 tabular-nums', formattedTime(item.starts_at_iso, scene.timezone));
+                start.dateTime = item.starts_at_iso;
+                const copy = element('div', 'wrap-break-word');
+                copy.append(element('p', 'text-sm font-semibold text-slate-100', item.label));
+                copy.append(element('p', 'mt-0.5 text-xs text-slate-300', labels[`timeline_${item.status}`]));
+                row.append(start, copy);
+                items.append(row);
+            });
+            stage.append(items);
+            body.append(stage);
+        });
+
+        details.append(body);
+        return details;
     };
 
     const liveTimeline = (edition) => {
@@ -359,7 +388,7 @@ export function initFestivalTelegramMiniApp() {
             }
             sceneList.append(sceneCard);
         });
-        live.append(sceneList);
+        live.append(sceneList, timelineDetails(scenes));
 
         return live;
     };
@@ -376,13 +405,31 @@ export function initFestivalTelegramMiniApp() {
         });
     };
 
+    const renderEditionSchedule = (host, edition) => {
+        const live = liveTimeline(edition);
+        const mode = live ? 'timeline' : 'program';
+        const previousDetails = host.querySelector('details');
+        const sameMode = host.dataset.scheduleMode === mode;
+        const restoreFocus = sameMode && previousDetails?.querySelector('summary') === document.activeElement;
+        host.dataset.scheduleMode = mode;
+        host.replaceChildren();
+        if (live) {
+            host.append(live);
+        } else {
+            appendProgram(host, edition);
+        }
+        const details = host.querySelector('details');
+        if (details && sameMode && previousDetails?.open) details.open = true;
+        if (restoreFocus) details?.querySelector('summary')?.focus({ preventScroll: true });
+        updateCountdowns();
+    };
+
     const appendEditionSections = (container, edition) => {
         appendRichTextDisclosure(container, labels.details, edition.description_html);
         (edition.sections || []).forEach((section) => appendRichTextDisclosure(container, section.title, section.body_html));
         appendRichTextDisclosure(container, labels.rules, edition.rules_html);
         appendCategories(container, edition);
         appendRubrics(container, edition);
-        appendProgram(container, edition);
         appendNominations(container, edition);
 
         [['results', edition.results], ['documents', edition.documents]].forEach(([name, items]) => {
@@ -415,21 +462,21 @@ export function initFestivalTelegramMiniApp() {
         const header = element('div', 'flex items-start gap-4');
         header.append(editionThumbnail(edition, 'h-24 w-24'));
         const heading = element('div', 'min-w-0 flex-1');
-        heading.append(element('div', 'festival-telegram-accent-text text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period));
+        const period = element('div', 'festival-telegram-accent-text text-xs font-semibold uppercase tracking-wider', labels[edition.period] || edition.period);
+        period.dataset.festivalTelegramPeriod = String(edition.id);
+        heading.append(period);
         heading.append(element('h2', 'mt-1 text-xl font-semibold leading-tight', edition.title));
         if (edition.starts_at) heading.append(element('p', 'mt-2 text-sm text-slate-300', formattedEditionDate(edition)));
         header.append(heading);
         card.append(header);
         if (edition.venue_name || edition.venue_address) card.append(element('p', 'mt-4 text-sm font-medium text-slate-200', [edition.venue_name, edition.venue_address].filter(Boolean).join(' · ')));
         if (edition.summary) card.append(element('p', 'mt-3 text-sm leading-6 text-slate-300', edition.summary));
-        const liveHost = element('div');
-        liveHost.dataset.festivalTelegramLive = String(edition.id);
-        const live = liveTimeline(edition);
-        if (live) liveHost.append(live);
-        card.append(liveHost);
+        const scheduleHost = element('div');
+        scheduleHost.dataset.festivalTelegramSchedule = String(edition.id);
+        card.append(scheduleHost);
         card.append(editionActions(edition));
         container.append(card);
-        updateCountdowns();
+        renderEditionSchedule(scheduleHost, edition);
 
         const sections = element('div', 'mt-4 space-y-3');
         appendEditionSections(sections, edition);
@@ -611,25 +658,29 @@ export function initFestivalTelegramMiniApp() {
     };
 
     const refreshTimeline = async () => {
-        if (!initData || !(state.editions || []).some((edition) => edition.period === 'live')) return;
+        const editionId = selectedEditionId;
+        if (!initData || editionId === null || pollingSchedule) return;
 
+        pollingSchedule = true;
         try {
-            const result = await request(root.dataset.timelineUrl);
-            const updates = new Map((result.editions || []).map((edition) => [edition.id, edition]));
-            state.editions = (state.editions || []).map((edition) => updates.has(edition.id)
-                ? { ...edition, ...updates.get(edition.id) }
-                : edition);
+            const result = await request(root.dataset.timelineUrl, 'POST', { target_id: editionId });
+            const update = result.editions?.find((edition) => edition.id === editionId);
+            const previous = state.editions?.find((edition) => edition.id === editionId);
+            if (!update || !previous) return;
 
-            const liveHost = root.querySelector('[data-festival-telegram-live]');
-            if (liveHost) {
-                const edition = state.editions.find((candidate) => candidate.id === Number(liveHost.dataset.festivalTelegramLive));
-                liveHost.replaceChildren();
-                const live = edition ? liveTimeline(edition) : null;
-                if (live) liveHost.append(live);
-                updateCountdowns();
+            const edition = { ...previous, ...update };
+            state.editions = state.editions.map((candidate) => candidate.id === editionId ? edition : candidate);
+            const period = root.querySelector(`[data-festival-telegram-period="${editionId}"]`);
+            if (period) period.textContent = labels[edition.period] || edition.period;
+            const host = root.querySelector(`[data-festival-telegram-schedule="${editionId}"]`);
+            if (host && (JSON.stringify(previous.timeline) !== JSON.stringify(edition.timeline)
+                || JSON.stringify(previous.program) !== JSON.stringify(edition.program))) {
+                renderEditionSchedule(host, edition);
             }
         } catch {
-            // The next public timeline poll may recover without interrupting the open Mini App.
+            // A later poll can recover while the current schedule stays visible.
+        } finally {
+            pollingSchedule = false;
         }
     };
 

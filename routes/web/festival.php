@@ -50,6 +50,7 @@ Route::middleware([EnsurePublicSubscriptionIsActive::class, EnsureFestivalsEnabl
     Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/orders/{token}', [FestivalTelegramLoginController::class, 'order'])->middleware('signed')->name('public.festival-telegram.order.consume');
     Route::get('/{accountSlug}/festival-series/{seriesSlug}/telegram/checkout/{editionSlug}/{token}', [FestivalTelegramLoginController::class, 'checkout'])->middleware('signed')->name('public.festival-telegram.checkout.consume');
     Route::get('/{accountSlug}/festivals/{editionSlug}', [FestivalPublicController::class, 'show'])->name('public.festivals.show');
+    Route::get('/{accountSlug}/festivals/{editionSlug}/program', [FestivalPublicController::class, 'program'])->name('public.festivals.program');
     Route::get('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'show'])->name('public.festivals.entrance');
     Route::post('/{accountSlug}/festivals/{editionSlug}/entrance/promo-code', [FestivalPromoCodeQuoteController::class, 'entrance'])->middleware('throttle:festival-checkout')->name('public.festivals.entrance.promo-code');
     Route::post('/{accountSlug}/festivals/{editionSlug}/entrance', [PublicFestivalEntranceController::class, 'store'])->middleware([PreventReadOnlyDemoMutations::class, 'throttle:festival-checkout'])->name('public.festivals.entrance.store');

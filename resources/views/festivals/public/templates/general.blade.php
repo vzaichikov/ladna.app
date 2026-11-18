@@ -18,6 +18,7 @@
                     <div class="mt-6 flex flex-wrap gap-2">
                         <x-ui.button :href="route('festival.login', $account->slug)" class="festival-primary-button">{{ __('app.festival_participant_cabinet') }}</x-ui.button>
                         <x-ui.button :href="route('festival.judge.login', $account->slug)" variant="secondary" class="festival-secondary-button">{{ __('app.festival_judge_cabinet') }}</x-ui.button>
+                        @include('festivals.public._program-link', ['buttonClass' => 'festival-secondary-button min-h-10 rounded-lg border px-4 text-sm font-semibold hover:underline'])
                         <x-ui.button :href="route('public.festivals.index', $account->slug)" variant="ghost" class="festival-ghost-button">{{ __('app.all_festivals') }}</x-ui.button>
                     </div>
                 </div>

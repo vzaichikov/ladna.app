@@ -293,6 +293,57 @@ class FestivalRealtimeTimelineTest extends TestCase
             ->assertDontSee('data-festival-timeline', false);
     }
 
+    public function test_public_program_links_from_both_landings_and_follows_the_edition_lifecycle(): void
+    {
+        Queue::fake();
+        [$account, $edition, $owner, $stage] = $this->festival();
+        $now = CarbonImmutable::parse('2030-06-10 10:00:00', $edition->timezone)->utc();
+        $this->travelTo($now);
+        $landingUrl = route('public.festivals.show', [$account->slug, $edition->slug]);
+        $programUrl = $landingUrl.'/program';
+
+        $this->get($landingUrl)->assertOk()->assertDontSee('href="'.$programUrl.'"', false);
+        $this->get($programUrl)->assertNotFound();
+
+        $header = $this->slot($edition, $stage, ['type' => 'free_header', 'name' => 'Unpublished block']);
+        $this->slot($edition, $stage, [
+            'parent_id' => $header->id,
+            'name' => 'Published showcase',
+            'starts_at' => $now,
+            'ends_at' => $now->addMinutes(5),
+            'published_at' => $now,
+            'notes' => 'Internal showcase note',
+        ]);
+        app(FillFestivalTimelines::class)->execute($edition, $owner);
+
+        foreach (['general', 'velvet_night'] as $template) {
+            $edition->update(['landing_template' => $template]);
+            $this->get($landingUrl)->assertOk()->assertSee('href="'.$programUrl.'"', false)->assertSeeText(__('app.festival_program_title'));
+        }
+
+        $this->get($programUrl)->assertOk()
+            ->assertSeeText('Published showcase')
+            ->assertSeeText('10:00')
+            ->assertDontSeeText('Unpublished block')
+            ->assertDontSeeText('Internal showcase note');
+
+        app(StartFestivalTimelines::class)->execute($edition, $owner);
+        $this->get($programUrl)->assertOk()->assertSeeText(__('app.festival_timeline_public_title'));
+        $this->get($landingUrl)->assertOk()->assertSeeText(__('app.festival_timeline_title'));
+
+        $edition->update(['status' => FestivalEditionStatus::Completed, 'completed_at' => $now]);
+        $this->get($programUrl.'?fragment=1')->assertOk()
+            ->assertSeeText('Published showcase')
+            ->assertDontSeeText(__('app.festival_timeline_public_title'));
+        $this->get($landingUrl)->assertOk()
+            ->assertDontSeeText(__('app.festival_timeline_public_title'))
+            ->assertSeeText(__('app.festival_program_title'));
+
+        $edition->update(['is_private' => true]);
+        $this->get($programUrl)->assertNotFound();
+        $this->get($programUrl.'?fragment=1')->assertNotFound();
+    }
+
     public function test_active_card_uses_structured_clock_confirmation_and_keeps_pause_or_resume_in_focus(): void
     {
         Queue::fake();

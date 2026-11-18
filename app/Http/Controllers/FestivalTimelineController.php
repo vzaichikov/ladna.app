@@ -9,6 +9,7 @@ use App\Actions\Festivals\ReorderFestivalTimeline;
 use App\Actions\Festivals\ResumeFestivalTimeline;
 use App\Actions\Festivals\StartFestivalTimelines;
 use App\Actions\Festivals\ToggleFestivalTimelineItem;
+use App\Enums\FestivalEditionStatus;
 use App\Http\Requests\FestivalTimelineOrderRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
@@ -147,21 +148,10 @@ class FestivalTimelineController extends Controller
     /** @return array<string, mixed> */
     public function publicFragmentData(FestivalEdition $edition, Account $account): array
     {
-        $withinDates = $this->presenter->isWithinLocalDates($edition);
-        $timelines = $withinDates
-            ? FestivalTimeline::query()
-                ->where('festival_edition_id', $edition->id)
-                ->where('account_id', $account->id)
-                ->whereNotNull('started_at')
-                ->whereHas('stage', fn ($query) => $query->where('is_active', true))
-                ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
-                ->get()
-            : collect();
-
         return [
             'edition' => $edition,
-            'publicTimelineViews' => $this->presenter->scenes($timelines, true),
-            'timelineWithinDates' => $withinDates,
+            'publicTimelineViews' => $this->presenter->publicScenes($edition),
+            'timelineWithinDates' => $edition->status !== FestivalEditionStatus::Completed && $this->presenter->isWithinLocalDates($edition),
             'timelinePollingUrl' => route('public.festivals.timeline', [$account->slug, $edition->slug]),
         ];
     }

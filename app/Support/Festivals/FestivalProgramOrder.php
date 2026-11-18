@@ -19,14 +19,25 @@ class FestivalProgramOrder
      * @param  Collection<int, FestivalScheduleSlot>  $items
      * @return list<array{item: FestivalScheduleSlot, children: array}>
      */
-    public function tree(Collection $items, ?int $parentId = null): array
+    public function tree(Collection $items, bool $includeOrphans = false): array
     {
-        return $items
-            ->filter(fn (FestivalScheduleSlot $item): bool => $item->parent_id === $parentId)
+        $visibleItems = $items->keyBy('id');
+        $byParent = $items
             ->sortBy(fn (FestivalScheduleSlot $item): string => sprintf('%010d:%020d', $item->sort_order, $item->id))
+            ->groupBy(fn (FestivalScheduleSlot $item): int => $item->parent_id === null || ($includeOrphans && ! $visibleItems->has($item->parent_id))
+                ? 0
+                : $item->parent_id);
+
+        return $this->children($byParent, 0);
+    }
+
+    /** @return list<array{item: FestivalScheduleSlot, children: array}> */
+    private function children(Collection $byParent, int $parentId): array
+    {
+        return $byParent->get($parentId, collect())
             ->map(fn (FestivalScheduleSlot $item): array => [
                 'item' => $item,
-                'children' => $this->tree($items, $item->id),
+                'children' => $this->children($byParent, $item->id),
             ])
             ->values()
             ->all();

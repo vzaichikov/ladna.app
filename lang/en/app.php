@@ -233,6 +233,8 @@ return [
     'festival_readonly_summary' => 'View summary',
     'festival_readonly_summary_copy' => 'Read-only summary of the fully confirmed application.',
     'festival_program_title' => 'Program',
+    'festival_program_back' => 'Back to festival',
+    'festival_program_unavailable' => 'The program is currently unavailable.',
     'festival_program_copy' => 'Build the ordered, hierarchical program for each scene.',
     'festival_generate_program' => 'Generate program',
     'festival_program_generation_copy' => 'Create untimed performance placeholders from accepted entries for :scene.',

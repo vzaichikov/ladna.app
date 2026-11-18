@@ -319,6 +319,7 @@ export function initFestivalSeatCheckout(root = document) {
                 count: active ? choices.length : 0,
                 estimatedSubtotal: active ? estimates : 0,
                 quote: active ? quote : null,
+                draft: awaitingConfirmation ? { count: choices.length, subtotalCents: estimates } : null,
                 awaitingConfirmation,
                 blocked,
             };

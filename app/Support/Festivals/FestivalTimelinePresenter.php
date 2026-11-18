@@ -2,6 +2,7 @@
 
 namespace App\Support\Festivals;
 
+use App\Enums\FestivalEditionStatus;
 use App\Models\FestivalEdition;
 use App\Models\FestivalTimeline;
 use App\Models\FestivalTimelineItem;
@@ -68,6 +69,28 @@ class FestivalTimelinePresenter
 
         return $today >= $edition->starts_at->timezone($edition->timezone)->toDateString()
             && $today <= $edition->ends_at->timezone($edition->timezone)->toDateString();
+    }
+
+    public function isPubliclyLive(FestivalEdition $edition): bool
+    {
+        return $edition->status === FestivalEditionStatus::InProgress && $this->isWithinLocalDates($edition);
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    public function publicScenes(FestivalEdition $edition): Collection
+    {
+        if (! $this->isPubliclyLive($edition)) {
+            return collect();
+        }
+
+        $timelines = $edition->timelines()
+            ->where('account_id', $edition->account_id)
+            ->whereNotNull('started_at')
+            ->whereHas('stage', fn ($query) => $query->where('is_active', true))
+            ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
+            ->get();
+
+        return $this->scenes($timelines, true);
     }
 
     private function state(FestivalTimeline $timeline): string

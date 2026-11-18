@@ -233,6 +233,8 @@ return [
     'festival_readonly_summary' => 'Переглянути підсумок',
     'festival_readonly_summary_copy' => 'Підсумок повністю підтвердженої заявки без можливості редагування.',
     'festival_program_title' => 'Програма',
+    'festival_program_back' => 'До фестивалю',
+    'festival_program_unavailable' => 'Програма наразі недоступна.',
     'festival_program_copy' => 'Створюйте впорядковану ієрархічну програму окремо для кожної сцени.',
     'festival_generate_program' => 'Створити програму',
     'festival_program_generation_copy' => 'Створіть заготовки виступів без часу з прийнятих заявок для сцени «:scene».',

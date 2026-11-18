@@ -20,6 +20,17 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.183.0',
+                'date' => '2026-11-18',
+                'title' => 'Public Festival Program and live Timeline',
+                'items' => [
+                    'Open the published Program from the Festival landing page or Telegram Mini App. It switches to the live Timeline when the Festival starts and returns to Program when the edition is completed.',
+                    'The Telegram Mini App lists all categories and judging criteria after registration closes.',
+                    'The ticket checkout shows the selected seat count and estimated total while you choose seats.',
+                ],
+                'meta' => 'Festival schedule and ticket checkout improvements.',
+            ],
+            [
                 'version' => '0.182.2',
                 'date' => '2026-11-18',
                 'title' => 'Payment panel stays visible during Festival seat selection',
@@ -1755,6 +1766,17 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.183.0',
+                'date' => '2026-11-18',
+                'title' => 'Публічна програма фестивалю та таймлайн наживо',
+                'items' => [
+                    'Відкривайте опубліковану програму на сторінці фестивалю або в мінізастосунку Telegram. Після старту фестивалю з’являється таймлайн наживо, а після завершення знову відображається програма.',
+                    'У мінізастосунку Telegram усі категорії та критерії оцінювання доступні й після завершення реєстрації.',
+                    'Під час вибору місць на сторінці оплати видно кількість вибраних місць та орієнтовну суму.',
+                ],
+                'meta' => 'Оновлення програми фестивалю та оплати квитків.',
+            ],
             [
                 'version' => '0.182.2',
                 'date' => '2026-11-18',

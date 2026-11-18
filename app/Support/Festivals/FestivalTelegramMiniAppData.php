@@ -2,16 +2,15 @@
 
 namespace App\Support\Festivals;
 
+use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalEntryStatus;
 use App\Enums\FestivalPortalRole;
-use App\Enums\FestivalScheduleSlotType;
 use App\Models\FestivalCategory;
 use App\Models\FestivalEdition;
 use App\Models\FestivalMedia;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricSection;
-use App\Models\FestivalScheduleSlot;
 use App\Models\FestivalSeries;
 use App\Models\FestivalTimeline;
 use App\Models\TelegramChatAuthorization;
@@ -26,7 +25,7 @@ class FestivalTelegramMiniAppData
         private readonly FestivalTelegramAuthorizationResolver $authorizations,
         private readonly StudioRulesHtmlSanitizer $htmlSanitizer,
         private readonly FestivalCategoryLimitsPresenter $categoryLimits,
-        private readonly FestivalProgramOrder $programOrder,
+        private readonly FestivalPublicProgram $publicProgram,
     ) {}
 
     /** @return array<string, mixed> */
@@ -45,17 +44,12 @@ class FestivalTelegramMiniAppData
                 'documents' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true),
                 'nominations' => fn ($query) => $query->where('is_active', true)->where('show_in_mini_app', true),
                 'results' => fn ($query) => $query->whereNotNull('published_at')->with('entry.category'),
-                'categories' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->whereHas('direction', fn ($query) => $query->where('is_active', true))
-                    ->with('direction'),
-                'festivalRubrics' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->with(['category', 'sections.criteria']),
-                'scheduleSlots' => fn ($query) => $query
-                    ->whereNotNull('published_at')
-                    ->whereHas('stage', fn ($query) => $query->where('is_active', true))
-                    ->with(['stage', 'entry', 'category']),
+                'categories.direction',
+                'festivalRubrics.category',
+                'festivalRubrics.sections.criteria',
+                'publicProgramSlots.stage',
+                'publicProgramSlots.entry',
+                'publicProgramSlots.category',
             ])
             ->withExists(['admissionTypes as admission_available' => fn ($query) => $query->availableForSale()])
             ->orderByDesc('starts_at')
@@ -102,12 +96,13 @@ class FestivalTelegramMiniAppData
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function timelineUpdates(FestivalSeries $series): array
+    public function timelineUpdates(FestivalSeries $series, ?int $editionId = null): array
     {
         $editions = FestivalEdition::query()
             ->where('account_id', $series->account_id)
             ->where('festival_series_id', $series->id)
             ->published()->publiclyVisible()
+            ->when($editionId !== null, fn ($query) => $query->whereKey($editionId))
             ->get(['id', 'account_id', 'festival_series_id', 'status', 'starts_at', 'ends_at', 'timezone']);
         $timelines = $this->timelinesForEditions($editions);
 
@@ -116,6 +111,7 @@ class FestivalTelegramMiniAppData
             'status' => $edition->status->value,
             'period' => $this->period($edition),
             'timeline' => $timelines->get($edition->id, []),
+            ...($editionId !== null && ! $timelines->has($edition->id) ? ['program' => $this->publicProgram->stages($edition)] : []),
         ])->all();
     }
 
@@ -212,14 +208,14 @@ class FestivalTelegramMiniAppData
                 'kind' => $document->kind,
                 'url' => route('public.festival-documents.download', [$edition->account->slug, $document]),
             ])->all(),
-            'schedule' => $edition->scheduleSlots->map(fn ($slot): array => [
+            'schedule' => $edition->publicProgramSlots->map(fn ($slot): array => [
                 'id' => $slot->id,
                 'name' => $slot->displayName(),
                 'stage' => $slot->stage?->name,
                 'starts_at' => $slot->starts_at?->toIso8601String(),
                 'ends_at' => $slot->ends_at?->toIso8601String(),
             ])->all(),
-            'program' => $this->program($edition),
+            'program' => $this->publicProgram->stages($edition),
             'results' => $edition->results->map(fn ($result): array => [
                 'id' => $result->id,
                 'entry_name' => $result->entry?->entry_name,
@@ -267,11 +263,7 @@ class FestivalTelegramMiniAppData
     /** @return array<int, array<string, mixed>> */
     private function rubrics(FestivalEdition $edition): array
     {
-        $publicCategoryIds = $edition->categories->modelKeys();
-
         return $edition->festivalRubrics
-            ->filter(fn (FestivalRubric $rubric): bool => $rubric->festival_category_id === null
-                || in_array($rubric->festival_category_id, $publicCategoryIds, true))
             ->map(fn (FestivalRubric $rubric): array => [
                 'name' => $rubric->name,
                 'category' => $rubric->category?->name,
@@ -288,52 +280,6 @@ class FestivalTelegramMiniAppData
             ])
             ->values()
             ->all();
-    }
-
-    /** @return array<int, array<string, mixed>> */
-    private function program(FestivalEdition $edition): array
-    {
-        return $edition->scheduleSlots
-            ->groupBy('festival_stage_id')
-            ->sortBy(fn (Collection $slots): string => sprintf(
-                '%010d:%020d',
-                $slots->first()->stage->sort_order,
-                $slots->first()->stage->id,
-            ))
-            ->map(function (Collection $slots): array {
-                $publicSlots = $slots->filter(fn (FestivalScheduleSlot $slot): bool => $slot->type->isHeader() || $slot->hasTimeRange());
-
-                return [
-                    'stage' => $slots->first()->stage->name,
-                    'items' => collect($this->programOrder->tree($publicSlots))
-                        ->map(fn (array $node): array => $this->programNode($node))
-                        ->all(),
-                ];
-            })
-            ->filter(fn (array $stage): bool => $stage['items'] !== [])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @param  array{item: FestivalScheduleSlot, children: array}  $node
-     * @return array<string, mixed>
-     */
-    private function programNode(array $node): array
-    {
-        $slot = $node['item'];
-
-        return [
-            'name' => $slot->displayName(),
-            'type' => $slot->type->value,
-            'type_label' => __('app.festival_schedule_slot_type_'.$slot->type->value),
-            'category' => $slot->type === FestivalScheduleSlotType::Performance ? $slot->category?->name : null,
-            'starts_at' => $slot->starts_at?->toIso8601String(),
-            'ends_at' => $slot->ends_at?->toIso8601String(),
-            'children' => collect($node['children'])
-                ->map(fn (array $child): array => $this->programNode($child))
-                ->all(),
-        ];
     }
 
     /** @return array<string, mixed> */
@@ -417,9 +363,7 @@ class FestivalTelegramMiniAppData
     private function timelinesForEditions(Collection $editions): \Illuminate\Support\Collection
     {
         $editionIds = $editions
-            ->filter(fn (FestivalEdition $edition): bool => $edition->starts_at !== null
-                && $edition->ends_at !== null
-                && $this->timelinePresenter->isWithinLocalDates($edition))
+            ->filter($this->timelinePresenter->isPubliclyLive(...))
             ->modelKeys();
 
         if ($editionIds === []) {
@@ -466,14 +410,14 @@ class FestivalTelegramMiniAppData
 
     private function period(FestivalEdition $edition): string
     {
-        if ($edition->starts_at?->isFuture()) {
-            return 'upcoming';
+        if ($this->timelinePresenter->isPubliclyLive($edition)) {
+            return 'live';
         }
 
-        if ($edition->ends_at?->isPast()) {
+        if ($edition->status === FestivalEditionStatus::Completed || $edition->ends_at?->isPast()) {
             return 'previous';
         }
 
-        return 'live';
+        return 'upcoming';
     }
 }

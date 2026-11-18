@@ -9278,7 +9278,19 @@ function initFestivalTimeline(root = document.querySelector('[data-festival-time
         template.innerHTML = html.trim();
         const replacement = template.content.firstElementChild;
 
+        if (root.dataset.timelineScope === 'public') {
+            const link = document.querySelector('[data-festival-program-link]');
+            const label = link?.querySelector('[data-festival-program-link-label]');
+            const live = replacement?.hasAttribute('data-festival-timeline');
+
+            if (label) {
+                link.hidden = !live && link.dataset.programPublished !== 'true';
+                label.textContent = live ? label.dataset.timelineLabel : label.dataset.programLabel;
+            }
+        }
+
         if (!replacement) {
+            lifecycle.abort();
             root.remove();
 
             return null;
@@ -9869,6 +9881,7 @@ function initEventTicketCheckouts(root = document) {
         const counters = [...form.querySelectorAll('[data-event-ticket-counter]')];
         const selectedCount = form.querySelector('[data-event-selected-count]');
         const selectedTotal = form.querySelector('[data-event-selected-total]');
+        const promoSubtotal = form.querySelector('[data-promo-subtotal]');
         const noSelection = form.querySelector('[data-event-payment-no-selection]');
         const freePayment = form.querySelector('[data-event-payment-free]');
         const paidPayment = form.querySelector('[data-event-payment-paid]');
@@ -9950,9 +9963,9 @@ function initEventTicketCheckouts(root = document) {
             const subtotalCents = seats?.quote?.subtotal_cents
                 ?? (form.festivalGeneralSubtotalCents + (seats?.estimatedSubtotal ?? 0));
             const promotionQuote = seats?.count > 0 ? seats.quote : form.promotionQuote;
-            const totalCents = promotionQuote && Number(promotionQuote.subtotal_cents) === subtotalCents
-                ? Number(promotionQuote.total_cents)
-                : subtotalCents;
+            const quoteMatchesSubtotal = promotionQuote && Number(promotionQuote.subtotal_cents) === subtotalCents;
+            const totalCents = quoteMatchesSubtotal ? Number(promotionQuote.total_cents) : subtotalCents;
+            const draftSubtotalCents = seats?.draft?.subtotalCents ?? 0;
 
             counters.forEach((counter) => {
                 const input = counter.querySelector('[data-event-ticket-quantity]');
@@ -9983,11 +9996,15 @@ function initEventTicketCheckouts(root = document) {
             });
 
             if (selectedCount) {
-                selectedCount.textContent = String(quantity);
+                selectedCount.textContent = String(quantity + (seats?.draft?.count ?? 0));
             }
 
             if (selectedTotal) {
-                selectedTotal.textContent = moneyFormatter.format(totalCents / 100);
+                selectedTotal.textContent = moneyFormatter.format((totalCents + draftSubtotalCents) / 100);
+            }
+
+            if (seats && promoSubtotal && quoteMatchesSubtotal) {
+                promoSubtotal.textContent = moneyFormatter.format((subtotalCents + draftSubtotalCents) / 100);
             }
 
             const hasSelection = quantity > 0;

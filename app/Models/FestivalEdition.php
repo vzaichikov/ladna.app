@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\FestivalEditionStatus;
 use App\Enums\FestivalRegistrationStatus;
+use App\Enums\FestivalScheduleSlotType;
 use Carbon\CarbonInterface;
 use Database\Factories\FestivalEditionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -229,6 +230,16 @@ class FestivalEdition extends Model
     public function scheduleSlots(): HasMany
     {
         return $this->hasMany(FestivalScheduleSlot::class);
+    }
+
+    public function publicProgramSlots(): HasMany
+    {
+        return $this->scheduleSlots()
+            ->whereNotNull('published_at')
+            ->whereHas('stage', fn (Builder $stage) => $stage->where('is_active', true))
+            ->where(fn (Builder $slot) => $slot
+                ->whereIn('type', [FestivalScheduleSlotType::CategoryHeader->value, FestivalScheduleSlotType::FreeHeader->value])
+                ->orWhere(fn (Builder $timed) => $timed->whereNotNull('starts_at')->whereNotNull('ends_at')));
     }
 
     public function festivalScheduleSlots(): HasMany

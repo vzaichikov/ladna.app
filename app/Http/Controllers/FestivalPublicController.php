@@ -12,10 +12,10 @@ use App\Models\Account;
 use App\Models\FestivalEdition;
 use App\Models\FestivalPortalUser;
 use App\Models\FestivalTicketOrder;
-use App\Models\FestivalTimeline;
 use App\Support\CustomerAuth\CustomerAuthAvailability;
 use App\Support\Festivals\FestivalHallOccupancy;
 use App\Support\Festivals\FestivalLandingRegistry;
+use App\Support\Festivals\FestivalPublicProgram;
 use App\Support\Festivals\FestivalQrToken;
 use App\Support\Festivals\FestivalTicketPdf;
 use App\Support\Festivals\FestivalTimelinePresenter;
@@ -51,21 +51,13 @@ class FestivalPublicController extends Controller
         $account = $this->account($request, $accountSlug);
         $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()->where('slug', $editionSlug)
             ->with(['series.telegramBotInstallation', 'sections' => fn ($query) => $query->where('visibility', 'public')->where('is_active', true), 'media' => fn ($query) => $query->where('is_active', true), 'admissionTypes' => fn ($query) => $query->availableForSale()->where('is_assigned_seating', false)->with('onlineStream'), 'results' => fn ($query) => $query->whereNotNull('published_at'), 'results.entry.category'])
+            ->withExists('publicProgramSlots as has_public_program')
             ->firstOrFail();
         $landingTemplateKey = $landingRegistry->effectiveTemplateKey($edition, $account);
         $landingPaletteKey = $landingRegistry->effectivePaletteKey($edition);
         $landingTemplate = $landingRegistry->template($landingTemplateKey);
-        $timelineWithinDates = $timelinePresenter->isWithinLocalDates($edition);
-        $publicTimelines = $timelineWithinDates
-            ? FestivalTimeline::query()
-                ->where('festival_edition_id', $edition->id)
-                ->where('account_id', $account->id)
-                ->whereNotNull('started_at')
-                ->whereHas('stage', fn ($query) => $query->where('is_active', true))
-                ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
-                ->get()
-            : collect();
-        $publicTimelineViews = $timelinePresenter->scenes($publicTimelines, true);
+        $timelineWithinDates = $edition->status !== FestivalEditionStatus::Completed && $timelinePresenter->isWithinLocalDates($edition);
+        $publicTimelineViews = $timelinePresenter->publicScenes($edition);
         $timelinePollingUrl = route('public.festivals.timeline', [$account->slug, $edition->slug]);
         $festivalAdmissionOptions = $edition->admissionTypes->map(function ($type): array {
             $price = $type->currentPrice();
@@ -141,6 +133,35 @@ class FestivalPublicController extends Controller
             'festivalFriendPurchase',
             'festivalCheckoutPrefill',
         ));
+    }
+
+    public function program(
+        Request $request,
+        string $accountSlug,
+        string $editionSlug,
+        FestivalLandingRegistry $landingRegistry,
+        FestivalTimelinePresenter $timelinePresenter,
+        FestivalPublicProgram $publicProgram,
+    ): Response {
+        $account = $this->account($request, $accountSlug);
+        $edition = FestivalEdition::query()->whereBelongsTo($account)->published()->publiclyVisible()
+            ->where('slug', $editionSlug)->firstOrFail();
+        $publicTimelineViews = $timelinePresenter->publicScenes($edition);
+        $program = $publicTimelineViews->isEmpty() ? $publicProgram->stages($edition) : [];
+        $programPollingUrl = route('public.festivals.program', [$account->slug, $edition->slug, 'fragment' => 1]);
+        $data = compact('account', 'edition', 'publicTimelineViews', 'program', 'programPollingUrl');
+
+        if ($request->boolean('fragment')) {
+            return response()->view('festivals.public._program', $data)->header('Cache-Control', 'no-store');
+        }
+
+        abort_if($program === [] && $publicTimelineViews->isEmpty(), 404);
+
+        return response()->view('festivals.public.program', [
+            ...$data,
+            'landingTemplateKey' => $landingRegistry->effectiveTemplateKey($edition, $account),
+            'landingPaletteKey' => $landingRegistry->effectivePaletteKey($edition),
+        ]);
     }
 
     public function order(Request $request, string $accountSlug, string $accessToken, FestivalQrToken $qr): Response

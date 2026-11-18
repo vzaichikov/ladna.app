@@ -325,12 +325,14 @@ class FestivalTelegramMiniAppTest extends TestCase
             'requirements_html' => '<p>Bring a safe costume.</p><script>alert("unsafe")</script>',
             'sort_order' => 30,
         ]);
-        FestivalCategory::factory()->create([
+        $closedCategory = FestivalCategory::factory()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
             'festival_direction_id' => $direction->id,
-            'name' => 'Hidden Category',
+            'name' => 'Closed Category',
             'is_active' => false,
+            'registration_closes_at' => now()->subDay(),
+            'sort_order' => 40,
         ]);
         $rubric = FestivalRubric::factory()->create([
             'account_id' => $account->id,
@@ -354,12 +356,27 @@ class FestivalTelegramMiniAppTest extends TestCase
             'weight' => 1,
             'sort_order' => 10,
         ]);
-        FestivalRubric::factory()->create([
+        $closedRubric = FestivalRubric::factory()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
-            'festival_category_id' => $category->id,
-            'name' => 'Hidden protocol',
+            'festival_category_id' => $closedCategory->id,
+            'name' => 'Closed category protocol',
             'is_active' => false,
+            'sort_order' => 200,
+        ]);
+        $closedSection = $closedRubric->sections()->create([
+            'account_id' => $account->id,
+            'name' => 'Artistry',
+            'weight' => 1,
+            'contribution' => 'award',
+            'sort_order' => 10,
+        ]);
+        $closedSection->criteria()->create([
+            'account_id' => $account->id,
+            'name' => 'Musicality',
+            'max_score' => 10,
+            'weight' => 1,
+            'sort_order' => 10,
         ]);
         $stage = FestivalStage::factory()->create([
             'account_id' => $account->id,
@@ -419,8 +436,9 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('editions.0.program.0.stage', 'Main stage')
             ->assertJsonPath('editions.0.program.0.items.0.name', 'Evening block')
             ->assertJsonPath('editions.0.program.0.items.0.children.0.name', 'Opening show')
-            ->assertJsonMissing(['name' => 'Hidden Category'])
-            ->assertJsonMissing(['name' => 'Hidden protocol'])
+            ->assertJsonFragment(['name' => 'Closed Category'])
+            ->assertJsonFragment(['name' => 'Closed category protocol'])
+            ->assertJsonFragment(['name' => 'Musicality'])
             ->assertJsonMissing(['name' => 'Unpublished rehearsal']);
         $this->assertStringNotContainsString('festival_workflow_id', $response->getContent());
         $this->assertStringNotContainsString('Internal stage note', $response->getContent());
@@ -439,6 +457,15 @@ class FestivalTelegramMiniAppTest extends TestCase
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
             'name' => 'Main stage',
+        ]);
+        $slot = $edition->scheduleSlots()->create([
+            'account_id' => $account->id,
+            'festival_stage_id' => $stage->id,
+            'type' => 'custom',
+            'name' => 'Published opening',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addMinutes(4),
+            'published_at' => now()->subDay(),
         ]);
         $timeline = FestivalTimeline::factory()->create([
             'account_id' => $account->id,
@@ -469,9 +496,13 @@ class FestivalTelegramMiniAppTest extends TestCase
         ]);
         $timeline->forceFill(['active_item_id' => $current->id])->save();
 
-        $response = $this->postJson(route('public.festival-telegram.timeline', [$account->slug, $series->slug]), [
+        $pollUrl = route('public.festival-telegram.timeline', [$account->slug, $series->slug]);
+        $payload = [
             'init_data' => $this->initData($installation, '7002701'),
-        ]);
+            'target_id' => $edition->id,
+        ];
+
+        $response = $this->postJson($pollUrl, $payload);
 
         $response
             ->assertOk()
@@ -480,10 +511,19 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('editions.0.timeline.0.scene_name', 'Main stage')
             ->assertJsonPath('editions.0.timeline.0.items.0.label', 'Current performance')
             ->assertJsonPath('editions.0.timeline.0.items.0.status', 'active')
+            ->assertJsonMissingPath('editions.0.program')
             ->assertJsonMissing(['label' => 'Disabled private item']);
         foreach (['active_item_id', 'last_finished_item_id', 'entry_reference', 'notes', 'model', 'PRIVATE-REFERENCE'] as $privateFact) {
             $this->assertStringNotContainsString($privateFact, $response->getContent());
         }
+
+        $edition->update(['status' => FestivalEditionStatus::Completed]);
+        $this->postJson($pollUrl, $payload)->assertOk()
+            ->assertJsonPath('editions.0.timeline', [])
+            ->assertJsonPath('editions.0.program.0.items.0.name', $slot->name);
+
+        $edition->update(['is_private' => true]);
+        $this->postJson($pollUrl, $payload)->assertOk()->assertJsonPath('editions', []);
     }
 
     public function test_registrant_login_is_single_use_and_fails_after_revocation(): void
