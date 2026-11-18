@@ -243,6 +243,7 @@ Route::prefix('accounts/{account}/festivals')->name('accounts.festivals.')->midd
     Route::put('{festivalEdition:id}/schedule/{festivalScheduleSlot}', [FestivalScheduleController::class, 'update'])->whereNumber('festivalEdition')->name('schedule.update');
     Route::post('{festivalEdition:id}/program/scenes/{festivalStage}/generate', [FestivalScheduleController::class, 'generate'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('schedule.generate');
     Route::patch('{festivalEdition:id}/program/scenes/{festivalStage}/order', [FestivalScheduleController::class, 'reorder'])->whereNumber('festivalEdition')->name('schedule.reorder');
+    Route::patch('{festivalEdition:id}/program/scenes/{festivalStage}/publication', [FestivalScheduleController::class, 'publication'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('schedule.publication');
     Route::post('{festivalEdition:id}/timeline/fill', [FestivalTimelineController::class, 'fill'])->whereNumber('festivalEdition')->name('timeline.fill');
     Route::post('{festivalEdition:id}/timeline/start', [FestivalTimelineController::class, 'start'])->whereNumber('festivalEdition')->name('timeline.start');
     Route::patch('{festivalEdition:id}/timeline/scenes/{festivalStage}/pause', [FestivalTimelineController::class, 'pause'])->whereNumber('festivalEdition')->whereNumber('festivalStage')->name('timeline.pause');

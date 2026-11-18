@@ -66,18 +66,50 @@
             data-order-url="{{ route('dashboard.accounts.festivals.schedule.reorder', [$account, $edition, $activeStage]) }}"
             data-order-error="{{ __('app.festival_program_order_error') }}"
         >
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
+            <div class="space-y-3 border-b border-stone-200 px-5 py-4">
                 <div>
                     <h2 class="text-xl font-semibold text-slate-950">{{ $activeStage->name }}</h2>
                     @if ($activeStage->description)
                         <p class="mt-1 text-sm text-slate-500">{{ $activeStage->description }}</p>
                     @endif
                 </div>
-                <span class="text-sm text-slate-500">{{ $edition->timezone }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-sm text-slate-500">{{ $edition->timezone }}</span>
+                    @if ($programTree !== [])
+                        <form
+                            id="festival-program-publication"
+                            method="POST"
+                            action="{{ route('dashboard.accounts.festivals.schedule.publication', [$account, $edition, $activeStage]) }}"
+                            class="flex flex-wrap items-center gap-2 sm:ml-auto sm:justify-end"
+                            aria-label="{{ __('app.festival_program_publication') }}"
+                            data-festival-program-publication
+                        >
+                            @csrf
+                            @method('PATCH')
+                            <x-ui.button type="submit" name="operation" value="publish_all" variant="secondary" size="sm" data-festival-program-publication-button>
+                                {{ __('app.festival_program_publish_all') }}
+                            </x-ui.button>
+                            <x-ui.button type="submit" name="operation" value="unpublish_all" variant="secondary" size="sm" data-festival-program-publication-button>
+                                {{ __('app.festival_program_unpublish_all') }}
+                            </x-ui.button>
+                            <x-ui.button type="submit" name="operation" value="publish_selected" variant="secondary" size="sm" data-festival-program-publication-button data-festival-program-selection-required disabled>
+                                {{ __('app.festival_program_publish_selected') }}
+                            </x-ui.button>
+                            <x-ui.button type="submit" name="operation" value="unpublish_selected" variant="secondary" size="sm" data-festival-program-publication-button data-festival-program-selection-required disabled>
+                                {{ __('app.festival_program_unpublish_selected') }}
+                            </x-ui.button>
+                        </form>
+                    @endif
+                </div>
             </div>
 
             <div class="min-w-0 p-4 sm:p-5">
                 <p class="mb-4 hidden rounded-lg px-3 py-2 text-sm" role="status" data-festival-program-status></p>
+                @if ($errors->getBag('programPublication')->any())
+                    <div class="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
+                        {{ $errors->getBag('programPublication')->first() }}
+                    </div>
+                @endif
                 @if ($programTree !== [])
                     <ol class="min-w-0 space-y-2" role="list" data-festival-program-list data-parent-id="">
                         @foreach ($programTree as $node)
@@ -272,12 +304,12 @@
 
                         <label data-festival-program-field="times">
                             <span class="crm-label">{{ __('app.starts_at') }}</span>
-                            <input type="datetime-local" name="starts_at" value="{{ old('starts_at', $editingItem?->starts_at?->timezone($edition->timezone)->format('Y-m-d\TH:i') ?? $festivalStartDateTime) }}" class="crm-field">
+                            <input type="datetime-local" name="starts_at" value="{{ old('starts_at', $editingItem?->starts_at?->timezone($edition->timezone)->format('Y-m-d\TH:i:s') ?? $festivalStartDateTime) }}" step="1" class="crm-field">
                             @error('starts_at') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
                         <label data-festival-program-field="times">
                             <span class="crm-label">{{ __('app.ends_at') }}</span>
-                            <input type="datetime-local" name="ends_at" value="{{ old('ends_at', $editingItem?->ends_at?->timezone($edition->timezone)->format('Y-m-d\TH:i') ?? $festivalStartDateTime) }}" class="crm-field">
+                            <input type="datetime-local" name="ends_at" value="{{ old('ends_at', $editingItem?->ends_at?->timezone($edition->timezone)->format('Y-m-d\TH:i:s') ?? $festivalStartDateTime) }}" step="1" class="crm-field">
                             @error('ends_at') <span class="crm-help">{{ $message }}</span> @enderror
                         </label>
 
@@ -294,8 +326,8 @@
                         </label>
 
                         <input type="hidden" name="is_published" value="0">
-                        <label class="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2" data-festival-program-field="publish">
-                            <input type="checkbox" name="is_published" value="1" class="crm-checkbox" @checked(old('is_published', $editingItem?->published_at !== null))>
+                        <label class="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+                            <input type="checkbox" name="is_published" value="1" class="crm-checkbox" data-festival-program-publish @checked(old('is_published', $editingItem?->published_at !== null))>
                             {{ __('app.publish') }}
                         </label>
                     </div>

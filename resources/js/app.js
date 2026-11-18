@@ -8768,6 +8768,7 @@ function initFestivalProgram() {
     const editingIdInput = form?.querySelector('[data-festival-program-editing-id]');
     const typeInput = form?.querySelector('[data-festival-program-type]');
     const entryInput = form?.elements.namedItem('festival_entry_id');
+    const publishInput = form?.querySelector('[data-festival-program-publish]');
     const rootList = program.querySelector('[data-festival-program-list][data-parent-id=""]');
     const status = program.querySelector('[data-festival-program-status]');
     const generationTrigger = document.querySelector('[data-festival-program-generate]');
@@ -8781,8 +8782,8 @@ function initFestivalProgram() {
     }
 
     const fieldsForType = {
-        performance: ['entry', 'times', 'publish'],
-        rehearsal: ['entry', 'times', 'publish'],
+        performance: ['entry', 'times'],
+        rehearsal: ['entry', 'times'],
         custom: ['name', 'times'],
         free_header: ['name'],
         category_header: ['category'],
@@ -8792,16 +8793,6 @@ function initFestivalProgram() {
         const field = form.elements.namedItem(name);
 
         if (!field) {
-            return;
-        }
-
-        if (field instanceof RadioNodeList) {
-            field.value = value ?? '';
-            return;
-        }
-
-        if (field instanceof HTMLInputElement && field.type === 'checkbox') {
-            field.checked = Boolean(value);
             return;
         }
 
@@ -8923,9 +8914,10 @@ function initFestivalProgram() {
             entryInput.add(currentEntry);
         }
 
-        ['type', 'festival_entry_id', 'festival_category_id', 'parent_id', 'name', 'starts_at', 'ends_at', 'notes', 'is_published'].forEach((name) => {
+        ['type', 'festival_entry_id', 'festival_category_id', 'parent_id', 'name', 'starts_at', 'ends_at', 'notes'].forEach((name) => {
             setFieldValue(name, item[name]);
         });
+        if (publishInput) publishInput.checked = Boolean(item.is_published);
         setFieldValue('reschedule_reason', '');
         syncTypeFields();
         openModal(button);
@@ -8933,6 +8925,17 @@ function initFestivalProgram() {
 
     const directItems = (list) => [...list.children].filter((child) => child.matches('[data-festival-program-item]'));
     const childList = (item) => [...item.children].find((child) => child.matches('[data-festival-program-list]'));
+
+    const selectionSelector = '[data-festival-program-select]';
+    const syncPublicationButtons = () => {
+        const hasSelection = Boolean(program.querySelector(`${selectionSelector}:checked`));
+        program.querySelectorAll('[data-festival-program-publication-button]').forEach((button) => {
+            button.disabled = savingOrder || (button.hasAttribute('data-festival-program-selection-required') && !hasSelection);
+        });
+    };
+    program.addEventListener('change', (event) => {
+        if (event.target.matches(selectionSelector)) syncPublicationButtons();
+    });
 
     const syncTreePresentation = () => {
         program.querySelectorAll('[data-festival-program-list]').forEach((list) => {
@@ -8962,6 +8965,7 @@ function initFestivalProgram() {
                 control.setAttribute('disabled', 'disabled');
             }
         });
+        syncPublicationButtons();
     };
 
     const serializeTree = () => {
@@ -8994,7 +8998,11 @@ function initFestivalProgram() {
     };
 
     const restoreTree = (html) => {
+        const selectedIds = new Set([...rootList.querySelectorAll(`${selectionSelector}:checked`)].map((checkbox) => checkbox.value));
         rootList.innerHTML = html;
+        rootList.querySelectorAll(selectionSelector).forEach((checkbox) => {
+            checkbox.checked = selectedIds.has(checkbox.value);
+        });
         createIcons({ icons });
         syncTreePresentation();
     };

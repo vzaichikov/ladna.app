@@ -3,6 +3,7 @@
 @php
     $item = $node['item'];
     $isHeader = $item->type->isHeader();
+    $isPublished = $item->published_at !== null;
     $needsTime = $item->type === \App\Enums\FestivalScheduleSlotType::Performance && ! $item->hasTimeRange();
     $cardClasses = match ($item->type) {
         \App\Enums\FestivalScheduleSlotType::CategoryHeader => 'border-violet-200 bg-violet-50/70',
@@ -26,10 +27,10 @@
         'festival_category_id' => $item->festival_category_id,
         'parent_id' => $item->parent_id,
         'name' => $item->name,
-        'starts_at' => $item->starts_at?->timezone($edition->timezone)->format('Y-m-d\TH:i'),
-        'ends_at' => $item->ends_at?->timezone($edition->timezone)->format('Y-m-d\TH:i'),
+        'starts_at' => $item->starts_at?->timezone($edition->timezone)->format('Y-m-d\TH:i:s'),
+        'ends_at' => $item->ends_at?->timezone($edition->timezone)->format('Y-m-d\TH:i:s'),
         'notes' => $item->notes,
-        'is_published' => $item->published_at !== null,
+        'is_published' => $isPublished,
     ];
 @endphp
 
@@ -53,9 +54,9 @@
                                 {{ __('app.festival_program_time_required') }}
                             </span>
                         @endif
-                        @if ($item->published_at)
-                            <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">{{ __('app.published') }}</span>
-                        @endif
+                        <span data-program-published="{{ $isPublished ? 'true' : 'false' }}" class="rounded-full px-2 py-1 text-xs font-semibold {{ $isPublished ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">
+                            {{ $isPublished ? __('app.published') : __('app.festival_program_unpublished') }}
+                        </span>
                     </div>
                     <div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
                         @if ($item->starts_at && $item->ends_at)
@@ -71,6 +72,10 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-1">
+                <label class="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white shadow-xs">
+                    <input type="checkbox" name="item_ids[]" value="{{ $item->id }}" form="festival-program-publication" class="crm-checkbox cursor-pointer" autocomplete="off" data-festival-program-select>
+                    <span class="sr-only">{{ __('app.festival_program_select_item', ['name' => $item->displayName()]) }}</span>
+                </label>
                 <x-ui.action-button icon="arrow-up" :label="__('app.move_up')" data-festival-program-up data-festival-program-sort-control />
                 <x-ui.action-button icon="arrow-down" :label="__('app.move_down')" data-festival-program-down data-festival-program-sort-control />
                 <x-ui.action-button icon="indent-increase" :label="__('app.festival_indent_program_item')" data-festival-program-indent data-festival-program-sort-control />

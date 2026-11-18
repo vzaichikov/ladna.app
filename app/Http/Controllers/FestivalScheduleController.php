@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Actions\Festivals\GenerateFestivalProgram;
 use App\Actions\Festivals\ReorderFestivalSchedule;
 use App\Actions\Festivals\SaveFestivalScheduleSlot;
+use App\Actions\Festivals\SetFestivalSchedulePublication;
 use App\Http\Requests\FestivalProgramGenerationRequest;
 use App\Http\Requests\FestivalScheduleOrderRequest;
+use App\Http\Requests\FestivalSchedulePublicationRequest;
 use App\Http\Requests\FestivalScheduleSlotRequest;
 use App\Models\Account;
 use App\Models\FestivalEdition;
@@ -63,6 +65,27 @@ class FestivalScheduleController extends Controller
 
         return $this->programRedirect($account, $festivalEdition, $festivalStage->id)
             ->with('status', __('app.festival_program_generated', $result));
+    }
+
+    public function publication(FestivalSchedulePublicationRequest $request, Account $account, FestivalEdition $festivalEdition, FestivalStage $festivalStage, SetFestivalSchedulePublication $publication): RedirectResponse
+    {
+        $this->authorizeSchedule($request, $account, $festivalEdition);
+        abort_unless($festivalStage->festival_edition_id === $festivalEdition->id && $festivalStage->account_id === $account->id, 404);
+        $redirect = $this->programRedirect($account, $festivalEdition, $festivalStage->id);
+        $publish = str_starts_with($request->validated('operation'), 'publish_');
+
+        try {
+            $result = $publication->execute($festivalEdition, $festivalStage, $publish, $request->validated('item_ids'), $request->user());
+        } catch (ValidationException $exception) {
+            return $redirect->withErrors($exception->errors(), 'programPublication');
+        }
+
+        $message = trans_choice($publish ? 'app.festival_program_items_published' : 'app.festival_program_items_unpublished', $result['changed']);
+        if ($result['skipped'] > 0) {
+            $message .= ' '.trans_choice('app.festival_program_publication_skipped', $result['skipped']);
+        }
+
+        return $redirect->with('status', $message);
     }
 
     private function authorizeSchedule(Request $request, Account $account, FestivalEdition $edition): void

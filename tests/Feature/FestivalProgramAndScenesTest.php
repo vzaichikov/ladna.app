@@ -117,6 +117,10 @@ class FestivalProgramAndScenesTest extends TestCase
         $this->actingAs($owner)->post(route('dashboard.accounts.festivals.schedule.generate', [$account, $edition, $stage]), [
             'mode' => 'missing',
         ])->assertStatus(423);
+
+        $this->actingAs($owner)->patch(route('dashboard.accounts.festivals.schedule.publication', [$account, $edition, $stage]), [
+            'operation' => 'publish_all',
+        ])->assertStatus(423);
     }
 
     public function test_schedule_backfill_is_deterministic_and_scene_history_blocks_hard_deletion(): void
@@ -692,12 +696,14 @@ class FestivalProgramAndScenesTest extends TestCase
             'ends_at' => $startsAt->copy()->addMinutes(30)->format('Y-m-d H:i:s'),
             'is_published' => true,
         ]);
-        $freeHeader = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'free_header', 'name' => 'Finals']);
+        $freeHeader = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'free_header', 'name' => 'Finals', 'is_published' => true]);
         $categoryHeader = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'category_header', 'festival_category_id' => $category->id]);
 
         $this->assertNull($custom->festival_entry_id);
         $this->assertNull($custom->festival_category_id);
         $this->assertSame('Фото-перерва', $custom->name);
+        $this->assertNotNull($custom->published_at);
+        $this->assertNotNull($freeHeader->published_at);
         $this->assertNull($freeHeader->starts_at);
         $this->assertNull($freeHeader->ends_at);
         $this->assertNull($categoryHeader->name);
@@ -709,7 +715,10 @@ class FestivalProgramAndScenesTest extends TestCase
             ->assertSee('border-sky-200 bg-sky-50/70', false)
             ->assertSee('border-emerald-200 bg-emerald-50/70', false)
             ->assertSee('border-amber-200 bg-amber-50/70', false)
-            ->assertSee('border-rose-200 bg-rose-50/70', false);
+            ->assertSee('border-rose-200 bg-rose-50/70', false)
+            ->assertSee('data-festival-program-publication', false)
+            ->assertSee('data-program-published="true"', false)
+            ->assertSee('data-program-published="false"', false);
 
         try {
             $this->saveItem($edition, $owner, [
@@ -726,6 +735,80 @@ class FestivalProgramAndScenesTest extends TestCase
 
         $portal = $this->actingAs($portalUser, 'festival')->get(route('festival.portal.entries.index', $account->slug));
         $portal->assertOk()->assertSee($performance->entry->entry_name)->assertDontSee('Фото-перерва')->assertDontSee('Finals');
+    }
+
+    public function test_program_publication_applies_to_the_checked_rows_or_the_current_scene_and_skips_untimed_items(): void
+    {
+        Queue::fake();
+        [$account, $edition, $category, $owner, $portalUser] = $this->festival();
+        $stage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $otherStage = FestivalStage::factory()->for($edition)->create(['account_id' => $account->id]);
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $portalUser->id,
+            'status' => FestivalEntryStatus::Accepted,
+        ]);
+        $header = $this->saveItem($edition, $owner, ['festival_stage_id' => $stage->id, 'type' => 'free_header', 'name' => 'Evening program']);
+        $child = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'parent_id' => $header->id,
+            'type' => 'custom',
+            'name' => 'Doors open',
+            'starts_at' => $edition->starts_at->toIso8601String(),
+            'ends_at' => $edition->starts_at->copy()->addMinutes(15)->toIso8601String(),
+        ]);
+        $placeholder = $edition->scheduleSlots()->create([
+            'account_id' => $account->id,
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $entry->id,
+            'type' => 'performance',
+        ]);
+        $rehearsal = $this->saveItem($edition, $owner, [
+            'festival_stage_id' => $stage->id,
+            'festival_entry_id' => $entry->id,
+            'type' => 'rehearsal',
+            'starts_at' => $edition->starts_at->copy()->addMinutes(15)->toIso8601String(),
+            'ends_at' => $edition->starts_at->copy()->addMinutes(20)->toIso8601String(),
+        ]);
+        $otherSlot = $this->saveItem($edition, $owner, ['festival_stage_id' => $otherStage->id, 'type' => 'free_header', 'name' => 'Other scene header']);
+        $url = route('dashboard.accounts.festivals.schedule.publication', [$account, $edition, $stage]);
+        $redirect = route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]);
+        $programUrl = route('public.festivals.program', [$account->slug, $edition->slug]);
+
+        $this->actingAs($this->scheduleStaff($account))
+            ->patch($url, ['operation' => 'publish_selected', 'item_ids' => [$header->id]])
+            ->assertRedirect($redirect);
+        $publishedAt = $header->refresh()->published_at;
+        $this->assertNotNull($publishedAt);
+        $this->assertNull($child->refresh()->published_at);
+        $this->assertNull($otherSlot->refresh()->published_at);
+        $this->get($programUrl)->assertOk()->assertSeeText('Evening program')->assertDontSeeText('Doors open');
+
+        $this->patch($url, ['operation' => 'publish_selected', 'item_ids' => []])->assertSessionHasErrorsIn('programPublication', ['item_ids']);
+        $this->patch($url, ['operation' => 'publish_selected', 'item_ids' => [$child->id, $otherSlot->id]])
+            ->assertRedirect($redirect)
+            ->assertSessionHasErrorsIn('programPublication', ['item_ids']);
+        $this->assertNull($child->refresh()->published_at);
+        $this->actingAs(User::factory()->create())->patch($url, ['operation' => 'publish_all'])->assertForbidden();
+
+        $this->actingAs($owner)->patch($url, ['operation' => 'publish_all', 'item_ids' => [$header->id]])->assertRedirect($redirect);
+        $this->assertTrue($header->refresh()->published_at->equalTo($publishedAt));
+        $this->assertNotNull($child->refresh()->published_at);
+        $this->assertNotNull($rehearsal->refresh()->published_at);
+        $this->assertNull($placeholder->refresh()->published_at);
+        $this->assertNull($otherSlot->refresh()->published_at);
+        $this->get($programUrl)->assertOk()->assertSeeText('Evening program')->assertSeeText('Doors open');
+
+        $this->patch($url, ['operation' => 'unpublish_selected', 'item_ids' => [$header->id]])->assertRedirect($redirect);
+        $this->get($programUrl)->assertOk()->assertDontSeeText('Evening program')->assertSeeText('Doors open');
+        $this->assertSame($header->id, $child->refresh()->parent_id);
+        $this->patch($url, ['operation' => 'unpublish_all'])->assertRedirect($redirect);
+        $this->get($programUrl)->assertNotFound();
+
+        $this->assertSame(6, FestivalActivityLog::query()->where('festival_edition_id', $edition->id)->where('action', 'schedule.publication_changed')->count());
+        $this->assertFalse(FestivalNotification::query()->where('festival_edition_id', $edition->id)->exists());
+        Queue::assertNothingPushed();
     }
 
     public function test_hierarchy_validation_rejects_leaf_parents_cycles_and_header_conversion(): void

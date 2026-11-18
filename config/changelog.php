@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.184.0',
+                'date' => '2026-11-18',
+                'title' => 'Publish Festival Program items in bulk',
+                'items' => [
+                    'Publish or unpublish every ready item on a scene, or select individual rows and update only those items.',
+                    'The Program constructor shows the publication status of each performance, rehearsal, time block, and heading.',
+                ],
+                'meta' => 'Festival Program publication controls.',
+            ],
+            [
                 'version' => '0.183.0',
                 'date' => '2026-11-18',
                 'title' => 'Public Festival Program and live Timeline',
@@ -1766,6 +1776,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.184.0',
+                'date' => '2026-11-18',
+                'title' => 'Масова публікація елементів програми фестивалю',
+                'items' => [
+                    'Публікуйте готові елементи всієї сцени або лише вибрані рядки. Знімайте з публікації всю сцену або окремі елементи.',
+                    'У конструкторі програми видно статус публікації кожного виступу, репетиції, часового блоку та заголовка.',
+                ],
+                'meta' => 'Керування публікацією програми фестивалю.',
+            ],
             [
                 'version' => '0.183.0',
                 'date' => '2026-11-18',
