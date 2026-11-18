@@ -20,6 +20,16 @@ return [
     'releases' => [
         'en' => [
             [
+                'version' => '0.185.0',
+                'date' => '2026-11-18',
+                'title' => 'Performance order numbers in Festival Programs',
+                'items' => [
+                    'Performance numbers start at 1 in each category on each stage. They appear in the Program, live Timeline, judges’ lists and Telegram Mini App.',
+                    'Numbers update automatically when the performance order changes.',
+                ],
+                'meta' => 'Festival performance numbering.',
+            ],
+            [
                 'version' => '0.184.0',
                 'date' => '2026-11-18',
                 'title' => 'Publish Festival Program items in bulk',
@@ -1776,6 +1786,16 @@ return [
             ],
         ],
         'uk' => [
+            [
+                'version' => '0.185.0',
+                'date' => '2026-11-18',
+                'title' => 'Порядкові номери виступів у програмі фестивалю',
+                'items' => [
+                    'Нумерація виступів починається з 1 у кожній категорії на кожній сцені. Номери видно в програмі, таймлайні наживо, списках суддів і мінізастосунку Telegram.',
+                    'Номери оновлюються автоматично, коли змінюється порядок виступів.',
+                ],
+                'meta' => 'Нумерація виступів фестивалю.',
+            ],
             [
                 'version' => '0.184.0',
                 'date' => '2026-11-18',

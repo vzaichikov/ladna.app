@@ -31,6 +31,15 @@ class FestivalProgramOrder
         return $this->children($byParent, 0);
     }
 
+    /**
+     * @param  list<array{item: FestivalScheduleSlot, children: array}>  $tree
+     * @return array<int, int>
+     */
+    public function performanceNumbers(array $tree): array
+    {
+        return FestivalPerformanceNumbers::forItems(collect($tree)->flatMap($this->flattenNode(...)));
+    }
+
     /** @return list<array{item: FestivalScheduleSlot, children: array}> */
     private function children(Collection $byParent, int $parentId): array
     {

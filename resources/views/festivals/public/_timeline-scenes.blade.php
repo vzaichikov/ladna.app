@@ -41,7 +41,7 @@
                         @endphp
                         <li class="rounded-2xl border p-4 {{ $publicCardClasses }}" @if ($item['status'] === 'active') aria-current="time" @endif>
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <strong>{{ $item['label'] }}</strong>
+                                <strong><x-festivals.performance-number :number="$item['category_number']" />{{ $item['label'] }}</strong>
                                 <span class="rounded-full bg-white/75 px-2.5 py-1 text-xs font-bold">{{ __('app.festival_timeline_status_'.$item['status']) }}</span>
                             </div>
                             <p class="mt-2 text-sm">

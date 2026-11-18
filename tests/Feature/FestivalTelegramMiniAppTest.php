@@ -17,6 +17,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalEntry;
 use App\Models\FestivalMedia;
 use App\Models\FestivalParticipant;
+use App\Models\FestivalPortalUser;
 use App\Models\FestivalRubric;
 use App\Models\FestivalRubricCriterion;
 use App\Models\FestivalRubricSection;
@@ -407,6 +408,24 @@ class FestivalTelegramMiniAppTest extends TestCase
             'reschedule_reason' => 'Internal reschedule reason',
             'published_at' => now(),
         ]);
+        $performer = FestivalPortalUser::factory()->for($account)->create();
+        $entry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $performer->id,
+            'entry_name' => 'First solo performer',
+        ]);
+        $edition->scheduleSlots()->create([
+            'account_id' => $account->id,
+            'festival_stage_id' => $stage->id,
+            'parent_id' => $header->id,
+            'type' => 'performance',
+            'festival_entry_id' => $entry->id,
+            'starts_at' => $edition->starts_at->copy()->addHour()->addMinutes(15),
+            'ends_at' => $edition->starts_at->copy()->addHour()->addMinutes(20),
+            'sort_order' => 25,
+            'published_at' => now(),
+        ]);
         FestivalScheduleSlot::query()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
@@ -436,6 +455,9 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('editions.0.program.0.stage', 'Main stage')
             ->assertJsonPath('editions.0.program.0.items.0.name', 'Evening block')
             ->assertJsonPath('editions.0.program.0.items.0.children.0.name', 'Opening show')
+            ->assertJsonPath('editions.0.program.0.items.0.children.0.category_number', null)
+            ->assertJsonPath('editions.0.program.0.items.0.children.1.name', 'First solo performer')
+            ->assertJsonPath('editions.0.program.0.items.0.children.1.category_number', 1)
             ->assertJsonFragment(['name' => 'Closed Category'])
             ->assertJsonFragment(['name' => 'Closed category protocol'])
             ->assertJsonFragment(['name' => 'Musicality'])
@@ -474,10 +496,19 @@ class FestivalTelegramMiniAppTest extends TestCase
             'started_at' => now()->subMinute(),
             'next_transition_at' => now()->addMinutes(4),
         ]);
+        $category = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $performer = FestivalPortalUser::factory()->for($account)->create();
+        $entries = FestivalEntry::factory()->for($category)->count(2)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $performer->id,
+        ]);
         $current = FestivalTimelineItem::factory()->create([
             'account_id' => $account->id,
             'festival_edition_id' => $edition->id,
             'festival_timeline_id' => $timeline->id,
+            'festival_entry_id' => $entries[0]->id,
+            'type' => 'performance',
             'label' => 'Current performance',
             'entry_reference' => 'PRIVATE-REFERENCE',
             'notes' => 'Private operator note',
@@ -493,6 +524,17 @@ class FestivalTelegramMiniAppTest extends TestCase
             'notes' => 'Disabled private note',
             'sort_order' => 20,
             'is_enabled' => false,
+        ]);
+        FestivalTimelineItem::factory()->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_timeline_id' => $timeline->id,
+            'festival_entry_id' => $entries[1]->id,
+            'type' => 'performance',
+            'label' => 'Next performance',
+            'planned_starts_at' => now()->addMinutes(4),
+            'planned_ends_at' => now()->addMinutes(8),
+            'sort_order' => 30,
         ]);
         $timeline->forceFill(['active_item_id' => $current->id])->save();
 
@@ -511,6 +553,9 @@ class FestivalTelegramMiniAppTest extends TestCase
             ->assertJsonPath('editions.0.timeline.0.scene_name', 'Main stage')
             ->assertJsonPath('editions.0.timeline.0.items.0.label', 'Current performance')
             ->assertJsonPath('editions.0.timeline.0.items.0.status', 'active')
+            ->assertJsonPath('editions.0.timeline.0.items.0.category_number', 1)
+            ->assertJsonPath('editions.0.timeline.0.items.1.category_number', 2)
+            ->assertJsonPath('editions.0.timeline.0.next_category_number', 2)
             ->assertJsonMissingPath('editions.0.program')
             ->assertJsonMissing(['label' => 'Disabled private item']);
         foreach (['active_item_id', 'last_finished_item_id', 'entry_reference', 'notes', 'model', 'PRIVATE-REFERENCE'] as $privateFact) {

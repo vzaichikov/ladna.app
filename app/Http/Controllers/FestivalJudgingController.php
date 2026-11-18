@@ -443,6 +443,7 @@ class FestivalJudgingController extends Controller
                         'status' => $status,
                         'priority' => $priority,
                         'position' => sprintf('%010d:%010d', $scene['id'], $position),
+                        'category_number' => $item['category_number'],
                     ];
                 }
             }
@@ -455,10 +456,12 @@ class FestivalJudgingController extends Controller
                     ->where('status', 'active')
                     ->map(fn (array $item): array => [
                         'label' => $item['label'],
+                        'category_number' => $item['category_number'],
                         'sheet' => $sheetsByEntry->get($item['model']->festival_entry_id),
                     ])
                     ->values(),
                 'next_label' => $nextPerformance['label'] ?? null,
+                'next_category_number' => $nextPerformance['category_number'] ?? null,
                 'next_transition_iso' => $scene['next_transition_iso'],
             ];
         });
@@ -471,6 +474,7 @@ class FestivalJudgingController extends Controller
                 'progress' => $this->judgingCriteria->scoreProgress($sheet, $assignment),
                 'timeline_status' => $timeline['status'],
                 'timeline_position' => $timeline['position'],
+                'category_number' => $timeline['category_number'] ?? null,
                 'photo_participants' => $sheet->entry->participants
                     ->filter(fn ($participant): bool => filled($participant->resolvedPhotoPath()))
                     ->values(),

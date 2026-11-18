@@ -374,7 +374,7 @@ class FestivalTelegramMiniAppData
             ->whereIn('festival_edition_id', $editionIds)
             ->whereNotNull('started_at')
             ->whereHas('stage', fn ($query) => $query->where('is_active', true))
-            ->with(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem'])
+            ->with(['stage', 'edition', 'items.entry:id,festival_category_id', 'activeItem', 'lastFinishedItem'])
             ->get();
 
         return $timelines
@@ -394,12 +394,14 @@ class FestivalTelegramMiniAppData
             'completed' => $scene['completed'],
             'state' => $scene['state'],
             'next_label' => $scene['next_label'],
+            'next_category_number' => $scene['next_category_number'],
             'next_transition_iso' => $scene['next_transition_iso'],
             'timezone' => $scene['timezone'],
             'items' => collect($scene['items'])->map(fn (array $item): array => [
                 'label' => $item['label'],
                 'type' => $item['type'],
                 'type_label' => $item['type_label'],
+                'category_number' => $item['category_number'],
                 'duration_label' => $item['duration_label'],
                 'starts_at_iso' => $item['starts_at_iso'],
                 'ends_at_iso' => $item['ends_at_iso'],

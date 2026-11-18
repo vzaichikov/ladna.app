@@ -7,6 +7,7 @@ use App\Models\FestivalEdition;
 use App\Models\FestivalTimeline;
 use App\Models\FestivalTimelineItem;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 class FestivalTimelinePresenter
@@ -14,11 +15,12 @@ class FestivalTimelinePresenter
     /** @return array<string, mixed> */
     public function scene(FestivalTimeline $timeline, bool $public = false): array
     {
-        $timeline->loadMissing(['stage', 'edition', 'items', 'activeItem', 'lastFinishedItem']);
+        $timeline->loadMissing(['stage', 'edition', 'items.entry:id,festival_category_id', 'activeItem', 'lastFinishedItem']);
         $items = $timeline->items
             ->when($public, fn (Collection $collection): Collection => $collection->where('is_enabled', true))
             ->values();
         $nextItem = $this->nextItem($timeline);
+        $numbers = FestivalPerformanceNumbers::forItems($items);
 
         return [
             'id' => $timeline->id,
@@ -31,6 +33,7 @@ class FestivalTimelinePresenter
             'last_finished_item_id' => $timeline->last_finished_item_id,
             'state' => $this->state($timeline),
             'next_label' => $nextItem?->label,
+            'next_category_number' => $numbers[$nextItem?->id] ?? null,
             'next_transition_iso' => $timeline->next_transition_at?->toISOString(),
             'next_transition_local' => $timeline->next_transition_at?->timezone($timeline->edition->timezone)->format('d.m.Y H:i:s'),
             'timezone' => $timeline->edition->timezone,
@@ -40,6 +43,8 @@ class FestivalTimelinePresenter
                 'label' => $item->label,
                 'type' => $item->type->value,
                 'type_label' => __('app.festival_schedule_slot_type_'.$item->type->value),
+                'category_number' => $numbers[$item->id] ?? null,
+                'performance_category_id' => $public ? null : FestivalPerformanceNumbers::categoryId($item),
                 'entry_reference' => $item->entry_reference,
                 'notes' => $public ? null : $item->notes,
                 'duration_seconds' => $item->duration_seconds,
@@ -57,6 +62,8 @@ class FestivalTimelinePresenter
     /** @return Collection<int, array<string, mixed>> */
     public function scenes(Collection $timelines, bool $public = false): Collection
     {
+        (new EloquentCollection($timelines->all()))->loadMissing('items.entry:id,festival_category_id');
+
         return $timelines
             ->sortBy(fn (FestivalTimeline $timeline): string => sprintf('%010d:%020d', $timeline->stage->sort_order, $timeline->id))
             ->map(fn (FestivalTimeline $timeline): array => $this->scene($timeline, $public))

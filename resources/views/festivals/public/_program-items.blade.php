@@ -14,7 +14,9 @@
                         <time datetime="{{ $item['starts_at'] }}">{{ $start->format('H:i') }}</time><span aria-hidden="true">–</span><time datetime="{{ $item['ends_at'] }}">{{ $end->format('H:i') }}</time>
                     </div>
                     <div class="wrap-break-word">
-                        <div class="font-semibold">{{ $item['name'] }}</div>
+                        <div class="font-semibold">
+                            <x-festivals.performance-number :number="$item['category_number']" class="festival-muted" />{{ $item['name'] }}
+                        </div>
                         @if ($item['category'] || $item['type'] === 'rehearsal')
                             <p class="festival-muted mt-1 text-xs sm:text-sm">{{ $item['category'] ?: $item['type_label'] }}</p>
                         @endif

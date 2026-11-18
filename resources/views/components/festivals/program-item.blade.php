@@ -1,4 +1,4 @@
-@props(['node', 'account', 'edition', 'stage'])
+@props(['node', 'account', 'edition', 'stage', 'performanceNumbers'])
 
 @php
     $item = $node['item'];
@@ -46,7 +46,9 @@
                 />
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="min-w-0 break-words font-semibold text-slate-950 [overflow-wrap:anywhere] {{ $isHeader ? 'text-base' : '' }}">{{ $item->displayName() }}</h3>
+                        <h3 class="min-w-0 break-words font-semibold text-slate-950 [overflow-wrap:anywhere] {{ $isHeader ? 'text-base' : '' }}">
+                            <x-festivals.performance-number :number="$performanceNumbers[$item->id] ?? null" :data-performance-category="\App\Support\Festivals\FestivalPerformanceNumbers::categoryId($item)" class="text-slate-600" />{{ $item->displayName() }}
+                        </h3>
                         <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $typeBadgeClasses }}">{{ __('app.festival_schedule_slot_type_'.$item->type->value) }}</span>
                         @if ($needsTime)
                             <span class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800" data-festival-program-time-warning>
@@ -93,7 +95,7 @@
 
     <ol class="min-w-0 max-w-full space-y-2 border-l border-stone-200 pl-3 sm:pl-5 {{ $node['children'] === [] ? 'hidden' : '' }}" role="list" data-festival-program-list data-parent-id="{{ $item->id }}">
         @foreach ($node['children'] as $child)
-            <x-festivals.program-item :node="$child" :$account :$edition :$stage />
+            <x-festivals.program-item :node="$child" :$account :$edition :$stage :$performanceNumbers />
         @endforeach
     </ol>
 </li>

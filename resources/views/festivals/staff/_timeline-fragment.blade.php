@@ -127,7 +127,9 @@
                             @csrf @method('PATCH')
                             <button type="submit" class="block min-h-11 w-full rounded-lg text-left crm-focus">
                                 <span class="flex flex-wrap items-center gap-2">
-                                    <strong class="text-base text-slate-950 sm:text-lg">{{ $item['label'] }}</strong>
+                                    <strong class="text-base text-slate-950 sm:text-lg">
+                                        <x-festivals.performance-number :number="$item['category_number']" :data-performance-category="$item['performance_category_id']" class="text-slate-600" />{{ $item['label'] }}
+                                    </strong>
                                     <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $badgeClasses }}">{{ __('app.festival_timeline_status_'.$item['status']) }}</span>
                                 </span>
                                 <span class="mt-2 block text-sm text-slate-700">

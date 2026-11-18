@@ -8753,6 +8753,18 @@ function initFestivalTeamModals(root = document) {
     });
 }
 
+function syncFestivalPerformanceNumbers(list) {
+    const counts = new Map();
+
+    for (const badge of list.querySelectorAll('[data-performance-category]')) {
+        const category = badge.dataset.performanceCategory;
+        const number = (counts.get(category) ?? 0) + 1;
+        counts.set(category, number);
+        badge.dataset.festivalPerformanceNumber = String(number);
+        badge.textContent = `#${number}`;
+    }
+}
+
 function initFestivalProgram() {
     const program = document.querySelector('[data-festival-program]');
     const modal = document.querySelector('[data-festival-program-modal]');
@@ -8966,6 +8978,7 @@ function initFestivalProgram() {
             }
         });
         syncPublicationButtons();
+        syncFestivalPerformanceNumbers(rootList);
     };
 
     const serializeTree = () => {
@@ -9335,6 +9348,8 @@ function initFestivalTimeline(root = document.querySelector('[data-festival-time
             item.querySelector('[data-timeline-move="down"]')?.toggleAttribute('disabled', savingOrder || index === items.length - 1);
             item.draggable = !savingOrder;
         });
+
+        if (list) syncFestivalPerformanceNumbers(list);
     };
 
     const submitTimelineAction = async (form) => {

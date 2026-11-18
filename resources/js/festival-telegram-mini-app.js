@@ -122,6 +122,7 @@ export function initFestivalTelegramMiniApp() {
         : '';
 
     const withItem = (template, item) => (template || '').replace('__item__', item || '—');
+    const numberedPerformance = (label, number) => number ? `#${number} ${label}` : label;
 
     const formattedEditionDate = (edition) => formattedDateTime(edition.starts_at, edition.timezone);
 
@@ -272,7 +273,7 @@ export function initFestivalTelegramMiniApp() {
                 time.dateTime = item.starts_at;
                 card.append(time);
                 const copy = element('div', 'min-w-0');
-                copy.append(element('p', 'font-semibold text-slate-100', item.name));
+                copy.append(element('p', 'font-semibold text-slate-100', numberedPerformance(item.name, item.category_number)));
                 copy.append(element('p', 'mt-0.5 text-xs text-slate-400', [item.category, item.type_label, formattedTime(item.ends_at, timezone)].filter(Boolean).join(' · ')));
                 card.append(copy);
             }
@@ -333,7 +334,7 @@ export function initFestivalTelegramMiniApp() {
                 const start = element('time', 'text-xs font-semibold text-slate-300 tabular-nums', formattedTime(item.starts_at_iso, scene.timezone));
                 start.dateTime = item.starts_at_iso;
                 const copy = element('div', 'wrap-break-word');
-                copy.append(element('p', 'text-sm font-semibold text-slate-100', item.label));
+                copy.append(element('p', 'text-sm font-semibold text-slate-100', numberedPerformance(item.label, item.category_number)));
                 copy.append(element('p', 'mt-0.5 text-xs text-slate-300', labels[`timeline_${item.status}`]));
                 row.append(start, copy);
                 items.append(row);
@@ -369,7 +370,7 @@ export function initFestivalTelegramMiniApp() {
                 currentHeader.append(element('span', 'text-xs font-bold uppercase tracking-wider text-amber-200', labels.timeline_active));
                 if (scene.paused) currentHeader.append(element('span', 'rounded-full bg-rose-500/20 px-2 py-1 text-xs font-semibold text-rose-200', labels.timeline_paused));
                 current.append(currentHeader);
-                current.append(element('p', 'mt-2 text-lg font-semibold leading-tight text-white', active.label));
+                current.append(element('p', 'mt-2 text-lg font-semibold leading-tight text-white', numberedPerformance(active.label, active.category_number)));
                 current.append(element('p', 'mt-1 text-xs text-slate-300', [active.type_label, active.duration_label].filter(Boolean).join(' · ')));
                 if (scene.next_transition_iso && !scene.paused && !scene.completed) {
                     const countdown = element('div', 'mt-3 font-mono text-2xl font-semibold tabular-nums text-amber-100', '--:--');
@@ -380,11 +381,11 @@ export function initFestivalTelegramMiniApp() {
             } else {
                 const stateLabel = scene.completed
                     ? labels.timeline_completed
-                    : withItem(labels.timeline_waiting, scene.next_label || next?.label);
+                    : withItem(labels.timeline_waiting, numberedPerformance(scene.next_label || next?.label, scene.next_category_number ?? next?.category_number));
                 sceneCard.append(element('p', 'mt-3 text-sm text-slate-300', stateLabel));
             }
             if (next && !scene.completed) {
-                sceneCard.append(element('p', 'mt-3 text-sm text-slate-300', withItem(labels.timeline_next, next.label)));
+                sceneCard.append(element('p', 'mt-3 text-sm text-slate-300', withItem(labels.timeline_next, numberedPerformance(next.label, next.category_number))));
             }
             sceneList.append(sceneCard);
         });

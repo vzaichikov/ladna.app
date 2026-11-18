@@ -37,11 +37,11 @@
                                             class="inline-flex max-w-full items-center gap-2 text-lg font-bold text-rose-700 underline decoration-rose-300 underline-offset-4 hover:text-rose-900"
                                             data-current-performance-link
                                         >
-                                            <span class="truncate">{{ $performance['label'] }}</span>
+                                            <span class="truncate"><x-festivals.performance-number :number="$performance['category_number']" /> {{ $performance['label'] }}</span>
                                             <x-ui.icon name="arrow-up-right" class="h-4 w-4 shrink-0" />
                                         </a>
                                     @else
-                                        <p class="truncate text-lg font-bold text-rose-700">{{ $performance['label'] }}</p>
+                                        <p class="truncate text-lg font-bold text-rose-700"><x-festivals.performance-number :number="$performance['category_number']" /> {{ $performance['label'] }}</p>
                                     @endif
                                 @endforeach
                             @else
@@ -49,6 +49,7 @@
                             @endif
                             <p class="mt-2 text-sm text-slate-600">
                                 <span class="font-semibold text-amber-700">{{ __('app.festival_next_performance') }}:</span>
+                                <x-festivals.performance-number :number="$scene['next_category_number']" />
                                 {{ $scene['next_label'] ?: __('app.not_set') }}
                             </p>
                         </div>
@@ -127,7 +128,9 @@
                                 @endif
                                 <div class="min-w-0 flex-1">
                                     <div class="flex flex-wrap items-start justify-between gap-2">
-                                        <h3 class="min-w-0 flex-1 truncate text-lg font-bold text-slate-950 group-hover:text-violet-crm-800">{{ $sheet->entry->entry_name }}</h3>
+                                        <h3 class="min-w-0 flex-1 truncate text-lg font-bold text-slate-950 group-hover:text-violet-crm-800">
+                                            <x-festivals.performance-number :number="$card['category_number']" class="text-slate-600" /> {{ $sheet->entry->entry_name }}
+                                        </h3>
                                         <span @class([
                                             'rounded-full px-2.5 py-1 text-xs font-bold',
                                             'bg-rose-600 text-white' => $timelineStatus === 'active',

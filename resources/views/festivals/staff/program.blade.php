@@ -113,7 +113,7 @@
                 @if ($programTree !== [])
                     <ol class="min-w-0 space-y-2" role="list" data-festival-program-list data-parent-id="">
                         @foreach ($programTree as $node)
-                            <x-festivals.program-item :$node :$account :$edition :stage="$activeStage" />
+                            <x-festivals.program-item :$node :$account :$edition :stage="$activeStage" :$performanceNumbers />
                         @endforeach
                     </ol>
                 @else

@@ -344,6 +344,72 @@ class FestivalRealtimeTimelineTest extends TestCase
         $this->get($programUrl.'?fragment=1')->assertNotFound();
     }
 
+    public function test_performance_numbers_follow_the_order_within_each_category_in_program_and_timeline(): void
+    {
+        Queue::fake();
+        [$account, $edition, $owner, $stage, $category, $entry] = $this->festival();
+        $now = CarbonImmutable::parse('2030-06-10 10:00:00', $edition->timezone)->utc();
+        $this->travelTo($now);
+        $secondCategory = FestivalCategory::factory()->for($edition)->create(['account_id' => $account->id]);
+        $secondEntry = FestivalEntry::factory()->for($category)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $entry->festival_portal_user_id,
+            'entry_name' => 'Second in first category',
+        ]);
+        $otherEntry = FestivalEntry::factory()->for($secondCategory)->create([
+            'account_id' => $account->id,
+            'festival_edition_id' => $edition->id,
+            'festival_portal_user_id' => $entry->festival_portal_user_id,
+            'entry_name' => 'First in second category',
+        ]);
+        $header = $this->slot($edition, $stage, ['type' => 'free_header', 'name' => 'Backstage heading', 'sort_order' => 10]);
+        $first = $this->slot($edition, $stage, [
+            'type' => 'performance', 'festival_entry_id' => $entry->id, 'parent_id' => $header->id,
+            'starts_at' => $now, 'ends_at' => $now->addMinutes(5),
+        ]);
+        $this->slot($edition, $stage, [
+            'type' => 'rehearsal', 'festival_entry_id' => $secondEntry->id, 'sort_order' => 20,
+            'starts_at' => $now->addMinutes(5), 'ends_at' => $now->addMinutes(10), 'published_at' => $now,
+        ]);
+        $other = $this->slot($edition, $stage, [
+            'type' => 'performance', 'festival_entry_id' => $otherEntry->id, 'sort_order' => 30,
+            'starts_at' => $now->addMinutes(10), 'ends_at' => $now->addMinutes(15), 'published_at' => $now,
+        ]);
+        $last = $this->slot($edition, $stage, [
+            'type' => 'performance', 'festival_entry_id' => $secondEntry->id, 'sort_order' => 40,
+            'starts_at' => $now->addMinutes(15), 'ends_at' => $now->addMinutes(20), 'published_at' => $now,
+        ]);
+
+        $this->actingAs($owner)->get(route('dashboard.accounts.festivals.program', [$account, $edition, 'scene' => $stage->id]))
+            ->assertOk()
+            ->assertViewHas('performanceNumbers', [$first->id => 1, $other->id => 1, $last->id => 2])
+            ->assertSee('data-festival-performance-number="2"', false);
+
+        $programUrl = route('public.festivals.program', [$account->slug, $edition->slug]);
+        $publicProgram = $this->get($programUrl)->assertOk()->viewData('program')[0]['items'];
+        $this->assertSame([null, 1, 1], array_column($publicProgram, 'category_number'));
+
+        [$timeline] = app(FillFestivalTimelines::class)->execute($edition, $owner);
+        $this->assertSame([1, null, 1, 2], array_column(app(FestivalTimelinePresenter::class)->scene($timeline)['items'], 'category_number'));
+
+        $firstTimelineItem = $timeline->items()->where('festival_schedule_slot_id', $first->id)->sole();
+        app(ToggleFestivalTimelineItem::class)->execute($timeline, $firstTimelineItem, $owner);
+        app(StartFestivalTimelines::class)->execute($edition, $owner);
+        $staffTimeline = $this->get(route('dashboard.accounts.festivals.timeline.show', [$account, $edition, $stage]))
+            ->assertOk()->viewData('timelineView');
+        $this->assertSame([null, null, 1, 1], array_column($staffTimeline['items'], 'category_number'));
+
+        $lastTimelineItem = $timeline->items()->where('festival_schedule_slot_id', $last->id)->sole();
+        app(ToggleFestivalTimelineItem::class)->execute($timeline->fresh(), $firstTimelineItem->fresh(), $owner);
+        $orderedIds = [$lastTimelineItem->id, ...$timeline->items()->whereKeyNot($lastTimelineItem->id)->pluck('id')->all()];
+        app(ReorderFestivalTimeline::class)->execute($timeline->fresh(), $orderedIds, $owner);
+
+        $publicTimeline = $this->get($programUrl)->assertOk()->assertSee('data-festival-performance-number="2"', false)->viewData('publicTimelineViews')->first();
+        $this->assertSame($lastTimelineItem->id, $publicTimeline['items'][0]['id']);
+        $this->assertSame([1, 2, null, 1], array_column($publicTimeline['items'], 'category_number'));
+    }
+
     public function test_active_card_uses_structured_clock_confirmation_and_keeps_pause_or_resume_in_focus(): void
     {
         Queue::fake();

@@ -266,7 +266,7 @@ class FestivalWorkspaceController extends Controller
             ? FestivalScheduleSlot::query()
                 ->where('festival_stage_id', $activeStage->id)
                 ->where('festival_edition_id', $festivalEdition->id)
-                ->with(['entry:id,festival_edition_id,code,entry_name', 'category:id,festival_edition_id,name'])
+                ->with(['entry:id,festival_edition_id,festival_category_id,code,entry_name', 'category:id,festival_edition_id,name'])
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get()
@@ -302,9 +302,11 @@ class FestivalWorkspaceController extends Controller
                 : 0,
         ];
 
-        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems', 'generationStats') + [
+        $programTree = $this->programOrder->tree($programItems);
+
+        return view('festivals.staff.program', compact('account', 'festivalEdition', 'entries', 'categories', 'stages', 'activeStage', 'programItems', 'generationStats', 'programTree') + [
             'edition' => $festivalEdition,
-            'programTree' => $this->programOrder->tree($programItems),
+            'performanceNumbers' => $this->programOrder->performanceNumbers($programTree),
             'workspacePermissions' => $permissions,
         ]);
     }
